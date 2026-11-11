@@ -15,12 +15,12 @@ repository = "https://github.com/Souhaieb-Marzouk/CipherKeep"
 authors = ["Souhaieb Marzouk"]
 
 [workspace.dependencies]
-argon2 = "0.5"
-chacha20poly1305 = "0.10"
+argon2 = "0.6"
+chacha20poly1305 = "0.11"
 data-encoding = "2.6"
 getrandom = "0.2"
-hkdf = "0.12"
-sha2 = "0.10"
+hkdf = "0.13"
+sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 subtle = "2.6"
