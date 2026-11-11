@@ -34,6 +34,8 @@ kotlin {
 dependencies {
     // JNA Android native libs live in the AAR; the plain JAR lacks libjnidispatch.so.
     api("net.java.dev.jna:jna:5.19.1@aar")
+    // The Android AAR carries Android .so files; host JVM tests need the desktop JNA jar.
+    testImplementation("net.java.dev.jna:jna:5.19.1")
     testImplementation(libs.junit)
 }
 

@@ -68,6 +68,46 @@ let wasm_bindgen = (function(exports) {
             }
         }
         /**
+         * Decrypt an item ciphertext returned by `encrypt_item`.
+         *
+         * # Errors
+         *
+         * Returns a JS error object for a malformed id, locked session or
+         * authentication failure.
+         * @param {Uint8Array | number[]} item_id
+         * @param {Uint8Array | number[]} ciphertext
+         * @returns {Uint8Array}
+         */
+        decrypt_item(item_id, ciphertext) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                let ptr0, len0, ptr1, len1;
+                try {
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                    len0 = WASM_VECTOR_LEN;
+                    ptr1 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_export4);
+                    len1 = WASM_VECTOR_LEN;
+                } catch (e) {
+                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    throw e;
+                }
+                wasm.wasmvaultsession_decrypt_item(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                if (r3) {
+                    throw takeFromExternrefTable0(r2);
+                }
+                var v3 = getArrayU8FromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                return v3;
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
          * Delete an item.
          *
          * # Errors
@@ -86,6 +126,47 @@ let wasm_bindgen = (function(exports) {
                 if (r1) {
                     throw takeFromExternrefTable0(r0);
                 }
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
+         * Encrypt an item payload for IndexedDB storage without adding it to the
+         * in-memory item map.
+         *
+         * # Errors
+         *
+         * Returns a JS error object for a malformed id, locked session or crypto
+         * failure.
+         * @param {Uint8Array | number[]} item_id
+         * @param {Uint8Array | number[]} plaintext
+         * @returns {Uint8Array}
+         */
+        encrypt_item(item_id, plaintext) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                let ptr0, len0, ptr1, len1;
+                try {
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                    len0 = WASM_VECTOR_LEN;
+                    ptr1 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export4);
+                    len1 = WASM_VECTOR_LEN;
+                } catch (e) {
+                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    throw e;
+                }
+                wasm.wasmvaultsession_encrypt_item(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                if (r3) {
+                    throw takeFromExternrefTable0(r2);
+                }
+                var v3 = getArrayU8FromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                return v3;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
             }
@@ -239,9 +320,9 @@ let wasm_bindgen = (function(exports) {
                 try {
                     ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export4);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passStringToWasm0(first, wasm.__wbindgen_export4, wasm.__wbindgen_export6);
+                    ptr1 = passStringToWasm0(first, wasm.__wbindgen_export4, wasm.__wbindgen_export7);
                     len1 = WASM_VECTOR_LEN;
-                    ptr2 = passStringToWasm0(second, wasm.__wbindgen_export4, wasm.__wbindgen_export6);
+                    ptr2 = passStringToWasm0(second, wasm.__wbindgen_export4, wasm.__wbindgen_export7);
                     len2 = WASM_VECTOR_LEN;
                     ptr3 = passArray8ToWasm0(new_password, wasm.__wbindgen_export4);
                     len3 = WASM_VECTOR_LEN;
@@ -288,29 +369,6 @@ let wasm_bindgen = (function(exports) {
         retry_after() {
             const ret = wasm.wasmvaultsession_retry_after(this.__wbg_ptr);
             return ret >>> 0;
-        }
-        /**
-         * Rewrap under fresh KDF parameters.
-         *
-         * # Errors
-         *
-         * As the core session `rewrap`.
-         * @param {Uint8Array | number[]} password
-         */
-        rewrap(password) {
-            try {
-                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export4);
-                const len0 = WASM_VECTOR_LEN;
-                wasm.wasmvaultsession_rewrap(retptr, this.__wbg_ptr, ptr0, len0);
-                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-                if (r1) {
-                    throw takeFromExternrefTable0(r0);
-                }
-            } finally {
-                wasm.__wbindgen_add_to_stack_pointer(16);
-            }
         }
         /**
          * Encrypt and store an opaque item payload.
@@ -408,373 +466,6 @@ let wasm_bindgen = (function(exports) {
     }
     if (Symbol.dispose) WasmVaultSession.prototype[Symbol.dispose] = WasmVaultSession.prototype.free;
     exports.WasmVaultSession = WasmVaultSession;
-
-    /**
-     * Return the shared core version.
-     * @returns {string}
-     */
-    function core_version() {
-        let deferred1_0;
-        let deferred1_1;
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.core_version(retptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            deferred1_0 = r0;
-            deferred1_1 = r1;
-            return getStringFromWasm0(r0, r1);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export3(deferred1_0, deferred1_1, 1);
-        }
-    }
-    exports.core_version = core_version;
-
-    /**
-     * Derive the master key with the pinned default Argon2id parameters.
-     *
-     * # Errors
-     *
-     * Returns a JS error object for a bad salt length or derivation failure.
-     * @param {Uint8Array | number[]} password
-     * @param {Uint8Array | number[]} salt
-     * @returns {Uint8Array}
-     */
-    function derive_master_key_for_test(password, salt) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            let ptr0, len0, ptr1, len1;
-            try {
-                ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export4);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray8ToWasm0(salt, wasm.__wbindgen_export4);
-                len1 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.derive_master_key_for_test(retptr, ptr0, len0, ptr1, len1);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v3 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v3;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.derive_master_key_for_test = derive_master_key_for_test;
-
-    /**
-     * Generate a random 256-bit key.
-     *
-     * # Errors
-     *
-     * Returns a JS object `{ code, message }` with code 10 on CSPRNG failure.
-     * @returns {Uint8Array}
-     */
-    function generate_key() {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            wasm.generate_key(retptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v1 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v1;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.generate_key = generate_key;
-
-    /**
-     * Open a field with an item key.
-     *
-     * # Errors
-     *
-     * Returns a JS error object with code 3 for a wrong key/context or tampering.
-     * @param {Uint8Array | number[]} item_key
-     * @param {Uint8Array | number[]} item_id
-     * @param {number} field_id
-     * @param {bigint} lamport
-     * @param {boolean} tombstone
-     * @param {Uint8Array | number[]} envelope
-     * @returns {Uint8Array}
-     */
-    function open_field(item_key, item_id, field_id, lamport, tombstone, envelope) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const val4 = +field_id;
-            const val5 = BigInt.asIntN(64, lamport);
-            const val6 = +tombstone;
-            let ptr0, len0, ptr1, len1, ptr2, len2;
-            try {
-                ptr0 = passArray8ToWasm0(item_key, wasm.__wbindgen_export4);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passArray8ToWasm0(envelope, wasm.__wbindgen_export4);
-                len2 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.open_field(retptr, ptr0, len0, ptr1, len1, val4, val5, val6, ptr2, len2);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v7 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v7;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.open_field = open_field;
-
-    /**
-     * Combine two encoded recovery shares into the 32-byte recovery key.
-     *
-     * # Errors
-     *
-     * Returns a JS error object for malformed, corrupted or duplicate shares.
-     * @param {string} first
-     * @param {string} second
-     * @returns {Uint8Array}
-     */
-    function recovery_combine(first, second) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            let ptr0, len0, ptr1, len1;
-            try {
-                ptr0 = passStringToWasm0(first, wasm.__wbindgen_export4, wasm.__wbindgen_export6);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passStringToWasm0(second, wasm.__wbindgen_export4, wasm.__wbindgen_export6);
-                len1 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.recovery_combine(retptr, ptr0, len0, ptr1, len1);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v3 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v3;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.recovery_combine = recovery_combine;
-
-    /**
-     * Split a 32-byte recovery key into three 2-of-3 encoded shares.
-     *
-     * # Errors
-     *
-     * Returns a JS error object for a wrong secret length or CSPRNG failure.
-     * @param {Uint8Array | number[]} secret
-     * @returns {string[]}
-     */
-    function recovery_split(secret) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const ptr0 = passArray8ToWasm0(secret, wasm.__wbindgen_export4);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.recovery_split(retptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v2 = getArrayJsValueFromWasm0(r0, r1);
-            wasm.__wbindgen_export3(r0, r1 * 4, 4);
-            return v2;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.recovery_split = recovery_split;
-
-    /**
-     * Seal a field with an item key.
-     *
-     * # Errors
-     *
-     * Returns a JS error object for malformed ids/keys or sealing failure.
-     * @param {Uint8Array | number[]} item_key
-     * @param {Uint8Array | number[]} item_id
-     * @param {number} field_id
-     * @param {bigint} lamport
-     * @param {boolean} tombstone
-     * @param {Uint8Array | number[]} plaintext
-     * @returns {Uint8Array}
-     */
-    function seal_field(item_key, item_id, field_id, lamport, tombstone, plaintext) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const val4 = +field_id;
-            const val5 = BigInt.asIntN(64, lamport);
-            const val6 = +tombstone;
-            let ptr0, len0, ptr1, len1, ptr2, len2;
-            try {
-                ptr0 = passArray8ToWasm0(item_key, wasm.__wbindgen_export4);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export4);
-                len2 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.seal_field(retptr, ptr0, len0, ptr1, len1, val4, val5, val6, ptr2, len2);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v7 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v7;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.seal_field = seal_field;
-
-    /**
-     * Unwrap an item key with a vault key.
-     *
-     * # Errors
-     *
-     * Returns a JS error object with code 3 for wrong material/context or tampering.
-     * @param {Uint8Array | number[]} vault_key
-     * @param {Uint8Array | number[]} vault_id
-     * @param {Uint8Array | number[]} item_id
-     * @param {number} schema
-     * @param {Uint8Array | number[]} envelope
-     * @returns {Uint8Array}
-     */
-    function unwrap_item_key(vault_key, vault_id, item_id, schema, envelope) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const val5 = +schema;
-            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
-            try {
-                ptr0 = passArray8ToWasm0(vault_key, wasm.__wbindgen_export4);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray8ToWasm0(vault_id, wasm.__wbindgen_export4);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
-                len2 = WASM_VECTOR_LEN;
-                ptr3 = passArray8ToWasm0(envelope, wasm.__wbindgen_export4);
-                len3 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.unwrap_item_key(retptr, ptr0, len0, ptr1, len1, ptr2, len2, val5, ptr3, len3);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v6 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v6;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.unwrap_item_key = unwrap_item_key;
-
-    /**
-     * Wrap an item key under a vault key.
-     *
-     * # Errors
-     *
-     * Returns a JS error object for malformed ids/keys or wrapping failure.
-     * @param {Uint8Array | number[]} vault_key
-     * @param {Uint8Array | number[]} item_key
-     * @param {Uint8Array | number[]} vault_id
-     * @param {Uint8Array | number[]} item_id
-     * @param {number} schema
-     * @returns {Uint8Array}
-     */
-    function wrap_item_key(vault_key, item_key, vault_id, item_id, schema) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-            const val5 = +schema;
-            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
-            try {
-                ptr0 = passArray8ToWasm0(vault_key, wasm.__wbindgen_export4);
-                len0 = WASM_VECTOR_LEN;
-                ptr1 = passArray8ToWasm0(item_key, wasm.__wbindgen_export4);
-                len1 = WASM_VECTOR_LEN;
-                ptr2 = passArray8ToWasm0(vault_id, wasm.__wbindgen_export4);
-                len2 = WASM_VECTOR_LEN;
-                ptr3 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
-                len3 = WASM_VECTOR_LEN;
-            } catch (e) {
-                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
-                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
-                throw e;
-            }
-            wasm.wrap_item_key(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, val5);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeFromExternrefTable0(r2);
-            }
-            var v6 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export3(r0, r1 * 1, 1);
-            return v6;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    exports.wrap_item_key = wrap_item_key;
     function __wbg_get_imports() {
         const import0 = {
             __proto__: null,
@@ -921,7 +612,7 @@ let wasm_bindgen = (function(exports) {
         for (let i = ptr; i < ptr + 4 * len; i += 4) {
             result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
         }
-        wasm.__wbindgen_export7(ptr, len);
+        wasm.__wbindgen_export6(ptr, len);
         return result;
     }
 

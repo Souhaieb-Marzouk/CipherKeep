@@ -675,24 +675,6 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
-    external fun uniffi_cipherkeep_ffi_checksum_func_core_version(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_derive_master_key_for_test(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_generate_key(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_open_field(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_recovery_combine(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_recovery_split(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_seal_field(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_unwrap_item_key(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_func_wrap_item_key(
-    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_blob(
@@ -718,8 +700,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_recovery_shares(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_retry_after(
-    ): Int
-    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_rewrap(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_save_item(
     ): Int
@@ -795,30 +775,10 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_retry_after(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_rewrap(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_save_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
-    external fun uniffi_cipherkeep_ffi_fn_func_core_version(uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_derive_master_key_for_test(`password`: RustBuffer.ByValue,`salt`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_generate_key(uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_open_field(`itemKey`: RustBuffer.ByValue,`itemId`: RustBuffer.ByValue,`fieldId`: Short,`lamport`: Long,`tombstone`: Byte,`envelope`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_recovery_combine(`first`: RustBuffer.ByValue,`second`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_recovery_split(`secret`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_seal_field(`itemKey`: RustBuffer.ByValue,`itemId`: RustBuffer.ByValue,`fieldId`: Short,`lamport`: Long,`tombstone`: Byte,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_unwrap_item_key(`vaultKey`: RustBuffer.ByValue,`vaultId`: RustBuffer.ByValue,`itemId`: RustBuffer.ByValue,`schema`: Short,`envelope`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_func_wrap_item_key(`vaultKey`: RustBuffer.ByValue,`itemKey`: RustBuffer.ByValue,`vaultId`: RustBuffer.ByValue,`itemId`: RustBuffer.ByValue,`schema`: Short,uniffi_out_err: UniffiRustCallStatus, 
-    ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -938,33 +898,6 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_core_version() and 0xFFFF) != 61556) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_derive_master_key_for_test() and 0xFFFF) != 37915) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_key() and 0xFFFF) != 33044) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_open_field() and 0xFFFF) != 39503) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_recovery_combine() and 0xFFFF) != 29629) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_recovery_split() and 0xFFFF) != 24544) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_seal_field() and 0xFFFF) != 24037) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_unwrap_item_key() and 0xFFFF) != 36034) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_wrap_item_key() and 0xFFFF) != 25204) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key() and 0xFFFF) != 2948) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1002,9 +935,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_retry_after() and 0xFFFF) != 7337) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_rewrap() and 0xFFFF) != 55322) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_save_item() and 0xFFFF) != 51135) {
@@ -1183,33 +1113,6 @@ private class JavaLangRefCleanable(
     val cleanable: java.lang.ref.Cleaner.Cleanable
 ) : UniffiCleaner.Cleanable {
     override fun clean() = cleanable.clean()
-}
-
-/**
- * @suppress
- */
-public object FfiConverterUShort: FfiConverter<UShort, Short> {
-    override fun lift(value: Short): UShort {
-        return value.toUShort()
-    }
-
-    fun lift(value: Int): UShort {
-        return value.toUShort()
-    }
-
-    override fun read(buf: ByteBuffer): UShort {
-        return lift(buf.getShort())
-    }
-
-    override fun lower(value: UShort): Short {
-        return value.toShort()
-    }
-
-    override fun allocationSize(value: UShort) = 2UL
-
-    override fun write(value: UShort, buf: ByteBuffer) {
-        buf.putShort(value.toShort())
-    }
 }
 
 /**
@@ -1557,15 +1460,6 @@ public interface FfiVaultSessionInterface {
      * Seconds until another unlock is allowed.
      */
     fun `retryAfter`(): kotlin.ULong
-    
-    /**
-     * Rewrap under fresh KDF parameters.
-     *
-     * # Errors
-     *
-     * As the core session `rewrap`.
-     */
-    fun `rewrap`(`password`: kotlin.ByteArray)
     
     /**
      * Encrypt and store an opaque item payload.
@@ -1945,27 +1839,6 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
-
-    
-    /**
-     * Rewrap under fresh KDF parameters.
-     *
-     * # Errors
-     *
-     * As the core session `rewrap`.
-     */
-    @Throws(FfiException::class)override fun `rewrap`(`password`: kotlin.ByteArray)
-        = 
-    callWithHandle {
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_rewrap(
-        it,
-        
-        FfiConverterByteArray.lower(`password`),_status)
-}
-    }
-    
     
 
     
@@ -2460,194 +2333,4 @@ public object FfiConverterSequenceByteArray: FfiConverterRustBuffer<List<kotlin.
         }
     }
 }
-        /**
-         * Return the shared core version.
-         */ fun `coreVersion`(): kotlin.String {
-            return FfiConverterString.lift(
-    uniffiRustCall() { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_core_version(
-    
-        _status)
-}
-    )
-    }
-    
-
-        /**
-         * Derive the master key with the pinned default Argon2id parameters.
-         *
-         * The 16-byte salt must come from [`generate_key`]-style CSPRNG output or a
-         * stored vault header. This function exists for binding tests and vector
-         * parity; production session code uses the core directly.
-         *
-         * # Errors
-         *
-         * Returns a redacted [`FfiError`] for a bad salt length or derivation failure.
-         */
-    @Throws(FfiException::class) fun `deriveMasterKeyForTest`(`password`: kotlin.ByteArray, `salt`: kotlin.ByteArray): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_derive_master_key_for_test(
-    
-        
-        FfiConverterByteArray.lower(`password`),
-        FfiConverterByteArray.lower(`salt`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Generate a random 256-bit key.
-         *
-         * # Errors
-         *
-         * Returns [`FfiError::Internal`] if the OS CSPRNG fails.
-         */
-    @Throws(FfiException::class) fun `generateKey`(): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_generate_key(
-    
-        _status)
-}
-    )
-    }
-    
-
-        /**
-         * Open a field with an item key.
-         *
-         * # Errors
-         *
-         * Returns [`FfiError::AuthenticationFailed`] for a wrong key, wrong context or
-         * tampered envelope.
-         */
-    @Throws(FfiException::class) fun `openField`(`itemKey`: kotlin.ByteArray, `itemId`: kotlin.ByteArray, `fieldId`: kotlin.UShort, `lamport`: kotlin.ULong, `tombstone`: kotlin.Boolean, `envelope`: kotlin.ByteArray): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_open_field(
-    
-        
-        FfiConverterByteArray.lower(`itemKey`),
-        FfiConverterByteArray.lower(`itemId`),
-        FfiConverterUShort.lower(`fieldId`),
-        FfiConverterULong.lower(`lamport`),
-        FfiConverterBoolean.lower(`tombstone`),
-        FfiConverterByteArray.lower(`envelope`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Combine two encoded recovery shares into the 32-byte recovery key.
-         *
-         * # Errors
-         *
-         * Returns a redacted [`FfiError`] for malformed, corrupted or duplicate shares.
-         */
-    @Throws(FfiException::class) fun `recoveryCombine`(`first`: kotlin.String, `second`: kotlin.String): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_recovery_combine(
-    
-        
-        FfiConverterString.lower(`first`),
-        FfiConverterString.lower(`second`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Split a 32-byte recovery key into three 2-of-3 encoded shares.
-         *
-         * # Errors
-         *
-         * Returns a redacted [`FfiError`] for a wrong secret length or CSPRNG failure.
-         */
-    @Throws(FfiException::class) fun `recoverySplit`(`secret`: kotlin.ByteArray): List<kotlin.String> {
-            return FfiConverterSequenceString.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_recovery_split(
-    
-        
-        FfiConverterByteArray.lower(`secret`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Seal a field with an item key.
-         *
-         * # Errors
-         *
-         * Returns a redacted [`FfiError`] for malformed ids/keys or sealing failure.
-         */
-    @Throws(FfiException::class) fun `sealField`(`itemKey`: kotlin.ByteArray, `itemId`: kotlin.ByteArray, `fieldId`: kotlin.UShort, `lamport`: kotlin.ULong, `tombstone`: kotlin.Boolean, `plaintext`: kotlin.ByteArray): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_seal_field(
-    
-        
-        FfiConverterByteArray.lower(`itemKey`),
-        FfiConverterByteArray.lower(`itemId`),
-        FfiConverterUShort.lower(`fieldId`),
-        FfiConverterULong.lower(`lamport`),
-        FfiConverterBoolean.lower(`tombstone`),
-        FfiConverterByteArray.lower(`plaintext`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Unwrap an item key with a vault key.
-         *
-         * # Errors
-         *
-         * Returns [`FfiError::AuthenticationFailed`] for wrong material/context or a
-         * tampered envelope.
-         */
-    @Throws(FfiException::class) fun `unwrapItemKey`(`vaultKey`: kotlin.ByteArray, `vaultId`: kotlin.ByteArray, `itemId`: kotlin.ByteArray, `schema`: kotlin.UShort, `envelope`: kotlin.ByteArray): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_unwrap_item_key(
-    
-        
-        FfiConverterByteArray.lower(`vaultKey`),
-        FfiConverterByteArray.lower(`vaultId`),
-        FfiConverterByteArray.lower(`itemId`),
-        FfiConverterUShort.lower(`schema`),
-        FfiConverterByteArray.lower(`envelope`),_status)
-}
-    )
-    }
-    
-
-        /**
-         * Wrap an item key under a vault key.
-         *
-         * # Errors
-         *
-         * Returns a redacted [`FfiError`] for malformed ids/keys or wrapping failure.
-         */
-    @Throws(FfiException::class) fun `wrapItemKey`(`vaultKey`: kotlin.ByteArray, `itemKey`: kotlin.ByteArray, `vaultId`: kotlin.ByteArray, `itemId`: kotlin.ByteArray, `schema`: kotlin.UShort): kotlin.ByteArray {
-            return FfiConverterByteArray.lift(
-    uniffiRustCallWithError(FfiException) { _status ->
-    UniffiLib.uniffi_cipherkeep_ffi_fn_func_wrap_item_key(
-    
-        
-        FfiConverterByteArray.lower(`vaultKey`),
-        FfiConverterByteArray.lower(`itemKey`),
-        FfiConverterByteArray.lower(`vaultId`),
-        FfiConverterByteArray.lower(`itemId`),
-        FfiConverterUShort.lower(`schema`),_status)
-}
-    )
-    }
-    
-
 

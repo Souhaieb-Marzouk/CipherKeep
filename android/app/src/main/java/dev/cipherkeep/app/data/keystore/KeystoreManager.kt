@@ -86,6 +86,10 @@ class KeystoreManager(
         if (strongBox && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             builder.setIsStrongBoxBacked(true)
         }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            // The wrapped database key is unavailable while the device is locked.
+            builder.setUnlockedDeviceRequired(true)
+        }
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
         generator.init(builder.build())
         return generator.generateKey()

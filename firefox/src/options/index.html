@@ -45,21 +45,9 @@
       <h2>Site access</h2>
       <div class="card">
         <p>
-          CipherKeep asks for <strong>no host permissions at install</strong>. Site access is optional and
-          granted one origin at a time when you enable autofill in a future build.
+          This build holds <strong>no host permissions</strong> and does not inject into any page.
+          Per-origin autofill permission is intentionally deferred until autofill is implemented.
         </p>
-        <div class="row">
-          <input id="origin" type="url" placeholder="https://example.com" />
-          <button id="grant">Grant this origin</button>
-          <button id="remove" class="secondary">Remove</button>
-        </div>
-        <p id="message"></p>
-        <p class="notice">Autofill itself is not implemented in this shell.</p>
-      </div>
-
-      <h2>Granted origins</h2>
-      <div class="card">
-        <ul id="origins"><li>None</li></ul>
       </div>
 
       <h2>Updates</h2>

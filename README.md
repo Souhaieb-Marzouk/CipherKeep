@@ -25,8 +25,8 @@ CipherKeep is a free, local-first password manager. Your vault stays on your own
 
 The project is built for two places where people need their credentials most:
 
-- **Android** — a mobile vault for everyday use.
-- **Firefox** — a browser companion for quick access while you work.
+- **Android 8.0+** — a mobile vault for everyday use.
+- **Firefox 142+** — a browser companion for quick access while you work.
 
 > **Project status:** early development. There is no public signed release yet, and the code has not been independently audited. Do not use current development builds for real credentials.
 

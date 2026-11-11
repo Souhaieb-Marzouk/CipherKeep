@@ -13,7 +13,13 @@ import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.db.VaultRepository
 import org.json.JSONObject
 import java.security.SecureRandom
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 sealed interface VaultUiState {
@@ -29,6 +35,7 @@ sealed interface VaultUiState {
         val retryAfterSeconds: Long = 0,
     ) : VaultUiState
     data object LockWarning : VaultUiState
+    data class StorageError(val message: String) : VaultUiState
     data object Unlocked : VaultUiState
 }
 
@@ -40,6 +47,9 @@ class SessionController(context: Context) {
     private val blobs = VaultBlobStore(context.applicationContext)
     private val biometrics = BiometricStore(context.applicationContext)
     private val storage = VaultStorage(context.applicationContext)
+    private val backoff = UnlockBackoffStore(context.applicationContext)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var autoLockJob: Job? = null
     private var repository: VaultRepository? = null
     private var session: FfiVaultSession? = null
     private var blob: ByteArray? = null
@@ -61,10 +71,12 @@ class SessionController(context: Context) {
         session = withContext(Dispatchers.IO) {
             runCatching { FfiVaultSession.open(blob!!) }.getOrNull()
         }
+        val guard = withContext(Dispatchers.IO) { backoff.read() }
+        val retry = guard.remaining(System.currentTimeMillis() / 1000)
         state = if (session == null) {
-            VaultUiState.Locked("Vault metadata could not be opened.")
+            VaultUiState.Locked("Vault metadata could not be opened.", retry)
         } else {
-            VaultUiState.Locked()
+            VaultUiState.Locked(retryAfterSeconds = retry)
         }
     }
 
@@ -79,9 +91,14 @@ class SessionController(context: Context) {
                 session = created
                 blob = encoded
                 biometrics.clear()
-                openStorage()
+                backoff.clear()
+                if (!openStorage()) {
+                    state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
+                    return@runCatching
+                }
                 loadItems()
                 state = VaultUiState.Recovery(created.recoveryShares())
+                recordActivity()
             } finally {
                 bytes.fill(0)
             }
@@ -89,6 +106,16 @@ class SessionController(context: Context) {
     }
 
     suspend fun unlock(password: String): Result<Unit> = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis() / 1000
+        val guard = backoff.read()
+        val persistedRetry = guard.remaining(now)
+        if (persistedRetry > 0) {
+            state = VaultUiState.Locked(
+                error = "Too many attempts. Wait $persistedRetry seconds before trying again.",
+                retryAfterSeconds = persistedRetry,
+            )
+            return@withContext Result.failure(IllegalStateException("unlock delayed"))
+        }
         runCatching {
             val locked = session ?: run {
                 val loaded = blob ?: error("no vault")
@@ -97,15 +124,24 @@ class SessionController(context: Context) {
             val bytes = password.encodeToByteArray()
             try {
                 locked.unlockAgain(bytes)
-                openStorage()
+                backoff.clear()
+                if (!openStorage()) {
+                    state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
+                    return@runCatching
+                }
                 loadItems()
                 state = VaultUiState.Unlocked
+                recordActivity()
             } finally {
                 bytes.fill(0)
             }
         }.recoverCatching { error ->
             val code = (error as? FfiException)?.numericCode() ?: 10
-            val retry = session?.retryAfter()?.toLong() ?: 0L
+            val retry = if (code == 3) {
+                backoff.recordFailure(now).remaining(now)
+            } else {
+                session?.retryAfter()?.toLong() ?: 0L
+            }
             state = VaultUiState.Locked(
                 error = when (code) {
                     3 -> "Vault could not be opened. Check your master password."
@@ -135,12 +171,17 @@ class SessionController(context: Context) {
                 session = recovered
                 blob = encoded
                 biometrics.clear()
-                openStorage()
+                backoff.clear()
+                if (!openStorage()) {
+                    state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
+                    return@runCatching
+                }
                 loadItems()
                 state = VaultUiState.Recovery(
                     shares = recovered.recoveryShares(),
                     afterRecovery = true,
                 )
+                recordActivity()
             } finally {
                 bytes.fill(0)
             }
@@ -169,14 +210,20 @@ class SessionController(context: Context) {
             val unlocked = FfiVaultSession.unlockWithMasterKey(current, masterKey)
             session?.close()
             session = unlocked
-            openStorage()
+            backoff.clear()
+            if (!openStorage()) {
+                state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
+                return@runCatching
+            }
             loadItems()
             state = VaultUiState.Unlocked
+            recordActivity()
         }
     }
 
-    private suspend fun openStorage() {
+    private suspend fun openStorage(): Boolean {
         repository = runCatching { storage.repository() }.getOrNull()
+        return repository != null
     }
 
     private suspend fun loadItems() {
@@ -204,6 +251,8 @@ class SessionController(context: Context) {
                 val repo = repository ?: error("storage is unavailable")
                 val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
                 val payload = JSONObject()
+                    .put("v", 1)
+                    .put("type", "login")
                     .put("title", title)
                     .put("username", username)
                     .put("password", password)
@@ -230,24 +279,48 @@ class SessionController(context: Context) {
         }
     }
 
-    fun lock() {
+    fun lock(message: String? = null) {
+        autoLockJob?.cancel()
+        autoLockJob = null
         session?.lock()
         items = emptyList()
         backgroundedAt = null
-        state = VaultUiState.Locked()
+        storage.closeBlocking()
+        state = VaultUiState.Locked(message)
+    }
+
+    /** Reset the foreground inactivity deadline after real user input. */
+    fun recordActivity() {
+        if (state != VaultUiState.Unlocked) return
+        autoLockJob?.cancel()
+        autoLockJob = scope.launch {
+            delay(AUTO_LOCK_MILLIS)
+            lock("Session locked after inactivity.")
+        }
     }
 
     /** Called from the lifecycle observer when the activity stops. */
     fun onBackground(now: Long = SystemClock.elapsedRealtime()) {
         backgroundedAt = now
+        autoLockJob?.cancel()
+        autoLockJob = scope.launch {
+            delay(AUTO_LOCK_MILLIS)
+            lock("Session locked after inactivity.")
+        }
     }
 
     /** Lock if the app was backgrounded for at least the 60-second timeout. */
     fun onForeground(now: Long = SystemClock.elapsedRealtime()) {
         val since = backgroundedAt ?: return
+        val elapsed = now - since
         backgroundedAt = null
-        if (state == VaultUiState.Unlocked && now - since >= AUTO_LOCK_MILLIS) {
+        if (state == VaultUiState.Unlocked && elapsed >= AUTO_LOCK_MILLIS) {
+            lock("Session locked after inactivity.")
+        } else if (state == VaultUiState.Unlocked && elapsed >= AUTO_LOCK_MILLIS - 5_000) {
             state = VaultUiState.LockWarning
+        } else if (state == VaultUiState.Unlocked) {
+            autoLockJob?.cancel()
+            autoLockJob = null
         }
     }
 
@@ -255,10 +328,12 @@ class SessionController(context: Context) {
     fun stayUnlocked() {
         backgroundedAt = null
         state = VaultUiState.Unlocked
+        recordActivity()
     }
 
     fun finishRecovery() {
         state = VaultUiState.Unlocked
+        recordActivity()
     }
 
     fun nextShare() {
@@ -268,11 +343,15 @@ class SessionController(context: Context) {
         } else {
             current.copy(index = current.index + 1)
         }
+        if (state == VaultUiState.Unlocked) recordActivity()
     }
 
     fun close() {
+        autoLockJob?.cancel()
         session?.close()
         session = null
+        storage.closeBlocking()
+        scope.cancel()
     }
 
     companion object {

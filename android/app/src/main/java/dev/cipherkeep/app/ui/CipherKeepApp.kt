@@ -55,6 +55,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.fragment.app.FragmentActivity
@@ -98,7 +99,10 @@ fun CipherKeepApp() {
     DisposableEffect(controller, lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> controller.onBackground()
+                Lifecycle.Event.ON_STOP -> {
+                    SecretInputRegistry.clearAll()
+                    controller.onBackground()
+                }
                 Lifecycle.Event.ON_START -> controller.onForeground()
                 else -> Unit
             }
@@ -112,7 +116,19 @@ fun CipherKeepApp() {
     LaunchedEffect(controller) { controller.bootstrap() }
 
     CipherKeepTheme(mode = ThemeMode.valueOf(themeName)) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+        Surface(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(controller) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            awaitPointerEvent()
+                            controller.recordActivity()
+                        }
+                    }
+                },
+            color = MaterialTheme.colorScheme.background,
+        ) {
             when (val state = controller.state) {
                 VaultUiState.Loading -> Box(
                     modifier = Modifier.fillMaxSize(),
@@ -124,6 +140,7 @@ fun CipherKeepApp() {
                 is VaultUiState.Recovery -> RecoveryScreen(controller, state)
                 is VaultUiState.Locked -> UnlockScreen(controller, state)
                 VaultUiState.LockWarning -> LockWarningScreen(controller)
+                is VaultUiState.StorageError -> StorageErrorScreen(controller, state.message)
                 VaultUiState.Unlocked -> {
                     BackHandler(enabled = screen != "vault") {
                         screen = "vault"
@@ -143,6 +160,7 @@ fun CipherKeepApp() {
                                 onSettings = { screen = "settings" },
                                 onLock = {
                                     selectedIndex = -1
+                                    SecretInputRegistry.clearAll()
                                     controller.lock()
                                 },
                             )
@@ -165,6 +183,18 @@ fun CipherKeepApp() {
 }
 
 @Composable
+private fun StorageErrorScreen(controller: SessionController, message: String) {
+    AlertDialog(
+        onDismissRequest = { controller.lock() },
+        title = { Text("Vault storage unavailable") },
+        text = { Text(message) },
+        confirmButton = {
+            TextButton(onClick = { controller.lock() }) { Text("Lock vault") }
+        },
+    )
+}
+
+@Composable
 private fun LockWarningScreen(controller: SessionController) {
     AlertDialog(
         onDismissRequest = { controller.lock() },
@@ -176,7 +206,10 @@ private fun LockWarningScreen(controller: SessionController) {
             )
         },
         confirmButton = {
-            TextButton(onClick = { controller.lock() }) { Text("Lock now") }
+            TextButton(onClick = {
+                SecretInputRegistry.clearAll()
+                controller.lock()
+            }) { Text("Lock now") }
         },
         dismissButton = {
             TextButton(onClick = { controller.stayUnlocked() }) { Text("Stay unlocked") }
@@ -188,6 +221,11 @@ private fun LockWarningScreen(controller: SessionController) {
 private fun SetupScreen(controller: SessionController) {
     var password by remember { mutableStateOf("") }
     var confirmation by remember { mutableStateOf("") }
+    DisposableEffect(Unit) {
+        val reset = { password = ""; confirmation = "" }
+        SecretInputRegistry.register(reset)
+        onDispose { SecretInputRegistry.unregister(reset) }
+    }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -395,6 +433,11 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
     var firstShare by remember { mutableStateOf("") }
     var secondShare by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
+    DisposableEffect(Unit) {
+        val reset = { password = ""; firstShare = ""; secondShare = ""; newPassword = "" }
+        SecretInputRegistry.register(reset)
+        onDispose { SecretInputRegistry.unregister(reset) }
+    }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val activity = context as? FragmentActivity
@@ -645,6 +688,11 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
     var title by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    DisposableEffect(Unit) {
+        val reset = { password = "" }
+        SecretInputRegistry.register(reset)
+        onDispose { SecretInputRegistry.unregister(reset) }
+    }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -747,91 +795,6 @@ private fun BrandMark() {
             fontWeight = FontWeight.Bold,
             color = CKColor.DarkOnPrimary,
         )
-    }
-}
-
-@Composable
-private fun LockScreen(onUnlock: () -> Unit) {
-    var password by remember { mutableStateOf("") }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.primaryContainer,
-                    ),
-                ),
-            )
-            .padding(CKDimens.Space4),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            BrandMark()
-            Spacer(Modifier.height(CKDimens.Space6))
-            Text(
-                text = "CipherKeep",
-                style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                text = "Your vault stays on this device.",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = CKDimens.Space2),
-            )
-            Spacer(Modifier.height(CKDimens.Space8))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            ) {
-                Column(modifier = Modifier.padding(CKDimens.Space4)) {
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Master password") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        shape = MaterialTheme.shapes.small,
-                    )
-                    Spacer(Modifier.height(CKDimens.Space4))
-                    Button(
-                        onClick = {
-                            password = ""
-                            onUnlock()
-                        },
-                        enabled = password.isNotEmpty(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                    ) {
-                        Text("Unlock")
-                    }
-                }
-            }
-            Spacer(Modifier.height(CKDimens.Space4))
-            Text(
-                text = "Shell build Ã¢â‚¬â€ the cryptographic core is not connected yet.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-            )
-            Text(
-                text = "More item types and autofill arrive in a later release.",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = CKDimens.Space2),
-            )
-        }
     }
 }
 

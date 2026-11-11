@@ -60,6 +60,19 @@ class SensitiveClipboard(
         private const val EXTRA_IS_SENSITIVE = "android.content.extra.IS_SENSITIVE"
         private const val EXTRA_CIPHERKEEP_TOKEN = "dev.cipherkeep.clipboard.token"
 
+        /** Clear only a clip CipherKeep marked; safe to call from onStop. */
+        fun clearIfOwned(context: Context) {
+            val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            if (manager.primaryClipDescription?.extras?.containsKey(EXTRA_CIPHERKEEP_TOKEN) != true) {
+                return
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                manager.clearPrimaryClip()
+            } else {
+                manager.setPrimaryClip(ClipData.newPlainText("CipherKeep password", ""))
+            }
+        }
+
         // Process-wide clearing must not be cancelled when the item screen leaves.
         private val clearScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }

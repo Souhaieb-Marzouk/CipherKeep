@@ -452,7 +452,9 @@ impl VaultSession {
     /// Rewrap the same keyring under freshly generated KDF parameters.
     ///
     /// The recovery envelope is unchanged, so previously issued recovery shares
-    /// remain valid. The old header no longer opens the vault.
+    /// remain valid. This is not a revocation or password-change primitive: a
+    /// copied old header still opens the same keyring with the old password.
+    /// The API is intentionally not exposed through the platform bindings.
     ///
     /// # Errors
     ///
@@ -585,12 +587,23 @@ pub fn validate_master_password(password: &SecretBytes) -> Result<()> {
     if bytes.len() < MIN_PASSWORD_LEN {
         return Err(CoreError::new(ErrorCode::PolicyRejected));
     }
-    const COMMON: [&[u8]; 5] = [
+    const COMMON: [&[u8]; 16] = [
         b"password",
         b"password1234",
         b"correcthorsebatterystaple",
         b"qwertyuiopasdf",
         b"letmein12345",
+        b"123456789012",
+        b"1234567890123",
+        b"qwerty123456",
+        b"qwertyuiop123",
+        b"admin1234567",
+        b"welcome12345",
+        b"letmein123456",
+        b"iloveyou1234",
+        b"monkey123456",
+        b"dragon123456",
+        b"football1234",
     ];
     if COMMON.iter().any(|candidate| {
         candidate.len() == bytes.len()
@@ -601,7 +614,25 @@ pub fn validate_master_password(password: &SecretBytes) -> Result<()> {
     }) {
         return Err(CoreError::new(ErrorCode::PolicyRejected));
     }
+    let lower: Vec<u8> = bytes.iter().map(u8::to_ascii_lowercase).collect();
+    const SEQUENCES: [&[u8]; 5] = [b"123456", b"abcdef", b"qwerty", b"asdfgh", b"zxcvbn"];
+    if SEQUENCES.iter().any(|sequence| {
+        lower
+            .windows(sequence.len())
+            .any(|window| window == *sequence)
+    }) {
+        return Err(CoreError::new(ErrorCode::PolicyRejected));
+    }
     if bytes.iter().all(|byte| *byte == bytes[0]) {
+        return Err(CoreError::new(ErrorCode::PolicyRejected));
+    }
+    if bytes
+        .iter()
+        .copied()
+        .collect::<std::collections::BTreeSet<_>>()
+        .len()
+        < 5
+    {
         return Err(CoreError::new(ErrorCode::PolicyRejected));
     }
     Ok(())

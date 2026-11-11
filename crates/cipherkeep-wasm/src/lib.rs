@@ -35,7 +35,6 @@ fn js_error(error: cipherkeep_core::CoreError) -> JsValue {
 }
 
 /// Return the shared core version.
-#[wasm_bindgen]
 #[must_use]
 pub fn core_version() -> String {
     cipherkeep_core::VERSION.to_string()
@@ -46,7 +45,6 @@ pub fn core_version() -> String {
 /// # Errors
 ///
 /// Returns a JS object `{ code, message }` with code 10 on CSPRNG failure.
-#[wasm_bindgen]
 pub fn generate_key() -> Result<Vec<u8>, JsValue> {
     let mut key = Zeroizing::new([0u8; 32]);
     getrandom(&mut key[..]).map_err(|_| {
@@ -67,7 +65,6 @@ pub fn generate_key() -> Result<Vec<u8>, JsValue> {
 /// # Errors
 ///
 /// Returns a JS error object for a bad salt length or derivation failure.
-#[wasm_bindgen]
 pub fn derive_master_key_for_test(password: Vec<u8>, salt: Vec<u8>) -> Result<Vec<u8>, JsValue> {
     let mut password = password;
     let mut salt = salt;
@@ -99,7 +96,6 @@ pub fn derive_master_key_for_test(password: Vec<u8>, salt: Vec<u8>) -> Result<Ve
 /// # Errors
 ///
 /// Returns a JS error object for malformed ids/keys or sealing failure.
-#[wasm_bindgen]
 pub fn seal_field(
     item_key: Vec<u8>,
     item_id: Vec<u8>,
@@ -125,7 +121,6 @@ pub fn seal_field(
 /// # Errors
 ///
 /// Returns a JS error object with code 3 for a wrong key/context or tampering.
-#[wasm_bindgen]
 pub fn open_field(
     item_key: Vec<u8>,
     item_id: Vec<u8>,
@@ -151,7 +146,6 @@ pub fn open_field(
 /// # Errors
 ///
 /// Returns a JS error object for malformed ids/keys or wrapping failure.
-#[wasm_bindgen]
 pub fn wrap_item_key(
     vault_key: Vec<u8>,
     item_key: Vec<u8>,
@@ -183,7 +177,6 @@ pub fn wrap_item_key(
 /// # Errors
 ///
 /// Returns a JS error object with code 3 for wrong material/context or tampering.
-#[wasm_bindgen]
 pub fn unwrap_item_key(
     vault_key: Vec<u8>,
     vault_id: Vec<u8>,
@@ -213,7 +206,6 @@ pub fn unwrap_item_key(
 /// # Errors
 ///
 /// Returns a JS error object for a wrong secret length or CSPRNG failure.
-#[wasm_bindgen]
 pub fn recovery_split(secret: Vec<u8>) -> Result<Vec<String>, JsValue> {
     let mut secret = secret;
     let result = split_2_of_3(&SecretBytes::from_slice(&secret));
@@ -230,7 +222,6 @@ pub fn recovery_split(secret: Vec<u8>) -> Result<Vec<String>, JsValue> {
 /// # Errors
 ///
 /// Returns a JS error object for malformed, corrupted or duplicate shares.
-#[wasm_bindgen]
 pub fn recovery_combine(first: String, second: String) -> Result<Vec<u8>, JsValue> {
     let first = RecoveryShare::decode(&first).map_err(js_error)?;
     let second = RecoveryShare::decode(&second).map_err(js_error)?;
@@ -438,14 +429,22 @@ impl WasmVaultSession {
     /// One-time recovery shares; empty after a normal unlock.
     #[wasm_bindgen]
     #[must_use]
-    pub fn recovery_shares(&self) -> Vec<String> {
-        self.shares.clone()
+    pub fn recovery_shares(&mut self) -> Vec<String> {
+        let mut shares = std::mem::take(&mut self.shares);
+        for share in &mut shares {
+            share.zeroize();
+        }
+        shares
     }
 
     /// Lock and drop the master key/keyring.
     #[wasm_bindgen]
     pub fn lock(&mut self) {
         self.inner.lock();
+        for share in &mut self.shares {
+            share.zeroize();
+        }
+        self.shares.clear();
     }
 
     /// Whether the session is locked.
@@ -482,19 +481,6 @@ impl WasmVaultSession {
         self.inner
             .unlock_again(&secret, now_secs())
             .map_err(js_error)
-    }
-
-    /// Rewrap under fresh KDF parameters.
-    ///
-    /// # Errors
-    ///
-    /// As the core session `rewrap`.
-    #[wasm_bindgen]
-    pub fn rewrap(&mut self, password: Vec<u8>) -> Result<(), JsValue> {
-        let mut password = password;
-        let secret = SecretBytes::from_slice(&password);
-        password.zeroize();
-        self.inner.rewrap(&secret).map_err(js_error)
     }
 }
 
@@ -564,7 +550,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn wasm_session_create_unlock_and_lock() {
         let password = b"correct horse battery staple".to_vec();
-        let session = WasmVaultSession::create(password.clone()).expect("create");
+        let mut session = WasmVaultSession::create(password.clone()).expect("create");
         assert!(!session.is_locked());
         assert_eq!(session.recovery_shares().len(), 3);
         let blob = session.blob();

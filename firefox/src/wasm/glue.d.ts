@@ -34,5 +34,4 @@ declare class WasmVaultSession {
   failed_attempts(): number;
   retry_after(): number;
   unlock_again(password: Uint8Array): void;
-  rewrap(password: Uint8Array): void;
 }

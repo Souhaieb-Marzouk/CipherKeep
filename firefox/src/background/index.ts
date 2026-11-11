@@ -1,5 +1,6 @@
 import { isRequest, type ItemView, type Request, type Response } from "../shared/protocol";
 import { CiphertextStore } from "../shared/ciphertext-store";
+import { backoffSeconds, remainingSeconds } from "../shared/backoff";
 import { checkForUpdates } from "./updates";
 
 let session: WasmVaultSession | null = null;
@@ -8,6 +9,8 @@ let shares: string[] = [];
 let wasmReady: Promise<unknown> | null = null;
 const LOCK_ALARM = "cipherkeep-auto-lock";
 const itemStore = new CiphertextStore();
+const UNLOCK_FAILED = "unlockFailedAttempts";
+const UNLOCK_NEXT = "unlockNextAttemptAt";
 let itemStoreReady: Promise<void> | null = null;
 
 function ensureWasm(): Promise<unknown> {
@@ -131,13 +134,45 @@ async function listItems(): Promise<ItemView[]> {
   return items;
 }
 
+interface BackoffState {
+  failedAttempts: number;
+  nextAttemptAt: number;
+}
+
+async function readBackoff(): Promise<BackoffState> {
+  const stored = await browser.storage.local.get([UNLOCK_FAILED, UNLOCK_NEXT]);
+  return {
+    failedAttempts: typeof stored[UNLOCK_FAILED] === "number" ? stored[UNLOCK_FAILED] : 0,
+    nextAttemptAt: typeof stored[UNLOCK_NEXT] === "number" ? stored[UNLOCK_NEXT] : 0,
+  };
+}
+
+async function recordFailure(nowSeconds: number): Promise<BackoffState> {
+  const current = await readBackoff();
+  const failedAttempts = current.failedAttempts + 1;
+  const delay = backoffSeconds(failedAttempts);
+  const nextAttemptAt = delay === 0 ? 0 : nowSeconds + delay;
+  await browser.storage.local.set({
+    [UNLOCK_FAILED]: failedAttempts,
+    [UNLOCK_NEXT]: nextAttemptAt,
+  });
+  return { failedAttempts, nextAttemptAt };
+}
+
+async function clearBackoff(): Promise<void> {
+  await browser.storage.local.remove([UNLOCK_FAILED, UNLOCK_NEXT]);
+}
+
 async function status(): Promise<Response> {
   return {
     ok: true,
     kind: "status",
     hasVault: vaultBlob !== null,
     locked: session?.is_locked() ?? true,
-    retryAfter: session?.retry_after() ?? 0,
+    retryAfter: Math.max(
+      session?.retry_after() ?? 0,
+      remainingSeconds((await readBackoff()).nextAttemptAt, Math.floor(Date.now() / 1000)),
+    ),
   };
 }
 
@@ -159,6 +194,7 @@ async function handle(request: Request): Promise<Response> {
         vaultBlob = bytesToBase64(created.blob());
         await browser.storage.local.set({ vaultBlob });
         session = created;
+        await clearBackoff();
         shares = created.recovery_shares();
         armAutoLock();
         return { ok: true, kind: "ok", shares };
@@ -167,13 +203,25 @@ async function handle(request: Request): Promise<Response> {
         if (vaultBlob === null) {
           return { ok: false, error: "No vault exists." };
         }
+        const now = Math.floor(Date.now() / 1000);
+        const guard = await readBackoff();
+        const retry = remainingSeconds(guard.nextAttemptAt, now);
+        if (retry > 0) {
+          return { ok: false, error: `Too many attempts. Wait ${retry} seconds.`, code: 8 };
+        }
         session ??= WasmVaultSession.open(base64ToBytes(vaultBlob));
         const password = new TextEncoder().encode(request.password);
         try {
           session.unlock_again(password);
+        } catch (error) {
+          if (codeOf(error) === 3) {
+            await recordFailure(now);
+          }
+          throw error;
         } finally {
           password.fill(0);
         }
+        await clearBackoff();
         armAutoLock();
         return { ok: true, kind: "ok" };
       }
@@ -193,6 +241,8 @@ async function handle(request: Request): Promise<Response> {
         const idBytes = crypto.getRandomValues(new Uint8Array(16));
         const payload = new TextEncoder().encode(
           JSON.stringify({
+            v: 1,
+            type: "login",
             title: request.title,
             username: request.username,
             password: request.password,
@@ -227,6 +277,7 @@ async function handle(request: Request): Promise<Response> {
         vaultBlob = bytesToBase64(recovered.blob());
         await browser.storage.local.set({ vaultBlob });
         session = recovered;
+        await clearBackoff();
         shares = recovered.recovery_shares();
         armAutoLock();
         return { ok: true, kind: "ok", shares };

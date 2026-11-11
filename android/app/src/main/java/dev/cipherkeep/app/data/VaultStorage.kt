@@ -4,6 +4,7 @@ import android.content.Context
 import dev.cipherkeep.app.data.db.VaultDatabase
 import dev.cipherkeep.app.data.db.VaultRepository
 import dev.cipherkeep.app.data.keystore.PassphraseStore
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -35,5 +36,10 @@ class VaultStorage(
     suspend fun close() = mutex.withLock {
         database?.close()
         database = null
+    }
+
+    /** Close from a lifecycle callback that cannot suspend. */
+    fun closeBlocking() {
+        runBlocking { close() }
     }
 }

@@ -7,6 +7,11 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
 }
 
+val releaseStore = System.getenv("CIPHERKEEP_KEYSTORE")
+val releaseStorePassword = System.getenv("CIPHERKEEP_KEYSTORE_PASSWORD")
+val releaseKeyAlias = System.getenv("CIPHERKEEP_KEY_ALIAS")
+val releaseKeyPassword = System.getenv("CIPHERKEEP_KEY_PASSWORD")
+
 android {
     namespace = "dev.cipherkeep.app"
     compileSdk = 36
@@ -21,6 +26,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (releaseStore != null) {
+            create("release") {
+                storeFile = file(releaseStore)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -28,6 +44,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
 

@@ -83,6 +83,34 @@ jobs:
       - name: Run cargo-deny
         run: cargo deny --all-features check
 
+  android:
+    name: android build lint test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - run: chmod +x gradlew
+      - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest --no-daemon
+      - name: Build a non-debuggable release artifact
+        run: ./gradlew :app:assembleRelease --no-daemon
+      - name: Reject a debuggable release APK
+        shell: bash
+        run: |
+          apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
+          test -n "$apk"
+          aapt=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -n 1)
+          "$aapt" dump badging "$apk" | tee badging.txt
+          if grep -q 'application-debuggable' badging.txt; then
+            echo "release APK is debuggable" >&2
+            exit 1
+          fi
+
   firefox:
     name: firefox typecheck test build lint
     runs-on: ubuntu-latest

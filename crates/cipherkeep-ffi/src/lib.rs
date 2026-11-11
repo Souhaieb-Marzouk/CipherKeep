@@ -106,7 +106,6 @@ impl From<cipherkeep_core::CoreError> for FfiError {
 }
 
 /// Return the shared core version.
-#[uniffi::export]
 #[must_use]
 pub fn core_version() -> String {
     cipherkeep_core::VERSION.to_string()
@@ -117,7 +116,6 @@ pub fn core_version() -> String {
 /// # Errors
 ///
 /// Returns [`FfiError::Internal`] if the OS CSPRNG fails.
-#[uniffi::export]
 pub fn generate_key() -> Result<Vec<u8>, FfiError> {
     let mut key = Zeroizing::new([0u8; 32]);
     getrandom(&mut key[..]).map_err(|_| FfiError::Internal)?;
@@ -136,7 +134,6 @@ pub fn generate_key() -> Result<Vec<u8>, FfiError> {
 /// # Errors
 ///
 /// Returns a redacted [`FfiError`] for a bad salt length or derivation failure.
-#[uniffi::export]
 pub fn derive_master_key_for_test(password: Vec<u8>, salt: Vec<u8>) -> Result<Vec<u8>, FfiError> {
     let mut password = password;
     let mut salt = salt;
@@ -165,7 +162,6 @@ pub fn derive_master_key_for_test(password: Vec<u8>, salt: Vec<u8>) -> Result<Ve
 /// # Errors
 ///
 /// Returns a redacted [`FfiError`] for malformed ids/keys or sealing failure.
-#[uniffi::export]
 pub fn seal_field(
     item_key: Vec<u8>,
     item_id: Vec<u8>,
@@ -192,7 +188,6 @@ pub fn seal_field(
 ///
 /// Returns [`FfiError::AuthenticationFailed`] for a wrong key, wrong context or
 /// tampered envelope.
-#[uniffi::export]
 pub fn open_field(
     item_key: Vec<u8>,
     item_id: Vec<u8>,
@@ -217,7 +212,6 @@ pub fn open_field(
 /// # Errors
 ///
 /// Returns a redacted [`FfiError`] for malformed ids/keys or wrapping failure.
-#[uniffi::export]
 pub fn wrap_item_key(
     vault_key: Vec<u8>,
     item_key: Vec<u8>,
@@ -247,7 +241,6 @@ pub fn wrap_item_key(
 ///
 /// Returns [`FfiError::AuthenticationFailed`] for wrong material/context or a
 /// tampered envelope.
-#[uniffi::export]
 pub fn unwrap_item_key(
     vault_key: Vec<u8>,
     vault_id: Vec<u8>,
@@ -274,7 +267,6 @@ pub fn unwrap_item_key(
 /// # Errors
 ///
 /// Returns a redacted [`FfiError`] for a wrong secret length or CSPRNG failure.
-#[uniffi::export]
 pub fn recovery_split(secret: Vec<u8>) -> Result<Vec<String>, FfiError> {
     let mut secret = secret;
     let result = split_2_of_3(&SecretBytes::from_slice(&secret));
@@ -291,7 +283,6 @@ pub fn recovery_split(secret: Vec<u8>) -> Result<Vec<String>, FfiError> {
 /// # Errors
 ///
 /// Returns a redacted [`FfiError`] for malformed, corrupted or duplicate shares.
-#[uniffi::export]
 pub fn recovery_combine(first: String, second: String) -> Result<Vec<u8>, FfiError> {
     let first = RecoveryShare::decode(&first)?;
     let second = RecoveryShare::decode(&second)?;
@@ -427,12 +418,24 @@ impl FfiVaultSession {
     /// One-time recovery shares, newest first. Empty after a normal unlock.
     #[must_use]
     pub fn recovery_shares(&self) -> Vec<String> {
-        self.with_state(|state| state.shares.clone())
+        self.with_state_mut(|state| {
+            let mut shares = std::mem::take(&mut state.shares);
+            for share in &mut shares {
+                share.zeroize();
+            }
+            shares
+        })
     }
 
     /// Lock and drop the master key/keyring.
     pub fn lock(&self) {
-        self.with_state_mut(|state| state.session.lock());
+        self.with_state_mut(|state| {
+            state.session.lock();
+            for share in &mut state.shares {
+                share.zeroize();
+            }
+            state.shares.clear();
+        });
     }
 
     /// Whether the session is locked.
@@ -606,18 +609,6 @@ impl FfiVaultSession {
                 shares: Vec::new(),
             }),
         }))
-    }
-
-    /// Rewrap under fresh KDF parameters.
-    ///
-    /// # Errors
-    ///
-    /// As the core session `rewrap`.
-    pub fn rewrap(&self, password: Vec<u8>) -> Result<(), FfiError> {
-        let mut password = password;
-        let secret = SecretBytes::from_slice(&password);
-        password.zeroize();
-        self.with_state_mut(|state| state.session.rewrap(&secret).map_err(FfiError::from))
     }
 }
 
