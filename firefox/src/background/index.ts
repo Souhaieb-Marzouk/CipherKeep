@@ -1,0 +1,261 @@
+import { isRequest, type ItemView, type Request, type Response } from "../shared/protocol";
+import { CiphertextStore } from "../shared/ciphertext-store";
+import { checkForUpdates } from "./updates";
+
+let session: WasmVaultSession | null = null;
+let vaultBlob: string | null = null;
+let shares: string[] = [];
+let wasmReady: Promise<unknown> | null = null;
+const LOCK_ALARM = "cipherkeep-auto-lock";
+const itemStore = new CiphertextStore();
+let itemStoreReady: Promise<void> | null = null;
+
+function ensureWasm(): Promise<unknown> {
+  wasmReady ??= wasm_bindgen(browser.runtime.getURL("cipherkeep_wasm_bg.wasm"));
+  return wasmReady;
+}
+
+function ensureItemStore(): Promise<void> {
+  itemStoreReady ??= itemStore.open();
+  return itemStoreReady;
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) {
+    throw new Error("invalid id");
+  }
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let index = 0; index < bytes.length; index += 1) {
+    bytes[index] = Number.parseInt(hex.slice(index * 2, index * 2 + 2), 16);
+  }
+  return bytes;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(encoded: string): Uint8Array {
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function load(): Promise<void> {
+  const stored = await browser.storage.local.get("vaultBlob");
+  if (typeof stored.vaultBlob !== "string") {
+    return;
+  }
+  await ensureWasm();
+  vaultBlob = stored.vaultBlob;
+  session = WasmVaultSession.open(base64ToBytes(vaultBlob));
+}
+
+function codeOf(error: unknown): number | undefined {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "number" ? code : undefined;
+  }
+  return undefined;
+}
+
+function messageFor(code: number | undefined): string {
+  switch (code) {
+    case 3:
+      return "Vault could not be opened. Check your master password.";
+    case 8:
+      return "Too many attempts. Wait before trying again.";
+    case 11:
+      return "The password does not meet the minimum policy.";
+    default:
+      return "Vault operation failed.";
+  }
+}
+
+function armAutoLock(): void {
+  void browser.alarms.create(LOCK_ALARM, { delayInMinutes: 1 });
+}
+
+async function lockSession(): Promise<void> {
+  session?.lock();
+  shares = [];
+  await browser.alarms.clear(LOCK_ALARM);
+  try {
+    await browser.runtime.sendMessage({ type: "locked" });
+  } catch {
+    // No popup is open.
+  }
+}
+
+function requireSession(): WasmVaultSession {
+  if (session === null || session.is_locked()) {
+    throw Object.assign(new Error("vault is locked"), { code: 5 });
+  }
+  return session;
+}
+
+async function listItems(): Promise<ItemView[]> {
+  await ensureItemStore();
+  const active = requireSession();
+  const records = await itemStore.list();
+  const items: ItemView[] = [];
+  for (const record of records) {
+    try {
+      const payload = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
+      const json = JSON.parse(new TextDecoder().decode(payload)) as {
+        title?: unknown;
+        username?: unknown;
+        password?: unknown;
+      };
+      items.push({
+        id: record.id,
+        title: typeof json.title === "string" ? json.title : "",
+        username: typeof json.username === "string" ? json.username : "",
+        password: typeof json.password === "string" ? json.password : "",
+      });
+    } catch {
+      // A record from a different vault is skipped rather than exposed.
+    }
+  }
+  return items;
+}
+
+async function status(): Promise<Response> {
+  return {
+    ok: true,
+    kind: "status",
+    hasVault: vaultBlob !== null,
+    locked: session?.is_locked() ?? true,
+    retryAfter: session?.retry_after() ?? 0,
+  };
+}
+
+async function handle(request: Request): Promise<Response> {
+  try {
+    await ensureWasm();
+    switch (request.type) {
+      case "status":
+        return status();
+      case "check-updates":
+        return { ok: true, kind: "update", update: await checkForUpdates() };
+      case "create": {
+        if (vaultBlob !== null) {
+          return { ok: false, error: "A vault already exists." };
+        }
+        const password = new TextEncoder().encode(request.password);
+        const created = WasmVaultSession.create(password);
+        password.fill(0);
+        vaultBlob = bytesToBase64(created.blob());
+        await browser.storage.local.set({ vaultBlob });
+        session = created;
+        shares = created.recovery_shares();
+        armAutoLock();
+        return { ok: true, kind: "ok", shares };
+      }
+      case "unlock": {
+        if (vaultBlob === null) {
+          return { ok: false, error: "No vault exists." };
+        }
+        session ??= WasmVaultSession.open(base64ToBytes(vaultBlob));
+        const password = new TextEncoder().encode(request.password);
+        try {
+          session.unlock_again(password);
+        } finally {
+          password.fill(0);
+        }
+        armAutoLock();
+        return { ok: true, kind: "ok" };
+      }
+      case "lock":
+        await lockSession();
+        return { ok: true, kind: "ok" };
+      case "activity":
+        if (session !== null && !session.is_locked()) {
+          armAutoLock();
+        }
+        return { ok: true, kind: "ok" };
+      case "list-items":
+        return { ok: true, kind: "items", items: await listItems() };
+      case "save-item": {
+        const active = requireSession();
+        await ensureItemStore();
+        const idBytes = crypto.getRandomValues(new Uint8Array(16));
+        const payload = new TextEncoder().encode(
+          JSON.stringify({
+            title: request.title,
+            username: request.username,
+            password: request.password,
+          }),
+        );
+        const ciphertext = active.encrypt_item(idBytes, payload);
+        payload.fill(0);
+        await itemStore.put({
+          id: bytesToHex(idBytes),
+          ciphertext,
+          updatedAt: Date.now(),
+        });
+        return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "delete-item":
+        requireSession();
+        await ensureItemStore();
+        await itemStore.delete(request.id);
+        return { ok: true, kind: "items", items: await listItems() };
+      case "recover": {
+        if (vaultBlob === null) {
+          return { ok: false, error: "No vault exists." };
+        }
+        const password = new TextEncoder().encode(request.newPassword);
+        const recovered = WasmVaultSession.recover(
+          base64ToBytes(vaultBlob),
+          request.first.trim(),
+          request.second.trim(),
+          password,
+        );
+        password.fill(0);
+        vaultBlob = bytesToBase64(recovered.blob());
+        await browser.storage.local.set({ vaultBlob });
+        session = recovered;
+        shares = recovered.recovery_shares();
+        armAutoLock();
+        return { ok: true, kind: "ok", shares };
+      }
+    }
+  } catch (error) {
+    const code = codeOf(error);
+    return code === undefined
+      ? { ok: false, error: messageFor(undefined) }
+      : { ok: false, error: messageFor(code), code };
+  }
+}
+
+void load().catch(() => {
+  // Status reports locked; no secret is logged from this path.
+});
+
+browser.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === LOCK_ALARM) {
+    void lockSession();
+  }
+});
+
+browser.runtime.onMessage.addListener((message: unknown, sender) => {
+  if (sender.id !== browser.runtime.id) {
+    return Promise.resolve<Response>({ ok: false, error: "unauthorized" });
+  }
+  if (!isRequest(message)) {
+    return Promise.resolve<Response>({ ok: false, error: "bad request" });
+  }
+  return handle(message);
+});

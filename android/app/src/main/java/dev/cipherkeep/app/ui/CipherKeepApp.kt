@@ -1,0 +1,1323 @@
+package dev.cipherkeep.app.ui
+
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.fragment.app.FragmentActivity
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import dev.cipherkeep.app.data.SensitiveClipboard
+import dev.cipherkeep.app.update.UpdateChecker
+import dev.cipherkeep.app.update.UpdateOutcome
+import dev.cipherkeep.app.update.UpdatePreferences
+import dev.cipherkeep.app.update.UpdateScheduler
+import dev.cipherkeep.app.data.keystore.BiometricKeyManager
+import dev.cipherkeep.app.data.keystore.WrappedSecret
+import dev.cipherkeep.app.data.SessionController
+import dev.cipherkeep.app.data.VaultItem
+import dev.cipherkeep.core.FfiException
+import dev.cipherkeep.core.numericCode
+import dev.cipherkeep.app.data.VaultUiState
+import dev.cipherkeep.app.ui.theme.CKColor
+import dev.cipherkeep.app.ui.theme.CKDimens
+import dev.cipherkeep.app.ui.theme.CipherKeepTheme
+import dev.cipherkeep.app.ui.theme.ThemeMode
+import kotlinx.coroutines.launch
+
+
+@Composable
+fun CipherKeepApp() {
+    var themeName by rememberSaveable { mutableStateOf(ThemeMode.System.name) }
+    var screen by rememberSaveable { mutableStateOf("vault") }
+    var selectedIndex by rememberSaveable { mutableIntStateOf(-1) }
+    val context = LocalContext.current
+    val controller = remember { SessionController(context) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    DisposableEffect(controller, lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> controller.onBackground()
+                Lifecycle.Event.ON_START -> controller.onForeground()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            controller.close()
+        }
+    }
+    LaunchedEffect(controller) { controller.bootstrap() }
+
+    CipherKeepTheme(mode = ThemeMode.valueOf(themeName)) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            when (val state = controller.state) {
+                VaultUiState.Loading -> Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator()
+                }
+                VaultUiState.Setup -> SetupScreen(controller)
+                is VaultUiState.Recovery -> RecoveryScreen(controller, state)
+                is VaultUiState.Locked -> UnlockScreen(controller, state)
+                VaultUiState.LockWarning -> LockWarningScreen(controller)
+                VaultUiState.Unlocked -> {
+                    BackHandler(enabled = screen != "vault") {
+                        screen = "vault"
+                        selectedIndex = -1
+                    }
+                    when (screen) {
+                        "vault" -> if (selectedIndex in controller.items.indices) {
+                            ItemDetailScreen(
+                                item = controller.items[selectedIndex],
+                                onBack = { selectedIndex = -1 },
+                            )
+                        } else {
+                            VaultScreen(
+                                items = controller.items,
+                                onOpen = { index -> selectedIndex = index },
+                                onAdd = { screen = "add" },
+                                onSettings = { screen = "settings" },
+                                onLock = {
+                                    selectedIndex = -1
+                                    controller.lock()
+                                },
+                            )
+                        }
+                        "add" -> AddItemScreen(
+                            controller = controller,
+                            onBack = { screen = "vault" },
+                        )
+                        "settings" -> SettingsScreen(
+                            controller = controller,
+                            themeMode = ThemeMode.valueOf(themeName),
+                            onThemeMode = { themeName = it.name },
+                            onBack = { screen = "vault" },
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LockWarningScreen(controller: SessionController) {
+    AlertDialog(
+        onDismissRequest = { controller.lock() },
+        title = { Text("Session idle") },
+        text = {
+            Text(
+                "CipherKeep was in the background for a minute. Lock the vault now, " +
+                    "or continue without re-authenticating.",
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { controller.lock() }) { Text("Lock now") }
+        },
+        dismissButton = {
+            TextButton(onClick = { controller.stayUnlocked() }) { Text("Stay unlocked") }
+        },
+    )
+}
+
+@Composable
+private fun SetupScreen(controller: SessionController) {
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ),
+            )
+            .padding(CKDimens.Space4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BrandMark()
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = "Create your vault",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "The master password is never stored. Argon2id runs on this device.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = CKDimens.Space2),
+            )
+            Spacer(Modifier.height(CKDimens.Space4))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Master password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        shape = MaterialTheme.shapes.small,
+                    )
+                    OutlinedTextField(
+                        value = confirmation,
+                        onValueChange = { confirmation = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = CKDimens.Space3),
+                        label = { Text("Confirm master password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        shape = MaterialTheme.shapes.small,
+                    )
+                    Text(
+                        text = "${password.length} characters · 12 minimum",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (password.length >= 12) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.padding(top = CKDimens.Space2),
+                    )
+                    if (error != null) {
+                        Text(
+                            text = error.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = CKDimens.Space2),
+                        )
+                    }
+                    Spacer(Modifier.height(CKDimens.Space4))
+                    Button(
+                        onClick = {
+                            if (password != confirmation) {
+                                error = "Passwords do not match."
+                                return@Button
+                            }
+                            busy = true
+                            error = null
+                            scope.launch {
+                                val result = controller.create(password)
+                                password = ""
+                                confirmation = ""
+                                busy = false
+                                result.exceptionOrNull()?.let {
+                                    error = if ((it as? FfiException)?.numericCode() == 11) {
+                                        "Use at least 12 characters and avoid common passwords."
+                                    } else {
+                                        "Vault could not be created."
+                                    }
+                                }
+                            }
+                        },
+                        enabled = !busy && password.length >= 12 && password == confirmation,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text(if (busy) "Deriving key…" else "Create vault")
+                    }
+                }
+            }
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = "Next: three recovery shares, shown one at a time.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun RecoveryScreen(controller: SessionController, state: VaultUiState.Recovery) {
+    var saved by remember(state.index) { mutableStateOf(false) }
+    val share = state.shares.getOrNull(state.index).orEmpty()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(CKDimens.Space4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            BrandMark()
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = if (state.afterRecovery) "New recovery shares" else "Recovery shares",
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Share ${state.index + 1} of ${state.shares.size}. " +
+                    "Store it offline and never keep all shares together.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = CKDimens.Space2),
+            )
+            Spacer(Modifier.height(CKDimens.Space4))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    Text(
+                        text = "CIPHERKEEP RECOVERY SHARE ${state.index + 1}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = share,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontFamily = FontFamily.Monospace,
+                        ),
+                        modifier = Modifier.padding(top = CKDimens.Space2),
+                    )
+                }
+            }
+            Spacer(Modifier.height(CKDimens.Space3))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = saved, onCheckedChange = { saved = it })
+                Text(
+                    text = "I have saved this share",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            Spacer(Modifier.height(CKDimens.Space3))
+            Button(
+                onClick = { controller.nextShare() },
+                enabled = saved,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(if (state.index + 1 >= state.shares.size) "Finish" else "Next share")
+            }
+            Spacer(Modifier.height(CKDimens.Space3))
+            Text(
+                text = "Any two shares restore access. A single share reveals nothing.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun UnlockScreen(controller: SessionController, state: VaultUiState.Locked) {
+    var password by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var showRecovery by remember { mutableStateOf(false) }
+    var firstShare by remember { mutableStateOf("") }
+    var secondShare by remember { mutableStateOf("") }
+    var newPassword by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val activity = context as? FragmentActivity
+    val biometricKey = remember { BiometricKeyManager() }
+    var biometricWrapped by remember { mutableStateOf<WrappedSecret?>(null) }
+    LaunchedEffect(controller) {
+        biometricWrapped = controller.biometricWrapped()
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ),
+            )
+            .padding(CKDimens.Space4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            BrandMark()
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = "CipherKeep",
+                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Unlock your local vault.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(CKDimens.Space4))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    if (!showRecovery) {
+                        OutlinedTextField(
+                            value = password,
+                            onValueChange = { password = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Master password") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            shape = MaterialTheme.shapes.small,
+                        )
+                        val message = error ?: state.error
+                        if (message != null) {
+                            Text(
+                                text = message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = CKDimens.Space2),
+                            )
+                        }
+                        if (state.retryAfterSeconds > 0) {
+                            Text(
+                                text = "Local delay: ${state.retryAfterSeconds}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = CKDimens.Space2),
+                            )
+                        }
+                        Spacer(Modifier.height(CKDimens.Space4))
+                        Button(
+                            onClick = {
+                                busy = true
+                                error = null
+                                scope.launch {
+                                    val result = controller.unlock(password)
+                                    password = ""
+                                    busy = false
+                                    result.exceptionOrNull()?.let {
+                                        error = "Vault could not be opened. Check your master password."
+                                    }
+                                }
+                            },
+                            enabled = !busy && password.isNotEmpty() && state.retryAfterSeconds == 0L,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Text(if (busy) "Unlocking…" else "Unlock")
+                        }
+                        if (biometricWrapped != null && activity != null && canUseBiometrics(activity)) {
+                            OutlinedButton(
+                                onClick = {
+                                    busy = true
+                                    error = null
+                                    val wrapped = biometricWrapped ?: return@OutlinedButton
+                                    try {
+                                        val cipher = biometricKey.decryptCipher(wrapped.iv)
+                                        promptBiometric(
+                                            activity = activity,
+                                            cipher = cipher,
+                                            title = "Unlock CipherKeep",
+                                            subtitle = "Authenticate to unwrap the vault master key.",
+                                            onSuccess = { authenticated ->
+                                                scope.launch {
+                                                    try {
+                                                        val master = authenticated.doFinal(wrapped.ciphertext)
+                                                        val result = controller.unlockWithMasterKey(master)
+                                                        master.fill(0)
+                                                        busy = false
+                                                        if (result.isFailure) {
+                                                            error = "Biometric unlock failed. Use your master password."
+                                                        }
+                                                    } catch (_: Exception) {
+                                                        busy = false
+                                                        error = "Biometric unlock failed. Use your master password."
+                                                    }
+                                                }
+                                            },
+                                            onFailure = { reason ->
+                                                busy = false
+                                                error = "Biometric authentication failed: $reason"
+                                            },
+                                        )
+                                    } catch (_: Exception) {
+                                        busy = false
+                                        error = "Biometric key is unavailable. Use your master password."
+                                    }
+                                },
+                                enabled = !busy,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = CKDimens.Space2),
+                                shape = MaterialTheme.shapes.medium,
+                            ) {
+                                Text("Unlock with biometrics")
+                            }
+                        }
+                        TextButton(
+                            onClick = { showRecovery = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Forgot password? Use recovery shares")
+                        }
+                    } else {
+                        Text(
+                            text = "Recover with two shares",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "Enter any two of your three shares and choose a new master password.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = CKDimens.Space2),
+                        )
+                        OutlinedTextField(
+                            value = firstShare,
+                            onValueChange = { firstShare = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = CKDimens.Space3),
+                            label = { Text("Recovery share 1") },
+                            minLines = 2,
+                            shape = MaterialTheme.shapes.small,
+                        )
+                        OutlinedTextField(
+                            value = secondShare,
+                            onValueChange = { secondShare = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = CKDimens.Space3),
+                            label = { Text("Recovery share 2") },
+                            minLines = 2,
+                            shape = MaterialTheme.shapes.small,
+                        )
+                        OutlinedTextField(
+                            value = newPassword,
+                            onValueChange = { newPassword = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = CKDimens.Space3),
+                            label = { Text("New master password") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            shape = MaterialTheme.shapes.small,
+                        )
+                        if (error != null) {
+                            Text(
+                                text = error.orEmpty(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.padding(top = CKDimens.Space2),
+                            )
+                        }
+                        Spacer(Modifier.height(CKDimens.Space4))
+                        Button(
+                            onClick = {
+                                busy = true
+                                error = null
+                                scope.launch {
+                                    val result = controller.recover(
+                                        firstShare,
+                                        secondShare,
+                                        newPassword,
+                                    )
+                                    busy = false
+                                    result.exceptionOrNull()?.let {
+                                        error = "Recovery failed. Check both shares and the new password."
+                                    }
+                                }
+                            },
+                            enabled = !busy &&
+                                firstShare.isNotBlank() &&
+                                secondShare.isNotBlank() &&
+                                newPassword.length >= 12,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                        ) {
+                            Text(if (busy) "Recovering…" else "Recover vault")
+                        }
+                        TextButton(
+                            onClick = {
+                                showRecovery = false
+                                error = null
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Back to master password")
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(CKDimens.Space3))
+            Text(
+                text = "No account or server is involved. A lost password with fewer than two shares cannot be recovered.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
+    var title by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = { Text("New item") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
+        ) {
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Title") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.small,
+            )
+            OutlinedTextField(
+                value = username,
+                onValueChange = { username = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Username") },
+                singleLine = true,
+                shape = MaterialTheme.shapes.small,
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                shape = MaterialTheme.shapes.small,
+            )
+            if (error != null) {
+                Text(
+                    text = error.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            Button(
+                onClick = {
+                    busy = true
+                    error = null
+                    scope.launch {
+                        val result = controller.saveItem(title.trim(), username.trim(), password)
+                        busy = false
+                        password = ""
+                        if (result.isSuccess) {
+                            onBack()
+                        } else {
+                            error = "Item could not be saved."
+                        }
+                    }
+                },
+                enabled = !busy && title.isNotBlank() && password.isNotEmpty(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+            ) {
+                Text(if (busy) "Saving…" else "Save item")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BrandMark() {
+    Box(
+        modifier = Modifier
+            .size(64.dp)
+            .background(
+                brush = Brush.linearGradient(
+                    listOf(CKColor.LightAccent, CKColor.DarkPrimary),
+                ),
+                shape = RoundedCornerShape(CKDimens.RadiusLg),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = "CK",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            color = CKColor.DarkOnPrimary,
+        )
+    }
+}
+
+@Composable
+private fun LockScreen(onUnlock: () -> Unit) {
+    var password by remember { mutableStateOf("") }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.primaryContainer,
+                    ),
+                ),
+            )
+            .padding(CKDimens.Space4),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            BrandMark()
+            Spacer(Modifier.height(CKDimens.Space6))
+            Text(
+                text = "CipherKeep",
+                style = MaterialTheme.typography.displaySmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Your vault stays on this device.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = CKDimens.Space2),
+            )
+            Spacer(Modifier.height(CKDimens.Space8))
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("Master password") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        shape = MaterialTheme.shapes.small,
+                    )
+                    Spacer(Modifier.height(CKDimens.Space4))
+                    Button(
+                        onClick = {
+                            password = ""
+                            onUnlock()
+                        },
+                        enabled = password.isNotEmpty(),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                    ) {
+                        Text("Unlock")
+                    }
+                }
+            }
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = "Shell build Ã¢â‚¬â€ the cryptographic core is not connected yet.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = "More item types and autofill arrive in a later release.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = CKDimens.Space2),
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VaultScreen(
+    items: List<VaultItem>,
+    onOpen: (Int) -> Unit,
+    onAdd: () -> Unit,
+    onSettings: () -> Unit,
+    onLock: () -> Unit,
+) {
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = { Text("Vault") },
+                actions = {
+                    TextButton(onClick = onAdd) { Text("Add") }
+                    TextButton(onClick = onLock) { Text("Lock") }
+                    TextButton(onClick = onSettings) { Text("Settings") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
+        ) {
+            item {
+                Text(
+                    text = "Vault",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.semantics { heading() },
+                )
+                Text(
+                    text = "Items are encrypted with the session key and stored in the local encrypted database.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = CKDimens.Space1),
+                )
+                Spacer(Modifier.height(CKDimens.Space2))
+                if (items.isEmpty()) {
+                    Text(
+                        text = "No items yet. Use Add to create the first one.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+            items(items) { item ->
+                val index = items.indexOf(item)
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClickLabel = "Open ${item.title}") { onOpen(index) },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(CKDimens.Space4),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.title,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                text = item.username,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        Text(
+                            text = "Open",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+            }
+            item {
+                Spacer(Modifier.height(CKDimens.Space2))
+                Text(
+                    text = "Autofill and richer item types arrive in P1.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
+    var revealed by remember { mutableStateOf(false) }
+    var clipboardTick by remember { mutableIntStateOf(0) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val clipboard = remember { SensitiveClipboard(context, scope) }
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = { Text(item.title) },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(CKDimens.Space4),
+        ) {
+            Text(
+                text = "Login",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+            Text(
+                text = item.title,
+                style = MaterialTheme.typography.headlineMedium,
+                modifier = Modifier
+                    .padding(top = CKDimens.Space2)
+                    .semantics { heading() },
+            )
+            Spacer(Modifier.height(CKDimens.Space4))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    DetailRow("Username", item.username)
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = CKDimens.Space3),
+                        color = MaterialTheme.colorScheme.outline,
+                    )
+                    DetailRow(
+                        label = "Password",
+                        value = if (revealed) item.password else "Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢",
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = { revealed = !revealed }) {
+                            Text(if (revealed) "Hide" else "Reveal")
+                        }
+                        if (revealed) {
+                            TextButton(
+                                onClick = {
+                                    clipboard.copy("CipherKeep password", item.password) {
+                                        clipboardTick = it
+                                    }
+                                },
+                            ) {
+                                Text("Copy")
+                            }
+                        }
+                    }
+                    if (clipboardTick > 0) {
+                        Text(
+                            text = "Clipboard clears in ${clipboardTick}s",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(CKDimens.Space4))
+            Text(
+                text = "Clipboard clears after 30 seconds. TOTP and edit arrive in P1.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(top = CKDimens.Space1),
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsScreen(
+    controller: SessionController,
+    themeMode: ThemeMode,
+    onThemeMode: (ThemeMode) -> Unit,
+    onBack: () -> Unit,
+) {
+    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var updateNotes by remember { mutableStateOf<String?>(null) }
+    var dailyCheck by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val updateChecker = remember { UpdateChecker(context) }
+    val updatePreferences = remember { UpdatePreferences(context) }
+    val activity = context as? FragmentActivity
+    val scope = rememberCoroutineScope()
+    val biometricKey = remember { BiometricKeyManager() }
+    var biometricEnabled by remember { mutableStateOf(false) }
+    var biometricMessage by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(controller) {
+        biometricEnabled = controller.biometricWrapped() != null
+        dailyCheck = updatePreferences.dailyEnabled()
+    }
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            )
+        },
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .padding(CKDimens.Space4)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space4),
+        ) {
+            Text(
+                text = "Appearance",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                ThemeMode.entries.forEach { mode ->
+                    if (mode == themeMode) {
+                        Button(onClick = { onThemeMode(mode) }) { Text(mode.name) }
+                    } else {
+                        OutlinedButton(onClick = { onThemeMode(mode) }) { Text(mode.name) }
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
+                text = "Security",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    Text("Screenshots blocked (FLAG_SECURE)", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        "Backups disabled (allowBackup=false)",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = CKDimens.Space2),
+                    )
+                    Text(
+                        "Network: manual GitHub update checks only",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(top = CKDimens.Space2),
+                    )
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
+                text = "Biometric unlock",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    Text(
+                        text = "Wraps the master key with a Keystore key that requires biometric or device-credential authentication.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (biometricMessage != null) {
+                        Text(
+                            text = biometricMessage.orEmpty(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = CKDimens.Space2),
+                        )
+                    }
+                    Spacer(Modifier.height(CKDimens.Space3))
+                    Button(
+                        onClick = {
+                            if (activity == null || !canUseBiometrics(activity)) {
+                                biometricMessage = "No biometric or device-credential authenticator is available."
+                                return@Button
+                            }
+                            if (biometricEnabled) {
+                                scope.launch {
+                                    controller.clearBiometric()
+                                    biometricKey.deleteKey()
+                                    biometricEnabled = false
+                                    biometricMessage = "Biometric unlock disabled."
+                                }
+                            } else {
+                                scope.launch {
+                                    val master = controller.biometricMasterKey()
+                                    if (master == null) {
+                                        biometricMessage = "Unlock the vault with your password first."
+                                        return@launch
+                                    }
+                                    try {
+                                        val cipher = biometricKey.encryptCipher()
+                                        promptBiometric(
+                                            activity = activity,
+                                            cipher = cipher,
+                                            title = "Enable biometric unlock",
+                                            subtitle = "Authenticate to wrap the vault master key.",
+                                            onSuccess = { authenticated ->
+                                                scope.launch {
+                                                    try {
+                                                        val ciphertext = authenticated.doFinal(master)
+                                                        controller.saveBiometricWrapped(
+                                                            WrappedSecret(
+                                                                WrappedSecret.VERSION,
+                                                                authenticated.iv,
+                                                                ciphertext,
+                                                            ),
+                                                        )
+                                                        biometricEnabled = true
+                                                        biometricMessage = "Biometric unlock enabled."
+                                                    } catch (_: Exception) {
+                                                        biometricMessage = "Could not enable biometric unlock."
+                                                    } finally {
+                                                        master.fill(0)
+                                                    }
+                                                }
+                                            },
+                                            onFailure = { reason ->
+                                                master.fill(0)
+                                                biometricMessage = "Biometric setup failed: $reason"
+                                            },
+                                        )
+                                    } catch (_: Exception) {
+                                        master.fill(0)
+                                        biometricMessage = "Biometric key is unavailable on this device."
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (biometricEnabled) "Disable biometric unlock" else "Enable biometric unlock")
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
+                text = "Updates",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            OutlinedButton(
+                onClick = {
+                    updateMessage = "Checking GitHub Releases…"
+                    updateNotes = null
+                    scope.launch {
+                        when (val outcome = updateChecker.check()) {
+                            is UpdateOutcome.Available -> {
+                                updateMessage = "Update available: ${outcome.currentVersion} → ${outcome.latestVersion}\n" +
+                                    "Published ${outcome.publishedAt}; ${outcome.sizeBytes} bytes."
+                                updateNotes = outcome.notes
+                            }
+                            is UpdateOutcome.UpToDate -> {
+                                updateMessage = "Up to date (${outcome.currentVersion})."
+                            }
+                            UpdateOutcome.NoRelease -> {
+                                updateMessage = "No public release has been published yet."
+                            }
+                            UpdateOutcome.RateLimited -> {
+                                updateMessage = "GitHub rate limit reached. Try again later."
+                            }
+                            is UpdateOutcome.Failed -> {
+                                updateMessage = outcome.message
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Check for updates")
+            }
+            if (updateMessage != null) {
+                Text(
+                    text = updateMessage.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (updateNotes != null) {
+                Text(
+                    text = updateNotes.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = CKDimens.Space2),
+                )
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = CKDimens.Space3),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Switch(
+                    checked = dailyCheck,
+                    onCheckedChange = { enabled ->
+                        dailyCheck = enabled
+                        scope.launch {
+                            updatePreferences.setDailyEnabled(enabled)
+                            UpdateScheduler.setDaily(context, enabled)
+                        }
+                    },
+                )
+                Text(
+                    text = "Daily check (off by default)",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(start = CKDimens.Space2),
+                )
+            }
+            Text(
+                text = "Download and install arrive in P5-001. This check never installs anything.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = CKDimens.Space2),
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
+                text = "About",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "CipherKeep 0.1.0-shell\nRust core connected via UniFFI.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

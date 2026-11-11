@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "CipherKeep",
+  "version": "0.1.0",
+  "description": "Zero-knowledge password manager shell. Local-only vault, no account, no telemetry.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "cipherkeep@cipherkeep.dev",
+      "strict_min_version": "109.0",
+      "update_url": "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/latest/download/firefox-updates.json"
+    }
+  },
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "scripting",
+    "activeTab",
+    "clipboardWrite"
+  ],
+  "optional_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "action": {
+    "default_title": "CipherKeep",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "icons/icon-48.png",
+      "96": "icons/icon-96.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "icons": {
+    "48": "icons/icon-48.png",
+    "96": "icons/icon-96.png"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self' https://github.com https://api.github.com https://raw.githubusercontent.com;"
+  }
+}

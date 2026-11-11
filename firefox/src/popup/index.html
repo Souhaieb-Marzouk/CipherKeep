@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CipherKeep</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1120; --surface: #111827; --primary: #312e81; --accent: #2dd4bf;
+        --text: #f8fafc; --muted: #94a3b8; --danger: #f87171; --line: #1e293b;
+      }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; }
+      body {
+        margin: 0; width: 360px; background: var(--bg); color: var(--text);
+        font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      main { padding: 16px; }
+      .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+      .mark {
+        display: grid; place-items: center; width: 38px; height: 38px;
+        border-radius: 11px; background: linear-gradient(135deg, #2dd4bf, #312e81);
+        color: #042f2e; font-weight: 800;
+      }
+      h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
+      .sub { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+      .status {
+        margin: 0 0 12px; padding: 8px 10px; border-radius: 9px;
+        background: var(--surface); color: var(--muted); font-size: 12px;
+      }
+      .status.unlocked { color: var(--accent); }
+      label { display: block; font-size: 11px; color: var(--muted); margin: 10px 0 5px; }
+      input, textarea {
+        width: 100%; padding: 9px; border-radius: 8px; border: 1px solid #334155;
+        background: #0f172a; color: var(--text); font: inherit; resize: vertical;
+      }
+      textarea { min-height: 54px; font-family: ui-monospace, monospace; font-size: 12px; }
+      .row { display: flex; gap: 8px; margin-top: 10px; }
+      button {
+        flex: 1; padding: 9px 10px; border-radius: 8px; border: 0;
+        background: var(--primary); color: var(--text); font: inherit; font-weight: 600;
+        cursor: pointer;
+      }
+      button.secondary { background: var(--line); }
+      button.link { background: none; color: var(--muted); font-weight: 500; font-size: 12px; }
+      button:disabled { opacity: 0.5; cursor: not-allowed; }
+      .message { min-height: 18px; margin: 10px 0 0; font-size: 12px; color: var(--danger); }
+      .message.ok { color: var(--accent); }
+      .share {
+        margin: 10px 0; padding: 10px; border-radius: 8px; background: var(--surface);
+        color: var(--accent); font-family: ui-monospace, monospace; font-size: 12px;
+        overflow-wrap: anywhere; user-select: all;
+      }
+      .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; color: var(--muted); font-size: 12px; }
+      .check input { width: auto; }
+      .note { margin-top: 12px; color: var(--muted); font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="brand">
+        <div class="mark">CK</div>
+        <div>
+          <h1>CipherKeep</h1>
+          <p class="sub">Local-only vault</p>
+        </div>
+      </div>
+
+      <p id="status" class="status">Checking vault…</p>
+
+      <section id="setupPanel" hidden>
+        <label for="setupPassword">Master password</label>
+        <input id="setupPassword" type="password" autocomplete="new-password" />
+        <label for="setupConfirm">Confirm master password</label>
+        <input id="setupConfirm" type="password" autocomplete="new-password" />
+        <div class="row">
+          <button id="create">Create vault</button>
+        </div>
+        <p class="note">12 characters minimum. The password is never stored.</p>
+      </section>
+
+      <section id="unlockPanel" hidden>
+        <label for="password">Master password</label>
+        <input id="password" type="password" autocomplete="current-password" />
+        <div class="row">
+          <button id="unlock">Unlock</button>
+          <button id="lock" class="secondary">Lock</button>
+        </div>
+        <button id="recoveryToggle" class="link">Forgot password? Use recovery shares</button>
+      </section>
+
+      <section id="recoveryPanel" hidden>
+        <label for="share1">Recovery share 1</label>
+        <textarea id="share1"></textarea>
+        <label for="share2">Recovery share 2</label>
+        <textarea id="share2"></textarea>
+        <label for="newPassword">New master password</label>
+        <input id="newPassword" type="password" autocomplete="new-password" />
+        <div class="row">
+          <button id="recover">Recover vault</button>
+          <button id="recoveryBack" class="secondary">Back</button>
+        </div>
+      </section>
+
+      <section id="sharesPanel" hidden>
+        <h2 id="sharesTitle" style="font-size: 17px; margin: 0 0 6px">Recovery shares</h2>
+        <p class="note" id="sharesHint">Store this share offline.</p>
+        <div id="shareValue" class="share"></div>
+        <label class="check">
+          <input id="saved" type="checkbox" />
+          I have saved this share
+        </label>
+        <div class="row">
+          <button id="nextShare" disabled>Next share</button>
+        </div>
+      </section>
+
+      <section id="vaultPanel" hidden>
+        <p class="status unlocked">Vault unlocked. The keyring exists only in background memory.</p>
+        <label for="itemTitle">Item title</label>
+        <input id="itemTitle" type="text" />
+        <label for="itemUsername">Username</label>
+        <input id="itemUsername" type="text" />
+        <label for="itemPassword">Password</label>
+        <input id="itemPassword" type="password" />
+        <div class="row">
+          <button id="saveItem">Save item</button>
+          <button id="lockUnlocked" class="secondary">Lock vault</button>
+        </div>
+        <ul id="itemList" style="padding-left:18px; color:var(--muted); font-size:12px"></ul>
+        <p class="note">Items are encrypted by the background session, then stored as ciphertext in IndexedDB.</p>
+      </section>
+
+      <p id="message" class="message"></p>
+      <p class="note">No account, no telemetry, no remote scripts. Browser restart locks the vault.</p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,28 @@
+[package]
+name = "cipherkeep-ffi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "UniFFI surface for the CipherKeep Android app"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib", "lib"]
+
+[dependencies]
+cipherkeep-core = { path = "../cipherkeep-core", version = "0.0.0" }
+getrandom.workspace = true
+thiserror.workspace = true
+uniffi.workspace = true
+zeroize.workspace = true
+
+[features]
+cli = ["uniffi/cli"]
+
+[[bin]]
+name = "uniffi-bindgen"
+path = "src/bin/uniffi-bindgen.rs"
+required-features = ["cli"]

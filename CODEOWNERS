@@ -1,0 +1,12 @@
+# CipherKeep code ownership
+# The maintainer reviews everything; security-critical paths require explicit review.
+
+*                                   @Souhaieb-Marzouk
+
+/crates/cipherkeep-core/            @Souhaieb-Marzouk
+/crates/cipherkeep-ffi/             @Souhaieb-Marzouk
+/crates/cipherkeep-wasm/            @Souhaieb-Marzouk
+/android/                           @Souhaieb-Marzouk
+/firefox/                           @Souhaieb-Marzouk
+/.github/workflows/                 @Souhaieb-Marzouk
+/SECURITY.md                        @Souhaieb-Marzouk

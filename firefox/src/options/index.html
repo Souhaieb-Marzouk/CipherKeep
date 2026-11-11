@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CipherKeep settings</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0b1120; --surface: #111827; --text: #f8fafc; --muted: #94a3b8;
+        --accent: #2dd4bf; --danger: #f87171; --line: #1e293b;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; background: var(--bg); color: var(--text);
+        font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      main { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
+      h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 4px; }
+      h2 { font-size: 18px; margin: 28px 0 10px; }
+      p { color: var(--muted); }
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+      .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+      input {
+        flex: 1; min-width: 240px; padding: 10px; border-radius: 8px;
+        border: 1px solid #334155; background: #0f172a; color: var(--text); font: inherit;
+      }
+      button {
+        padding: 10px 14px; border-radius: 8px; border: 0; background: #312e81;
+        color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
+      }
+      button.secondary { background: #1e293b; }
+      ul { padding-left: 18px; color: var(--muted); }
+      code { color: var(--accent); }
+      .notice { color: #fde68a; }
+      .error { color: var(--danger); }
+      .ok { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CipherKeep settings</h1>
+      <p>Version 0.1.0 shell. No account, no telemetry, no remote scripts.</p>
+
+      <h2>Site access</h2>
+      <div class="card">
+        <p>
+          CipherKeep asks for <strong>no host permissions at install</strong>. Site access is optional and
+          granted one origin at a time when you enable autofill in a future build.
+        </p>
+        <div class="row">
+          <input id="origin" type="url" placeholder="https://example.com" />
+          <button id="grant">Grant this origin</button>
+          <button id="remove" class="secondary">Remove</button>
+        </div>
+        <p id="message"></p>
+        <p class="notice">Autofill itself is not implemented in this shell.</p>
+      </div>
+
+      <h2>Granted origins</h2>
+      <div class="card">
+        <ul id="origins"><li>None</li></ul>
+      </div>
+
+      <h2>Updates</h2>
+      <div class="card">
+        <p>
+          Manual check of GitHub Releases with ETag caching. No identifiers or query parameters are sent.
+          Nothing is downloaded or installed by this action.
+        </p>
+        <div class="row">
+          <button id="checkUpdates">Check for updates</button>
+        </div>
+        <pre id="updateResult" style="white-space:pre-wrap; color:var(--muted); font:12px/1.5 ui-monospace, monospace; margin:12px 0 0"></pre>
+        <p class="notice">Download and install arrive in P5-002.</p>
+      </div>
+
+      <h2>Storage</h2>
+      <div class="card">
+        <p>
+          The vault header/recovery metadata is stored in <code>browser.storage.local</code>; the keyring
+          exists only in background memory.
+        </p>
+        <p>IndexedDB ciphertext storage remains reserved for item records in P1.</p>
+      </div>
+    </main>
+    <script src="options.js"></script>
+  </body>
+</html>

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ck_background">#F8FAFC</color>
+    <color name="ck_brand">#312E81</color>
+    <color name="ck_accent">#2DD4BF</color>
+    <color name="ck_ink">#0B1120</color>
+</resources>

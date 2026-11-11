@@ -1,0 +1,20 @@
+[package]
+name = "cipherkeep-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Zero-knowledge cryptographic core for CipherKeep"
+publish = false
+
+[dependencies]
+argon2.workspace = true
+chacha20poly1305.workspace = true
+data-encoding.workspace = true
+getrandom.workspace = true
+hkdf.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+zeroize.workspace = true

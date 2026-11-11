@@ -1,0 +1,760 @@
+//! UniFFI surface for the CipherKeep Android application.
+//!
+//! This is the primitive binding layer. It exposes version, key generation,
+//! KDF, envelope, item-key wrapping and recovery-share operations. The
+//! stateful `VaultSession` API is implemented alongside the session and storage
+//! contracts exist.
+//!
+//! Secrets cross the boundary as `Vec<u8>`/`String` only for immediate use.
+//! The Rust side copies them into zeroizing types and wipes the incoming
+//! buffers; the Kotlin caller remains responsible for clearing its own arrays.
+
+#![forbid(unsafe_code)]
+
+use getrandom::getrandom;
+use std::sync::{Arc, Mutex};
+use std::time::{SystemTime, UNIX_EPOCH};
+use zeroize::{Zeroize, Zeroizing};
+
+use cipherkeep_core::{
+    combine_2_of_3, derive_master_key, split_2_of_3, Envelope, ErrorCode, ItemId, ItemKey,
+    KdfParams, RecoveryShare, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession,
+    DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+};
+
+uniffi::setup_scaffolding!();
+
+/// A flat, payload-free FFI error.
+///
+/// The variant names mirror [`ErrorCode`] one-to-one. Kotlin maps them to the
+/// stable numeric codes in `ErrorMapping.kt`; the Rust table test keeps both
+/// sides honest.
+#[derive(Debug, thiserror::Error, uniffi::Error)]
+pub enum FfiError {
+    /// Caller input was malformed or outside an allowed range.
+    #[error("invalid input")]
+    InvalidArgument,
+    /// A format or schema version is newer than this build supports.
+    #[error("unsupported format version")]
+    UnsupportedVersion,
+    /// The vault could not be opened. Deliberately generic.
+    #[error("vault could not be opened")]
+    AuthenticationFailed,
+    /// Data is malformed or fails an integrity check.
+    #[error("data is malformed")]
+    CorruptData,
+    /// The operation requires an unlocked vault.
+    #[error("vault is locked")]
+    Locked,
+    /// The requested record does not exist.
+    #[error("item not found")]
+    NotFound,
+    /// A concurrent change requires resolution.
+    #[error("concurrent change requires resolution")]
+    Conflict,
+    /// A resource limit was exceeded.
+    #[error("resource limit exceeded")]
+    LimitExceeded,
+    /// Platform storage failed.
+    #[error("storage operation failed")]
+    Storage,
+    /// Internal invariant failure.
+    #[error("internal error")]
+    Internal,
+    /// Parameters fail the security policy.
+    #[error("security policy rejected the parameters")]
+    PolicyRejected,
+}
+
+impl FfiError {
+    /// Stable numeric code, matching [`ErrorCode`].
+    #[must_use]
+    pub const fn numeric_code(&self) -> u16 {
+        match self {
+            Self::InvalidArgument => 1,
+            Self::UnsupportedVersion => 2,
+            Self::AuthenticationFailed => 3,
+            Self::CorruptData => 4,
+            Self::Locked => 5,
+            Self::NotFound => 6,
+            Self::Conflict => 7,
+            Self::LimitExceeded => 8,
+            Self::Storage => 9,
+            Self::Internal => 10,
+            Self::PolicyRejected => 11,
+        }
+    }
+}
+
+impl From<cipherkeep_core::CoreError> for FfiError {
+    fn from(error: cipherkeep_core::CoreError) -> Self {
+        match error.code() {
+            ErrorCode::InvalidArgument => Self::InvalidArgument,
+            ErrorCode::UnsupportedVersion => Self::UnsupportedVersion,
+            ErrorCode::AuthenticationFailed => Self::AuthenticationFailed,
+            ErrorCode::CorruptData => Self::CorruptData,
+            ErrorCode::Locked => Self::Locked,
+            ErrorCode::NotFound => Self::NotFound,
+            ErrorCode::Conflict => Self::Conflict,
+            ErrorCode::LimitExceeded => Self::LimitExceeded,
+            ErrorCode::Storage => Self::Storage,
+            ErrorCode::Internal => Self::Internal,
+            ErrorCode::PolicyRejected => Self::PolicyRejected,
+            _ => Self::Internal,
+        }
+    }
+}
+
+/// Return the shared core version.
+#[uniffi::export]
+#[must_use]
+pub fn core_version() -> String {
+    cipherkeep_core::VERSION.to_string()
+}
+
+/// Generate a random 256-bit key.
+///
+/// # Errors
+///
+/// Returns [`FfiError::Internal`] if the OS CSPRNG fails.
+#[uniffi::export]
+pub fn generate_key() -> Result<Vec<u8>, FfiError> {
+    let mut key = Zeroizing::new([0u8; 32]);
+    getrandom(&mut key[..]).map_err(|_| FfiError::Internal)?;
+    if key.iter().all(|byte| *byte == 0) {
+        return Err(FfiError::Internal);
+    }
+    Ok(key.to_vec())
+}
+
+/// Derive the master key with the pinned default Argon2id parameters.
+///
+/// The 16-byte salt must come from [`generate_key`]-style CSPRNG output or a
+/// stored vault header. This function exists for binding tests and vector
+/// parity; production session code uses the core directly.
+///
+/// # Errors
+///
+/// Returns a redacted [`FfiError`] for a bad salt length or derivation failure.
+#[uniffi::export]
+pub fn derive_master_key_for_test(password: Vec<u8>, salt: Vec<u8>) -> Result<Vec<u8>, FfiError> {
+    let mut password = password;
+    let mut salt = salt;
+    if salt.len() != 16 {
+        password.zeroize();
+        salt.zeroize();
+        return Err(FfiError::InvalidArgument);
+    }
+    let mut salt_array = [0u8; 16];
+    salt_array.copy_from_slice(&salt);
+    let params = KdfParams::new(
+        DEFAULT_MEMORY_KIB,
+        DEFAULT_ITERATIONS,
+        DEFAULT_PARALLELISM,
+        salt_array,
+    );
+    let secret = SecretBytes::from_slice(&password);
+    password.zeroize();
+    salt.zeroize();
+    let key = derive_master_key(&secret, &params)?;
+    Ok(key.expose_secret().to_vec())
+}
+
+/// Seal a field with an item key.
+///
+/// # Errors
+///
+/// Returns a redacted [`FfiError`] for malformed ids/keys or sealing failure.
+#[uniffi::export]
+pub fn seal_field(
+    item_key: Vec<u8>,
+    item_id: Vec<u8>,
+    field_id: u16,
+    lamport: u64,
+    tombstone: bool,
+    plaintext: Vec<u8>,
+) -> Result<Vec<u8>, FfiError> {
+    let mut item_key = item_key;
+    let mut item_id = item_id;
+    let mut plaintext = plaintext;
+    let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+    let key = ItemKey::from_secret_bytes(SecretBytes::from_slice(&item_key))?;
+    item_key.zeroize();
+    item_id.zeroize();
+    let result = key.seal_field(id, field_id, lamport, tombstone, &plaintext);
+    plaintext.zeroize();
+    Ok(result?.encode())
+}
+
+/// Open a field with an item key.
+///
+/// # Errors
+///
+/// Returns [`FfiError::AuthenticationFailed`] for a wrong key, wrong context or
+/// tampered envelope.
+#[uniffi::export]
+pub fn open_field(
+    item_key: Vec<u8>,
+    item_id: Vec<u8>,
+    field_id: u16,
+    lamport: u64,
+    tombstone: bool,
+    envelope: Vec<u8>,
+) -> Result<Vec<u8>, FfiError> {
+    let mut item_key = item_key;
+    let mut item_id = item_id;
+    let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+    let key = ItemKey::from_secret_bytes(SecretBytes::from_slice(&item_key))?;
+    item_key.zeroize();
+    item_id.zeroize();
+    let envelope = Envelope::decode(&envelope)?;
+    let plaintext = key.open_field(&envelope, id, field_id, lamport, tombstone)?;
+    Ok(plaintext.expose_secret().to_vec())
+}
+
+/// Wrap an item key under a vault key.
+///
+/// # Errors
+///
+/// Returns a redacted [`FfiError`] for malformed ids/keys or wrapping failure.
+#[uniffi::export]
+pub fn wrap_item_key(
+    vault_key: Vec<u8>,
+    item_key: Vec<u8>,
+    vault_id: Vec<u8>,
+    item_id: Vec<u8>,
+    schema: u16,
+) -> Result<Vec<u8>, FfiError> {
+    let mut vault_key = vault_key;
+    let mut item_key = item_key;
+    let mut vault_id = vault_id;
+    let vault = VaultKey::from_parts(
+        VaultId::from_bytes(id_from_slice(&vault_id)?),
+        SecretBytes::from_slice(&vault_key),
+    )?;
+    let item = ItemKey::from_secret_bytes(SecretBytes::from_slice(&item_key))?;
+    vault_key.zeroize();
+    item_key.zeroize();
+    vault_id.zeroize();
+    let item_id = ItemId::from_bytes(id_from_slice(&item_id)?);
+    let envelope = vault.wrap_item_key(&item, item_id, schema)?;
+    Ok(envelope.encode())
+}
+
+/// Unwrap an item key with a vault key.
+///
+/// # Errors
+///
+/// Returns [`FfiError::AuthenticationFailed`] for wrong material/context or a
+/// tampered envelope.
+#[uniffi::export]
+pub fn unwrap_item_key(
+    vault_key: Vec<u8>,
+    vault_id: Vec<u8>,
+    item_id: Vec<u8>,
+    schema: u16,
+    envelope: Vec<u8>,
+) -> Result<Vec<u8>, FfiError> {
+    let mut vault_key = vault_key;
+    let mut vault_id = vault_id;
+    let vault = VaultKey::from_parts(
+        VaultId::from_bytes(id_from_slice(&vault_id)?),
+        SecretBytes::from_slice(&vault_key),
+    )?;
+    vault_key.zeroize();
+    vault_id.zeroize();
+    let item_id = ItemId::from_bytes(id_from_slice(&item_id)?);
+    let envelope = Envelope::decode(&envelope)?;
+    let item = vault.unwrap_item_key(&envelope, item_id, schema)?;
+    Ok(item.expose_secret().to_vec())
+}
+
+/// Split a 32-byte recovery key into three 2-of-3 encoded shares.
+///
+/// # Errors
+///
+/// Returns a redacted [`FfiError`] for a wrong secret length or CSPRNG failure.
+#[uniffi::export]
+pub fn recovery_split(secret: Vec<u8>) -> Result<Vec<String>, FfiError> {
+    let mut secret = secret;
+    let result = split_2_of_3(&SecretBytes::from_slice(&secret));
+    secret.zeroize();
+    let shares = result?;
+    Ok(shares
+        .iter()
+        .map(|share| share.encode().expose_secret().to_string())
+        .collect())
+}
+
+/// Combine two encoded recovery shares into the 32-byte recovery key.
+///
+/// # Errors
+///
+/// Returns a redacted [`FfiError`] for malformed, corrupted or duplicate shares.
+#[uniffi::export]
+pub fn recovery_combine(first: String, second: String) -> Result<Vec<u8>, FfiError> {
+    let first = RecoveryShare::decode(&first)?;
+    let second = RecoveryShare::decode(&second)?;
+    let secret = combine_2_of_3(&first, &second)?;
+    Ok(secret.expose_secret().to_vec())
+}
+
+fn id_from_slice(bytes: &[u8]) -> Result<[u8; 16], FfiError> {
+    bytes.try_into().map_err(|_| FfiError::InvalidArgument)
+}
+
+/// A vault session handle for Kotlin.
+///
+/// The object owns the session and any one-time recovery shares returned by
+/// `create`/`recover`. Callers persist `blob()` and clear password/recovery
+/// arrays after use.
+#[derive(uniffi::Object)]
+pub struct FfiVaultSession {
+    state: Mutex<SessionState>,
+}
+
+struct SessionState {
+    session: VaultSession,
+    shares: Vec<String>,
+}
+
+#[uniffi::export]
+impl FfiVaultSession {
+    /// Create a new vault and return the session with its recovery shares.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a weak password or key-generation
+    /// failure.
+    #[uniffi::constructor]
+    pub fn create(password: Vec<u8>) -> Result<Arc<Self>, FfiError> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.zeroize();
+        let created = VaultSession::create(&secret)?;
+        let shares = created
+            .shares
+            .iter()
+            .map(|share| share.expose_secret().to_string())
+            .collect();
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session: created.session,
+                shares,
+            }),
+        }))
+    }
+
+    /// Open a persisted vault in the locked state.
+    ///
+    /// This keeps local failed-attempt/backoff state across unlock calls.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a malformed blob.
+    #[uniffi::constructor]
+    pub fn open(blob: Vec<u8>) -> Result<Arc<Self>, FfiError> {
+        let vault = VaultBlob::decode(&blob)?;
+        let session = VaultSession::open(&vault)?;
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session,
+                shares: Vec::new(),
+            }),
+        }))
+    }
+
+    /// Unlock a persisted vault blob.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a wrong password, corrupt blob or
+    /// active local backoff.
+    #[uniffi::constructor]
+    pub fn unlock(blob: Vec<u8>, password: Vec<u8>) -> Result<Arc<Self>, FfiError> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.zeroize();
+        let vault = VaultBlob::decode(&blob)?;
+        let session = VaultSession::unlock(&vault, &secret, now_secs())?;
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session,
+                shares: Vec::new(),
+            }),
+        }))
+    }
+
+    /// Recover with any two shares and set a new master password.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for bad shares, a weak password or a
+    /// malformed blob.
+    #[uniffi::constructor]
+    pub fn recover(
+        blob: Vec<u8>,
+        first: String,
+        second: String,
+        new_password: Vec<u8>,
+    ) -> Result<Arc<Self>, FfiError> {
+        let mut new_password = new_password;
+        let secret = SecretBytes::from_slice(&new_password);
+        new_password.zeroize();
+        let vault = VaultBlob::decode(&blob)?;
+        let first_share = RecoveryShare::decode(&first)?;
+        let second_share = RecoveryShare::decode(&second)?;
+        let created = VaultSession::recover(&vault, &first_share, &second_share, &secret)?;
+        let shares = created
+            .shares
+            .iter()
+            .map(|share| share.expose_secret().to_string())
+            .collect();
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session: created.session,
+                shares,
+            }),
+        }))
+    }
+
+    /// Persist this vault's header and recovery envelope.
+    #[must_use]
+    pub fn blob(&self) -> Vec<u8> {
+        self.with_state(|state| state.session.blob().encode())
+    }
+
+    /// One-time recovery shares, newest first. Empty after a normal unlock.
+    #[must_use]
+    pub fn recovery_shares(&self) -> Vec<String> {
+        self.with_state(|state| state.shares.clone())
+    }
+
+    /// Lock and drop the master key/keyring.
+    pub fn lock(&self) {
+        self.with_state_mut(|state| state.session.lock());
+    }
+
+    /// Whether the session is locked.
+    #[must_use]
+    pub fn is_locked(&self) -> bool {
+        self.with_state(|state| state.session.is_locked())
+    }
+
+    /// Consecutive failed unlock attempts.
+    #[must_use]
+    pub fn failed_attempts(&self) -> u32 {
+        self.with_state(|state| state.session.failed_attempts())
+    }
+
+    /// Seconds until another unlock is allowed.
+    #[must_use]
+    pub fn retry_after(&self) -> u64 {
+        self.with_state(|state| state.session.retry_after(now_secs()))
+    }
+
+    /// Unlock this handle again after [`FfiVaultSession::lock`].
+    ///
+    /// # Errors
+    ///
+    /// As [`FfiVaultSession::unlock`].
+    pub fn unlock_again(&self, password: Vec<u8>) -> Result<(), FfiError> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.zeroize();
+        self.with_state_mut(|state| {
+            state
+                .session
+                .unlock_again(&secret, now_secs())
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Encrypt and store an opaque item payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a malformed id, a locked session or
+    /// cryptographic failure.
+    pub fn save_item(&self, item_id: Vec<u8>, plaintext: Vec<u8>) -> Result<(), FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        self.with_state_mut(|state| {
+            state
+                .session
+                .save_item(id, &plaintext)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Encrypt an item payload for platform storage without keeping it in the session map.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a malformed id, locked session or
+    /// cryptographic failure.
+    pub fn encrypt_item(&self, item_id: Vec<u8>, plaintext: Vec<u8>) -> Result<Vec<u8>, FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        self.with_state(|state| {
+            state
+                .session
+                .encrypt_item(id, &plaintext)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Decrypt an item payload previously returned by `encryptItem`.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a malformed id, locked session or
+    /// authentication failure.
+    pub fn decrypt_item(&self, item_id: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        self.with_state(|state| {
+            state
+                .session
+                .decrypt_item(id, &ciphertext)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Decrypt an item payload.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a missing item, locked session or
+    /// authentication failure.
+    pub fn get_item(&self, item_id: Vec<u8>) -> Result<Vec<u8>, FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        self.with_state(|state| state.session.get_item(id).map_err(FfiError::from))
+    }
+
+    /// List stored item ids.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] when the session is locked.
+    pub fn list_items(&self) -> Result<Vec<Vec<u8>>, FfiError> {
+        self.with_state(|state| {
+            state
+                .session
+                .list_items()
+                .map(|ids| ids.iter().map(|id| id.as_bytes().to_vec()).collect())
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Delete an item.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] when the session is locked.
+    pub fn delete_item(&self, item_id: Vec<u8>) -> Result<(), FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        self.with_state_mut(|state| state.session.delete_item(id).map_err(FfiError::from))
+    }
+
+    /// Number of stored items.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] when the session is locked.
+    pub fn item_count(&self) -> Result<u64, FfiError> {
+        self.with_state(|state| {
+            state
+                .session
+                .item_count()
+                .map(|count| count as u64)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Copy the master key for an immediate biometric Keystore wrap.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] when the session is locked.
+    pub fn biometric_master_key(&self) -> Result<Vec<u8>, FfiError> {
+        self.with_state(|state| {
+            state
+                .session
+                .master_key_for_biometric()
+                .map(|key| key.expose_secret().to_vec())
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Unlock with a master key unwrapped by BiometricPrompt.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`FfiError`] for a malformed blob/key or a keyring
+    /// that does not open.
+    #[uniffi::constructor]
+    pub fn unlock_with_master_key(
+        blob: Vec<u8>,
+        master_key: Vec<u8>,
+    ) -> Result<Arc<Self>, FfiError> {
+        let mut master_key = master_key;
+        let secret = SecretBytes::from_slice(&master_key);
+        master_key.zeroize();
+        let vault = VaultBlob::decode(&blob)?;
+        let session = VaultSession::unlock_with_master_key(&vault, &secret)?;
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session,
+                shares: Vec::new(),
+            }),
+        }))
+    }
+
+    /// Rewrap under fresh KDF parameters.
+    ///
+    /// # Errors
+    ///
+    /// As the core session `rewrap`.
+    pub fn rewrap(&self, password: Vec<u8>) -> Result<(), FfiError> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.zeroize();
+        self.with_state_mut(|state| state.session.rewrap(&secret).map_err(FfiError::from))
+    }
+}
+
+impl FfiVaultSession {
+    fn with_state<T>(&self, operation: impl FnOnce(&SessionState) -> T) -> T {
+        let state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        operation(&state)
+    }
+
+    fn with_state_mut<T>(&self, operation: impl FnOnce(&mut SessionState) -> T) -> T {
+        let mut state = self
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        operation(&mut state)
+    }
+}
+
+fn now_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cipherkeep_core::Aad;
+
+    #[test]
+    fn error_codes_match_core_codes() {
+        let cases = [
+            (FfiError::InvalidArgument, ErrorCode::InvalidArgument),
+            (FfiError::UnsupportedVersion, ErrorCode::UnsupportedVersion),
+            (
+                FfiError::AuthenticationFailed,
+                ErrorCode::AuthenticationFailed,
+            ),
+            (FfiError::CorruptData, ErrorCode::CorruptData),
+            (FfiError::Locked, ErrorCode::Locked),
+            (FfiError::NotFound, ErrorCode::NotFound),
+            (FfiError::Conflict, ErrorCode::Conflict),
+            (FfiError::LimitExceeded, ErrorCode::LimitExceeded),
+            (FfiError::Storage, ErrorCode::Storage),
+            (FfiError::Internal, ErrorCode::Internal),
+            (FfiError::PolicyRejected, ErrorCode::PolicyRejected),
+        ];
+        for (ffi, core) in cases {
+            assert_eq!(ffi.numeric_code(), core.numeric_code());
+        }
+    }
+
+    #[test]
+    fn version_is_exposed() {
+        assert_eq!(core_version(), cipherkeep_core::VERSION);
+    }
+
+    #[test]
+    fn generated_keys_are_32_bytes() {
+        let key = generate_key().expect("key");
+        assert_eq!(key.len(), 32);
+        assert!(key.iter().any(|byte| *byte != 0));
+    }
+
+    #[test]
+    fn field_round_trip_over_ffi_shape() {
+        let key = generate_key().expect("key");
+        let id = vec![7u8; 16];
+        let envelope =
+            seal_field(key.clone(), id.clone(), 10, 4, false, b"secret".to_vec()).expect("seal");
+        let plaintext = open_field(key, id, 10, 4, false, envelope).expect("open");
+        assert_eq!(plaintext, b"secret");
+    }
+
+    #[test]
+    fn item_key_wrap_round_trip_over_ffi_shape() {
+        let vault_key = generate_key().expect("vault key");
+        let item_key = generate_key().expect("item key");
+        let vault_id = vec![1u8; 16];
+        let item_id = vec![2u8; 16];
+        let envelope = wrap_item_key(
+            vault_key.clone(),
+            item_key.clone(),
+            vault_id.clone(),
+            item_id.clone(),
+            1,
+        )
+        .expect("wrap");
+        let unwrapped = unwrap_item_key(vault_key, vault_id, item_id, 1, envelope).expect("unwrap");
+        assert_eq!(unwrapped, item_key);
+    }
+
+    #[test]
+    fn recovery_round_trip_over_ffi_shape() {
+        let secret = vec![0x42u8; 32];
+        let shares = recovery_split(secret.clone()).expect("split");
+        let recovered = recovery_combine(shares[0].clone(), shares[2].clone()).expect("combine");
+        assert_eq!(recovered, secret);
+    }
+
+    #[test]
+    fn ffi_session_create_and_unlock() {
+        let password = b"correct horse battery staple".to_vec();
+        let session = FfiVaultSession::create(password.clone()).expect("create");
+        assert!(!session.is_locked());
+        assert_eq!(session.recovery_shares().len(), 3);
+        let blob = session.blob();
+        let unlocked = FfiVaultSession::unlock(blob, password).expect("unlock");
+        assert!(!unlocked.is_locked());
+        unlocked.lock();
+        assert!(unlocked.is_locked());
+    }
+
+    #[test]
+    fn ffi_session_item_crud() {
+        let password = b"correct horse battery staple".to_vec();
+        let session = FfiVaultSession::create(password).expect("create");
+        let item_id = vec![7u8; 16];
+        session
+            .save_item(item_id.clone(), b"payload".to_vec())
+            .expect("save");
+        assert_eq!(session.item_count().expect("count"), 1);
+        assert_eq!(session.list_items().expect("list"), vec![item_id.clone()]);
+        assert_eq!(session.get_item(item_id.clone()).expect("get"), b"payload");
+        session.delete_item(item_id).expect("delete");
+        assert_eq!(session.item_count().expect("count"), 0);
+    }
+
+    #[test]
+    fn core_aad_still_bound() {
+        // Keep the core AAD import exercised so the FFI crate compiles against
+        // the exact public surface it depends on.
+        let aad = Aad::field(ItemId::from_bytes([1u8; 16]), 10, 4, false);
+        assert!(!aad.encode().is_empty());
+    }
+}

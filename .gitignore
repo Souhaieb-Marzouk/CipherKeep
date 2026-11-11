@@ -1,0 +1,81 @@
+# ---- Secrets and signing material (never commit) ----
+*.jks
+*.keystore
+keystore.properties
+*.p12
+*.pfx
+minisign.key
+minisign.pub
+.env
+.env.*
+!.env.example
+*.pem
+secrets/
+
+# ---- Rust ----
+/target/
+**/target/
+**/*.rs.bk
+*.profraw
+
+# ---- Android / Gradle ----
+.gradle/
+**/.gradle/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+**/build/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# ---- Node / Firefox ----
+node_modules/
+**/node_modules/
+.npm/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+firefox/web-ext-artifacts/
+web-ext-artifacts/
+*.xpi
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+
+# ---- Build output / packaging ----
+/dist/
+/out/
+/release/
+*.zip
+*.tar.gz
+
+# ---- Tooling caches ----
+.wrangler/
+.dev.vars
+.eslintcache
+.stylelintcache
+*.tsbuildinfo
+
+# ---- Editors and OS ----
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+
+# ---- Logs and temporary files ----
+*.log
+*.tmp
+*.bak
+tmp/
