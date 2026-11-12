@@ -172,6 +172,33 @@
         </select>
         <ul id="itemList" style="padding-left:18px; color:var(--muted); font-size:12px"></ul>
 
+        <section id="detailPanel" hidden>
+          <label for="detailTitleInput">Title</label>
+          <input id="detailTitleInput" type="text" />
+          <label for="detailUsername">Username</label>
+          <input id="detailUsername" type="text" />
+          <label for="detailPassword">Password</label>
+          <input id="detailPassword" type="password" />
+          <div class="row">
+            <button id="revealDetail" class="secondary">Reveal</button>
+            <button id="copyDetail" class="secondary">Copy</button>
+          </div>
+          <label for="detailUrl">URL</label>
+          <input id="detailUrl" type="text" />
+          <label for="detailNotes">Notes</label>
+          <textarea id="detailNotes"></textarea>
+          <label for="detailFolder">Folder</label>
+          <input id="detailFolder" type="text" />
+          <label for="detailTags">Tags</label>
+          <input id="detailTags" type="text" />
+          <label class="check"><input id="detailFavorite" type="checkbox" /> Favorite</label>
+          <div class="row">
+            <button id="saveDetail">Save changes</button>
+            <button id="deleteDetail" class="secondary">Delete</button>
+          </div>
+          <button id="closeDetail" class="link">Close detail</button>
+        </section>
+
         <h2 style="font-size:16px;margin:18px 0 0">Generator</h2>
         <label for="genMode">Type</label>
         <select id="genMode">

@@ -39,7 +39,19 @@ export type Request =
   | { type: "delete-folder"; name: string }
   | { type: "export-backup"; password: string }
   | { type: "import-backup"; password: string; data: string }
-  | { type: "autofill-request"; id: string };
+  | { type: "autofill-request"; id: string }
+  | {
+      type: "update-item";
+      id: string;
+      title: string;
+      username: string;
+      password: string;
+      url: string;
+      notes: string;
+      folder: string;
+      tags: string[];
+      favorite: boolean;
+    };
 
 export interface SearchHit {
   id: string;
@@ -114,6 +126,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "export-backup",
       "import-backup",
       "autofill-request",
+      "update-item",
     ].includes(value)
   );
 }
@@ -207,6 +220,19 @@ export function isRequest(value: unknown): value is Request {
       return isText(request.name, 64);
     case "export-backup":
       return isText(request.password, 1_024) && request.password.length >= 12;
+    case "update-item":
+      return (
+        typeof request.id === "string" &&
+        /^[0-9a-f]{32}$/i.test(request.id) &&
+        isText(request.title, 512) &&
+        typeof request.username === "string" &&
+        typeof request.password === "string" &&
+        typeof request.url === "string" &&
+        typeof request.notes === "string" &&
+        typeof request.folder === "string" &&
+        Array.isArray(request.tags) &&
+        typeof request.favorite === "boolean"
+      );
     case "autofill-request":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
     case "import-backup":

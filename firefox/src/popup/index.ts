@@ -22,6 +22,97 @@ let pendingShares: string[] = [];
 let shareIndex = 0;
 let allItems: ItemView[] = [];
 let searchTimer: number | null = null;
+let selectedItem: ItemView | null = null;
+
+function closeDetail(): void {
+  selectedItem = null;
+  element<HTMLElement>("detailPanel").hidden = true;
+  element<HTMLInputElement>("detailPassword").type = "password";
+}
+
+function openDetail(item: ItemView): void {
+  selectedItem = item;
+  element<HTMLElement>("detailPanel").hidden = false;
+  element<HTMLInputElement>("detailTitleInput").value = item.title;
+  element<HTMLInputElement>("detailUsername").value = item.username;
+  element<HTMLInputElement>("detailPassword").value = item.password;
+  element<HTMLInputElement>("detailPassword").type = "password";
+  element<HTMLInputElement>("detailUrl").value = item.url;
+  element<HTMLTextAreaElement>("detailNotes").value = item.notes;
+  element<HTMLInputElement>("detailFolder").value = item.folder;
+  element<HTMLInputElement>("detailTags").value = item.tags.join(", ");
+  element<HTMLInputElement>("detailFavorite").checked = item.favorite;
+}
+
+element<HTMLButtonElement>("closeDetail").addEventListener("click", closeDetail);
+
+element<HTMLButtonElement>("revealDetail").addEventListener("click", () => {
+  const password = element<HTMLInputElement>("detailPassword");
+  password.type = password.type === "password" ? "text" : "password";
+});
+
+element<HTMLButtonElement>("copyDetail").addEventListener("click", async () => {
+  const value = element<HTMLInputElement>("detailPassword").value;
+  if (value.length === 0) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    showMessage("Password copied; clipboard clears in 30 seconds while this popup stays open.", true);
+    window.setTimeout(() => {
+      void navigator.clipboard.writeText("").catch(() => undefined);
+    }, 30_000);
+  } catch {
+    showMessage("Clipboard is unavailable.");
+  }
+});
+
+element<HTMLButtonElement>("saveDetail").addEventListener("click", async () => {
+  if (selectedItem === null) {
+    return;
+  }
+  const title = element<HTMLInputElement>("detailTitleInput").value.trim();
+  if (title.length === 0) {
+    showMessage("Title is required.");
+    return;
+  }
+  const reply = await send({
+    type: "update-item",
+    id: selectedItem.id,
+    title,
+    username: element<HTMLInputElement>("detailUsername").value.trim(),
+    password: element<HTMLInputElement>("detailPassword").value,
+    url: element<HTMLInputElement>("detailUrl").value.trim(),
+    notes: element<HTMLTextAreaElement>("detailNotes").value,
+    folder: element<HTMLInputElement>("detailFolder").value.trim(),
+    tags: element<HTMLInputElement>("detailTags").value.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0),
+    favorite: element<HTMLInputElement>("detailFavorite").checked,
+  });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  await loadItems();
+  closeDetail();
+  showMessage("Item saved.", true);
+});
+
+element<HTMLButtonElement>("deleteDetail").addEventListener("click", async () => {
+  if (selectedItem === null) {
+    return;
+  }
+  if (!window.confirm("Delete this encrypted item? This cannot be undone without a backup.")) {
+    return;
+  }
+  const reply = await send({ type: "delete-item", id: selectedItem.id });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  await loadItems();
+  closeDetail();
+  showMessage("Item deleted.", true);
+});
 
 function showPanel(id: string): void {
   for (const panel of panels) {
@@ -89,6 +180,7 @@ async function refresh(): Promise<void> {
       status.classList.remove("unlocked");
       clearGenerated();
       clearTotp();
+      closeDetail();
     }
   } catch {
     status.textContent = "Background unavailable";
@@ -215,12 +307,22 @@ function renderItems(items: ItemView[]): void {
     const row = document.createElement("li");
     const type = item.totpUri.length > 0 ? "TOTP · " : "";
     row.textContent = `${type}${item.title} — ${item.username}`;
+    row.tabIndex = 0;
+    row.style.cursor = "pointer";
+    row.addEventListener("click", () => openDetail(item));
+    row.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openDetail(item);
+      }
+    });
     if (item.url.length > 0 && item.password.length > 0) {
       const fill = document.createElement("button");
       fill.type = "button";
       fill.className = "link";
       fill.textContent = "Fill";
-      fill.addEventListener("click", async () => {
+      fill.addEventListener("click", async (event) => {
+        event.stopPropagation();
         const reply = await send({ type: "autofill-request", id: item.id });
         if (!reply.ok) {
           showMessage(reply.error);
@@ -612,6 +714,7 @@ async function lockVault(): Promise<void> {
   clearGenerated();
   clearTotp();
   allItems = [];
+  closeDetail();
   element<HTMLInputElement>("searchItems").value = "";
   renderItems([]);
   showMessage("Locked. The in-memory keyring was dropped.", true);

@@ -166,8 +166,10 @@ fun CipherKeepApp() {
                     when (screen) {
                         "vault" -> if (selectedIndex in controller.items.indices) {
                             ItemDetailScreen(
+                                controller = controller,
                                 item = controller.items[selectedIndex],
                                 onBack = { selectedIndex = -1 },
+                                onDeleted = { selectedIndex = -1 },
                             )
                         } else {
                             VaultScreen(
@@ -1362,8 +1364,21 @@ private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
+private fun ItemDetailScreen(
+    controller: SessionController,
+    item: VaultItem,
+    onBack: () -> Unit,
+    onDeleted: () -> Unit,
+) {
     var revealed by remember { mutableStateOf(false) }
+    var showEdit by remember { mutableStateOf(false) }
+    var showDelete by remember { mutableStateOf(false) }
+    var actionError by remember { mutableStateOf<String?>(null) }
+    DisposableEffect(item.id) {
+        val reset = { revealed = false }
+        SecretInputRegistry.register(reset)
+        onDispose { SecretInputRegistry.unregister(reset) }
+    }
     var clipboardTick by remember { mutableIntStateOf(0) }
     var totpValue by remember(item.id) { mutableStateOf("") }
     var totpRemaining by remember(item.id) { mutableIntStateOf(0) }
@@ -1390,6 +1405,10 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
                 title = { Text(item.title) },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
+                },
+                actions = {
+                    TextButton(onClick = { showEdit = true }) { Text("Edit") }
+                    TextButton(onClick = { showDelete = true }) { Text("Delete") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -1512,12 +1531,97 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(CKDimens.Space4))
             Text(
-                text = "Clipboard clears after 30 seconds. Codes are generated locally; edit arrives in P1.",
+                text = "Clipboard clears after 30 seconds. Codes are generated locally.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (actionError != null) {
+                Text(actionError.orEmpty(), color = MaterialTheme.colorScheme.error)
+            }
         }
     }
+    if (showEdit) {
+        EditItemDialog(controller, item, onDismiss = { showEdit = false })
+    }
+    if (showDelete) {
+        AlertDialog(
+            onDismissRequest = { showDelete = false },
+            title = { Text("Delete item?") },
+            text = { Text("This removes the encrypted item record. It cannot be recovered unless you have a backup.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    scope.launch {
+                        controller.deleteItem(item)
+                            .onSuccess { onDeleted() }
+                            .onFailure { actionError = "Item could not be deleted." }
+                    }
+                    showDelete = false
+                }) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { showDelete = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun EditItemDialog(controller: SessionController, item: VaultItem, onDismiss: () -> Unit) {
+    var title by remember { mutableStateOf(item.title) }
+    var username by remember { mutableStateOf(item.username) }
+    var password by remember { mutableStateOf(item.password) }
+    var url by remember { mutableStateOf(item.url) }
+    var notes by remember { mutableStateOf(item.notes) }
+    var folder by remember { mutableStateOf(item.folder) }
+    var tags by remember { mutableStateOf(item.tags.joinToString(",")) }
+    var favorite by remember { mutableStateOf(item.favorite) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit item") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
+                OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true)
+                OutlinedTextField(
+                    password,
+                    { password = it },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                OutlinedTextField(url, { url = it }, label = { Text("URL") }, singleLine = true)
+                OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, minLines = 2)
+                OutlinedTextField(folder, { folder = it }, label = { Text("Folder") }, singleLine = true)
+                OutlinedTextField(tags, { tags = it }, label = { Text("Tags") }, singleLine = true)
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { favorite = !favorite },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(favorite, onCheckedChange = { favorite = it })
+                    Text("Favorite")
+                }
+                if (error != null) {
+                    Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                if (title.isBlank()) {
+                    error = "Title is required."
+                    return@TextButton
+                }
+                scope.launch {
+                    controller.updateItem(
+                        item, title.trim(), username.trim(), password, url.trim(), notes,
+                        folder.trim(), tags, favorite,
+                    ).onSuccess { onDismiss() }
+                        .onFailure { error = "Item could not be saved." }
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
 }
 
 @Composable

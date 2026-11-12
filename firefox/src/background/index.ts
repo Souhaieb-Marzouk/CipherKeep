@@ -363,6 +363,33 @@ async function handle(request: Request): Promise<Response> {
         json.fill(0);
         return { ok: true, kind: "backup", data: bytesToBase64(bytes) };
       }
+      case "update-item": {
+        const active = requireSession();
+        await ensureItemStore();
+        const records = await itemStore.list();
+        const record = records.find((entry) => entry.id === request.id);
+        if (!record) {
+          return { ok: false, error: "Item not found." };
+        }
+        const plaintext = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
+        const json = JSON.parse(new TextDecoder().decode(plaintext)) as Record<string, unknown>;
+        plaintext.fill(0);
+        Object.assign(json, {
+          title: request.title,
+          username: request.username,
+          password: request.password,
+          url: request.url,
+          notes: request.notes,
+          folder: request.folder,
+          tags: request.tags,
+          favorite: request.favorite,
+        });
+        const payload = new TextEncoder().encode(JSON.stringify(json));
+        const ciphertext = active.encrypt_item(hexToBytes(record.id), payload);
+        payload.fill(0);
+        await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
+        return { ok: true, kind: "items", items: await listItems() };
+      }
       case "autofill-request": {
         const active = requireSession();
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

@@ -521,6 +521,53 @@ class SessionController(context: Context) {
         }
     }
 
+    suspend fun updateItem(
+        item: VaultItem,
+        title: String,
+        username: String,
+        password: String,
+        url: String,
+        notes: String,
+        folder: String,
+        tags: String,
+        favorite: Boolean,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(title.isNotBlank())
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val previous = repo.get(item.id) ?: error("item not found")
+            val payload = JSONObject()
+                .put("v", 1)
+                .put("type", if (item.totpUri.isNotEmpty()) "totp" else "login")
+                .put("title", title)
+                .put("username", username)
+                .put("password", password)
+                .put("totpUri", item.totpUri)
+                .put("url", url)
+                .put("notes", notes)
+                .put("folder", folder)
+                .put(
+                    "tags",
+                    JSONArray(tags.split(',').map(String::trim).filter(String::isNotEmpty)),
+                )
+                .put("favorite", favorite)
+                .toString()
+                .encodeToByteArray()
+            val ciphertext = active.encryptItem(item.id, payload)
+            payload.fill(0)
+            repo.save(
+                itemId = item.id,
+                ciphertext = ciphertext,
+                lamport = maxOf(previous.lamport + 1, 2),
+                tombstone = false,
+                schemaVersion = previous.schemaVersion,
+                updatedAt = System.currentTimeMillis(),
+            )
+            loadItems()
+        }
+    }
+
     suspend fun deleteItem(item: VaultItem): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             repository?.delete(item.id)
