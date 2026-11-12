@@ -333,6 +333,59 @@ class SessionController(context: Context) {
             }
         }
 
+    suspend fun folderNames(): Result<List<String>> = withContext(Dispatchers.IO) {
+        runCatching {
+            items.map { it.folder }.filter { it.isNotBlank() }.distinct().sorted()
+        }
+    }
+
+    suspend fun renameFolder(oldName: String, newName: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(newName.isNotBlank() && newName.length <= 64)
+                val target = newName.trim()
+                if (target != oldName) {
+                    rewriteFolder(oldName, target)
+                }
+                loadItems()
+            }
+        }
+
+    suspend fun deleteFolder(name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            rewriteFolder(name, "")
+            loadItems()
+        }
+    }
+
+    private suspend fun rewriteFolder(oldName: String, newName: String) {
+        val active = session ?: error("vault is locked")
+        val repo = repository ?: error("storage is unavailable")
+        repo.list().forEach { entity ->
+            if (entity.tombstone) {
+                return@forEach
+            }
+            val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)
+            val json = JSONObject(plaintext.decodeToString())
+            plaintext.fill(0)
+            if (json.optString("folder") != oldName) {
+                return@forEach
+            }
+            json.put("folder", newName)
+            val payload = json.toString().encodeToByteArray()
+            val ciphertext = active.encryptItem(entity.itemId, payload)
+            payload.fill(0)
+            repo.save(
+                itemId = entity.itemId,
+                ciphertext = ciphertext,
+                lamport = maxOf(entity.lamport + 1, 2),
+                tombstone = false,
+                schemaVersion = entity.schemaVersion,
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
+    }
+
     suspend fun deleteItem(item: VaultItem): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             repository?.delete(item.id)

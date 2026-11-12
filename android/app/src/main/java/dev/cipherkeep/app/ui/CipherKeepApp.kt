@@ -162,6 +162,7 @@ fun CipherKeepApp() {
                             )
                         } else {
                             VaultScreen(
+                                controller = controller,
                                 items = controller.items,
                                 onOpen = { index -> selectedIndex = index },
                                 onAdd = { screen = "add" },
@@ -1065,6 +1066,7 @@ private fun BrandMark() {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VaultScreen(
+    controller: SessionController,
     items: List<VaultItem>,
     onOpen: (Int) -> Unit,
     onAdd: () -> Unit,
@@ -1074,6 +1076,7 @@ private fun VaultScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var filterText by rememberSaveable { mutableStateOf("") }
+    var showFolders by remember { mutableStateOf(false) }
     val searchIndex = remember(items) {
         FfiSearchIndex().also { index ->
             items.forEach { item ->
@@ -1157,6 +1160,7 @@ private fun VaultScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
                     TextButton(onClick = { favoritesOnly = false }) { Text("All") }
                     TextButton(onClick = { favoritesOnly = true }) { Text("Favorites") }
+                    TextButton(onClick = { showFolders = true }) { Text("Folders") }
                 }
                 OutlinedTextField(
                     value = filterText,
@@ -1220,6 +1224,94 @@ private fun VaultScreen(
             }
         }
     }
+    if (showFolders) {
+        FolderDialog(controller = controller, onDismiss = { showFolders = false })
+    }
+}
+
+@Composable
+private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
+    var names by remember { mutableStateOf<List<String>>(emptyList()) }
+    var renameFrom by remember { mutableStateOf<String?>(null) }
+    var renameTo by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    fun reload() {
+        scope.launch {
+            controller.folderNames()
+                .onSuccess { names = it }
+                .onFailure { error = "Folders could not be loaded." }
+        }
+    }
+    LaunchedEffect(Unit) { reload() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Folders") },
+        text = {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+            ) {
+                if (names.isEmpty()) {
+                    Text(
+                        text = "No folders yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                names.forEach { name ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(name, modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            renameFrom = name
+                            renameTo = name
+                        }) { Text("Rename") }
+                        TextButton(onClick = {
+                            error = null
+                            scope.launch {
+                                controller.deleteFolder(name)
+                                    .onSuccess { reload() }
+                                    .onFailure { error = "Folder could not be deleted." }
+                            }
+                        }) { Text("Delete") }
+                    }
+                }
+                renameFrom?.let { oldName ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedTextField(
+                            value = renameTo,
+                            onValueChange = { renameTo = it },
+                            modifier = Modifier.weight(1f),
+                            label = { Text("Rename folder") },
+                            singleLine = true,
+                        )
+                        TextButton(onClick = {
+                            error = null
+                            scope.launch {
+                                controller.renameFolder(oldName, renameTo)
+                                    .onSuccess {
+                                        renameFrom = null
+                                        reload()
+                                    }
+                                    .onFailure { error = "Folder could not be renamed." }
+                            }
+                        }) { Text("Save") }
+                    }
+                }
+                if (error != null) {
+                    Text(
+                        text = error.orEmpty(),
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

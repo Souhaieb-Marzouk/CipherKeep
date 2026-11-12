@@ -33,7 +33,9 @@ export type Request =
   | { type: "generate-passphrase"; words: number; separator: string }
   | { type: "save-totp-item"; title: string; account: string; uri: string }
   | { type: "totp-code"; uri: string }
-  | { type: "search"; query: string };
+  | { type: "search"; query: string }
+  | { type: "rename-folder"; oldName: string; newName: string }
+  | { type: "delete-folder"; name: string };
 
 export interface SearchHit {
   id: string;
@@ -99,6 +101,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "save-totp-item",
       "totp-code",
       "search",
+      "rename-folder",
+      "delete-folder",
     ].includes(value)
   );
 }
@@ -184,5 +188,9 @@ export function isRequest(value: unknown): value is Request {
       );
     case "search":
       return typeof request.query === "string" && request.query.length <= 256;
+    case "rename-folder":
+      return isText(request.oldName, 64) && isText(request.newName, 64);
+    case "delete-folder":
+      return isText(request.name, 64);
   }
 }

@@ -323,6 +323,39 @@ async function handle(request: Request): Promise<Response> {
         });
         return { ok: true, kind: "items", items: await listItems() };
       }
+      case "rename-folder":
+      case "delete-folder": {
+        const active = requireSession();
+        await ensureItemStore();
+        const oldName = request.type === "rename-folder" ? request.oldName : request.name;
+        const newName = request.type === "rename-folder" ? request.newName : "";
+        const records = await itemStore.list();
+        for (const record of records) {
+          try {
+            const plaintext = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
+            const json = JSON.parse(new TextDecoder().decode(plaintext)) as {
+              folder?: unknown;
+              [key: string]: unknown;
+            };
+            plaintext.fill(0);
+            if (json.folder !== oldName) {
+              continue;
+            }
+            json.folder = newName;
+            const payload = new TextEncoder().encode(JSON.stringify(json));
+            const ciphertext = active.encrypt_item(hexToBytes(record.id), payload);
+            payload.fill(0);
+            await itemStore.put({
+              id: record.id,
+              ciphertext,
+              updatedAt: Date.now(),
+            });
+          } catch {
+            // A record from another vault is skipped.
+          }
+        }
+        return { ok: true, kind: "items", items: await listItems() };
+      }
       case "save-totp-item": {
         const active = requireSession();
         await ensureItemStore();

@@ -179,6 +179,40 @@ element<HTMLInputElement>("favoriteFilter").addEventListener("change", () => {
   void runSearch();
 });
 
+element<HTMLButtonElement>("renameFolder").addEventListener("click", async () => {
+  const oldName = element<HTMLInputElement>("folderName").value.trim();
+  const newName = element<HTMLInputElement>("folderNew").value.trim();
+  if (oldName.length === 0 || newName.length === 0) {
+    showMessage("Enter the current and new folder names.");
+    return;
+  }
+  const reply = await send({ type: "rename-folder", oldName, newName });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  element<HTMLInputElement>("folderName").value = "";
+  element<HTMLInputElement>("folderNew").value = "";
+  await loadItems();
+  showMessage("Folder renamed; items moved with it.", true);
+});
+
+element<HTMLButtonElement>("deleteFolder").addEventListener("click", async () => {
+  const name = element<HTMLInputElement>("folderName").value.trim();
+  if (name.length === 0) {
+    showMessage("Enter the folder to delete.");
+    return;
+  }
+  const reply = await send({ type: "delete-folder", name });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  element<HTMLInputElement>("folderName").value = "";
+  await loadItems();
+  showMessage("Folder deleted; its items moved to Unfiled.", true);
+});
+
 element<HTMLInputElement>("searchItems").addEventListener("input", () => {
   if (searchTimer !== null) {
     window.clearTimeout(searchTimer);
