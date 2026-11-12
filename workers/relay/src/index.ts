@@ -6,8 +6,15 @@ export interface Env {
 const MAX_BYTES = 64 * 1024 * 1024;
 
 function authorized(request: Request, env: Env): boolean {
+  if (typeof env.TOKEN !== "string" || env.TOKEN.length < 32) return false;
   const header = request.headers.get("authorization") ?? "";
-  return header === `Bearer ${env.TOKEN}` && env.TOKEN.length >= 32;
+  const expected = `Bearer ${env.TOKEN}`;
+  if (header.length !== expected.length) return false;
+  let diff = 0;
+  for (let index = 0; index < expected.length; index += 1) {
+    diff |= header.charCodeAt(index) ^ expected.charCodeAt(index);
+  }
+  return diff === 0;
 }
 
 function keyFor(url: URL): string | null {

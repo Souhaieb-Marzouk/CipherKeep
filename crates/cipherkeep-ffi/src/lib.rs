@@ -1279,7 +1279,10 @@ pub fn resolve_sync_conflict(
         Ok((value, ItemRecord::from_sync_json(&bytes)?, key))
     }
     let (local_value, local_record, local_key) = split(&local)?;
-    let (_remote_value, remote_record, _remote_key) = split(&remote)?;
+    let (_remote_value, remote_record, remote_key) = split(&remote)?;
+    if local_key != remote_key {
+        return Err(FfiError::CorruptData);
+    }
     let resolved = cipherkeep_core::MergeEngine::resolve_field_conflict(
         &local_record,
         &remote_record,

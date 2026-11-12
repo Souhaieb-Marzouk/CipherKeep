@@ -1074,7 +1074,10 @@ pub fn resolve_sync_conflict(
         ))
     }
     let (local_value, local_record, local_key) = split(&local)?;
-    let (_remote_value, remote_record, _) = split(&remote)?;
+    let (_remote_value, remote_record, remote_key) = split(&remote)?;
+    if local_key != remote_key {
+        return Err(js_error(CoreError::new(ErrorCode::CorruptData)));
+    }
     let resolved = cipherkeep_core::MergeEngine::resolve_field_conflict(
         &local_record,
         &remote_record,
