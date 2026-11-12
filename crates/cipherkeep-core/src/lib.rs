@@ -34,6 +34,7 @@ pub mod kdf;
 pub mod keyring;
 pub mod keys;
 pub mod lock;
+pub mod search;
 pub mod secret;
 pub mod session;
 pub mod shamir;
@@ -71,6 +72,7 @@ pub use kdf::{
 pub use keyring::{Keyring, MAX_VAULTS};
 pub use keys::{derive_subkey, DeviceId, ItemId, ItemKey, MasterKey, VaultId, VaultKey, KEY_LEN};
 pub use lock::{LockPolicy, DEFAULT_TIMEOUT_SECS, WARN_BEFORE_SECS};
+pub use search::{measure_p95, SearchDocument, SearchHit, SearchIndex, MAX_SEARCH_RESULTS};
 pub use secret::{SecretBytes, SecretString};
 pub use session::{validate_master_password, CreatedVault, VaultBlob, VaultSession};
 pub use shamir::{

@@ -19,6 +19,7 @@ hmac.workspace = true
 sha1.workspace = true
 url.workspace = true
 percent-encoding.workspace = true
+unicode-normalization.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 zeroize.workspace = true
