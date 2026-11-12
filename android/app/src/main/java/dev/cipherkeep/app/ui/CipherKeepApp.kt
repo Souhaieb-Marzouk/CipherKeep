@@ -2054,6 +2054,7 @@ private fun SettingsScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             SyncFolderSection(context)
+            RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {
                     scope.launch {

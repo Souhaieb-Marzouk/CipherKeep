@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.cipherkeep.core.FfiException
 import dev.cipherkeep.core.FfiVaultSession
+import dev.cipherkeep.core.mergeSyncRecordsV2
 import dev.cipherkeep.core.numericCode
 import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
@@ -351,6 +352,68 @@ class SessionController(context: Context) {
                 )
                 loadItems()
             }
+        }
+
+    suspend fun syncNow(endpoint: String, token: String, namespace: String): SyncOutcome =
+        withContext(Dispatchers.IO) {
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            if (!Regex("^[a-f0-9]{32}$").matches(namespace)) error("invalid sync namespace")
+            val entities = repo.list().filter {
+                !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID)
+            }
+            val actor = ByteArray(16) { 1 }
+            val created = System.currentTimeMillis().toULong()
+            val local = entities.map { entity ->
+                active.exportSyncRecord(
+                    entity.itemId,
+                    entity.ciphertext,
+                    actor,
+                    created,
+                    1uL,
+                ).decodeToString()
+            }
+            val client = RelaySyncClient(endpoint, token)
+            val remoteBytes = client.getManifest(namespace)
+            val remote = if (remoteBytes == null) {
+                emptyList()
+            } else {
+                val parsed = JSONObject(remoteBytes.decodeToString())
+                val array = parsed.optJSONArray("records") ?: JSONArray()
+                (0 until array.length()).mapNotNull { index ->
+                    array.optString(index).takeIf { it.isNotEmpty() }
+                }
+            }
+            val merged = JSONObject(mergeSyncRecordsV2(local, remote))
+            val records = merged.optJSONArray("records") ?: JSONArray()
+            for (index in 0 until records.length()) {
+                val raw = records.getString(index)
+                val wrapper = JSONObject(raw)
+                val idHex = wrapper.getString("item")
+                val legacy = active.applySyncRecord(raw.encodeToByteArray())
+                val id = ByteArray(16) { offset ->
+                    idHex.substring(offset * 2, offset * 2 + 2).toInt(16).toByte()
+                }
+                val ciphertext = active.encryptItem(id, legacy)
+                legacy.fill(0)
+                val previous = repo.get(id)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+            val payload = JSONObject()
+                .put("v", 1)
+                .put("records", records)
+                .toString()
+                .encodeToByteArray()
+            client.putManifest(namespace, payload, null)
+            loadItems()
+            SyncOutcome(records.length(), merged.optJSONArray("conflicts")?.length() ?: 0)
         }
 
     suspend fun exportSyncRecordLength(): Result<Int> = withContext(Dispatchers.IO) {

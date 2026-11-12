@@ -1168,3 +1168,74 @@ mod tests {
         assert!(!aad.encode().is_empty());
     }
 }
+
+
+/// Merge V2 sync records, preserving wrapped item keys.
+#[uniffi::export]
+pub fn merge_sync_records_v2(
+    local: Vec<String>,
+    remote: Vec<String>,
+) -> Result<String, FfiError> {
+    use cipherkeep_core::item::ItemConflict;
+    use cipherkeep_core::MergeEngine;
+    use std::collections::BTreeMap;
+
+    fn parse(raw: &str) -> Result<(String, String, Vec<u8>), FfiError> {
+        let value: serde_json::Value =
+            serde_json::from_str(raw).map_err(|_| FfiError::CorruptData)?;
+        if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
+            return Err(FfiError::UnsupportedVersion);
+        }
+        let item = value
+            .get("item")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(FfiError::CorruptData)?
+            .to_string();
+        let key = value
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(FfiError::CorruptData)?
+            .to_string();
+        let record = value.get("record").ok_or(FfiError::CorruptData)?;
+        let bytes = serde_json::to_vec(record).map_err(|_| FfiError::Internal)?;
+        Ok((item, key, bytes))
+    }
+
+    let mut engine = MergeEngine::new();
+    let mut keys: BTreeMap<String, String> = BTreeMap::new();
+    for raw in local {
+        let (item, key, bytes) = parse(&raw)?;
+        keys.insert(item, key);
+        engine
+            .insert_local(cipherkeep_core::item::ItemRecord::from_sync_json(&bytes)?)?;
+    }
+    let mut conflicts = Vec::new();
+    for raw in remote {
+        let (item, key, bytes) = parse(&raw)?;
+        keys.entry(item).or_insert(key);
+        let record = cipherkeep_core::item::ItemRecord::from_sync_json(&bytes)?;
+        let outcome = engine.merge_remote(&record)?;
+        for conflict in outcome.conflicts {
+            if let ItemConflict::Field(field) = conflict {
+                conflicts.push(serde_json::json!({
+                    "item": field.item_id().as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                    "field": field.left().field_id(),
+                    "kind": "field",
+                }));
+            }
+        }
+    }
+    let mut records = Vec::new();
+    for raw in engine.records_for_sync()? {
+        let record = cipherkeep_core::item::ItemRecord::from_sync_json(&raw)?;
+        let id = record.id().as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let key = keys.get(&id).ok_or(FfiError::CorruptData)?;
+        let value: serde_json::Value =
+            serde_json::from_slice(&raw).map_err(|_| FfiError::Internal)?;
+        records.push(
+            serde_json::json!({"v":2,"item":id,"key":key,"record":value}).to_string(),
+        );
+    }
+    serde_json::to_string(&serde_json::json!({"records":records,"conflicts":conflicts}))
+        .map_err(|_| FfiError::Internal)
+}

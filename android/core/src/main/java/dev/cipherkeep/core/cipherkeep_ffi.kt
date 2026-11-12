@@ -683,6 +683,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_import_portable(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_totp_code(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffisearchindex_clear(
@@ -837,6 +839,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_import_portable(`bytes`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_merge_sync_records_v2(`local`: RustBuffer.ByValue,`remote`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_totp_code(`uri`: RustBuffer.ByValue,`unixSecs`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -968,6 +972,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_portable() and 0xFFFF) != 4345) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2() and 0xFFFF) != 46137) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_totp_code() and 0xFFFF) != 63792) {
@@ -3401,6 +3408,22 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
         
         FfiConverterByteArray.lower(`bytes`),
         FfiConverterString.lower(`password`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Merge V2 sync records, preserving wrapped item keys.
+         */
+    @Throws(FfiException::class) fun `mergeSyncRecordsV2`(`local`: List<kotlin.String>, `remote`: List<kotlin.String>): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_merge_sync_records_v2(
+    
+        
+        FfiConverterSequenceString.lower(`local`),
+        FfiConverterSequenceString.lower(`remote`),_status)
 }
     )
     }

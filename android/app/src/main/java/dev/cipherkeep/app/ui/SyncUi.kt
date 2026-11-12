@@ -16,12 +16,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedTextField
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import dev.cipherkeep.app.ui.theme.CKDimens
 
 /** Persisted Android SAF folder used by the local-folder sync adapter. */
@@ -114,4 +118,56 @@ fun SyncConflictDialog(
             TextButton(onClick = onKeepRemote) { Text("Keep remote") }
         },
     )
+}
+
+
+/** Relay sync controls. The token is session-only and never persisted. */
+@Composable
+fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var endpoint by remember { mutableStateOf("https://cipherkeep-relay.marzouk-souhaieb.workers.dev") }
+    var token by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(
+            modifier = Modifier.padding(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+        ) {
+            Text("Relay sync", style = MaterialTheme.typography.titleMedium)
+            OutlinedTextField(
+                value = endpoint,
+                onValueChange = { endpoint = it },
+                label = { Text("HTTPS relay endpoint") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = token,
+                onValueChange = { token = it },
+                label = { Text("Relay token (session only)") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        message = dev.cipherkeep.app.data.AndroidSyncEngine(context, controller)
+                            .sync(endpoint.trim(), token)
+                            .fold(
+                                { "Synced ${it.records} record(s); conflicts ${it.conflicts}." },
+                                { "Sync failed." },
+                            )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Sync now") }
+            message?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+            Text(
+                "The token is not saved. Use a test vault until conflict resolution is complete.",
+                style = MaterialTheme.typography.labelSmall,
+            )
+        }
+    }
 }
