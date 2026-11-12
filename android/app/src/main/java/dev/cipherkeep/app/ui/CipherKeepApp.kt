@@ -72,6 +72,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import android.provider.Settings
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import java.util.concurrent.TimeUnit
 import dev.cipherkeep.app.data.SensitiveClipboard
 import dev.cipherkeep.core.FfiPassphrasePolicy
 import dev.cipherkeep.core.FfiPasswordPolicy
@@ -113,6 +117,14 @@ fun CipherKeepApp() {
     val context = LocalContext.current
     val controller = remember {
         SessionController(context).also { dev.cipherkeep.app.autofill.AutofillRegistry.controller = it }
+    }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        dev.cipherkeep.app.data.SyncRuntime.controller = controller
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "cipherkeep-sync",
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<dev.cipherkeep.app.data.SyncWorker>(15, TimeUnit.MINUTES).build(),
+        )
     }
     val reduceMotion = Settings.Global.getFloat(
         context.contentResolver,

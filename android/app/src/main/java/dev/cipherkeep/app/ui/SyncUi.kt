@@ -153,6 +153,9 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
             OutlinedButton(
                 onClick = {
                     scope.launch {
+                        context.getSharedPreferences("sync", android.content.Context.MODE_PRIVATE)
+                            .edit().putString("relay_endpoint", endpoint.trim()).apply()
+                        dev.cipherkeep.app.data.SyncCredentialStore(context).save(token)
                         message = dev.cipherkeep.app.data.AndroidSyncEngine(context, controller)
                             .sync(endpoint.trim(), token)
                             .fold(
