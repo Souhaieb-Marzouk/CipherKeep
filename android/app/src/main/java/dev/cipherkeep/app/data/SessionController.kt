@@ -353,6 +353,24 @@ class SessionController(context: Context) {
             }
         }
 
+    suspend fun exportSyncRecordLength(): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val entity = repo.list().firstOrNull {
+                !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID)
+            } ?: error("no item to migrate")
+            val bytes = active.exportSyncRecord(
+                entity.itemId,
+                entity.ciphertext,
+                ByteArray(16) { 1 },
+                System.currentTimeMillis().toULong(),
+                1uL,
+            )
+            bytes.size
+        }
+    }
+
     suspend fun exportBackup(password: String): Result<ByteArray> = withContext(Dispatchers.IO) {
         runCatching {
             val array = JSONArray()

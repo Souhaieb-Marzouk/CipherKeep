@@ -1712,6 +1712,7 @@ private fun SettingsScreen(
     var biometricEnabled by remember { mutableStateOf(false) }
     var biometricMessage by remember { mutableStateOf<String?>(null) }
     var showDesignGallery by remember { mutableStateOf(false) }
+    var syncTestMessage by remember { mutableStateOf<String?>(null) }
     var backupPassword by remember { mutableStateOf("") }
     var backupMessage by remember { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
@@ -2053,6 +2054,19 @@ private fun SettingsScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             SyncFolderSection(context)
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        controller.exportSyncRecordLength()
+                            .onSuccess { syncTestMessage = "V2 sync record: $it bytes" }
+                            .onFailure { syncTestMessage = "V2 sync record failed" }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Test V2 sync record") }
+            syncTestMessage?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall)
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 

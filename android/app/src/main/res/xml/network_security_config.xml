@@ -6,6 +6,7 @@
     <domain-config cleartextTrafficPermitted="false">
         <domain includeSubdomains="true">api.github.com</domain>
         <domain includeSubdomains="true">github.com</domain>
+        <domain includeSubdomains="true">cipherkeep-relay.marzouk-souhaieb.workers.dev</domain>
         <trust-anchors>
             <certificates src="system" />
         </trust-anchors>
