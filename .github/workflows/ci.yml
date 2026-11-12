@@ -161,7 +161,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: trufflesecurity/trufflehog@eafb8c5f6a06175141c27f17bcc17941853d0047 # v3.90.0
+      - uses: trufflesecurity/trufflehog@ea68ca03c865c5f324e86e849ced20ed3cf9dbbb # v3.99.8
         with:
           path: .
           version: 3.90.0
