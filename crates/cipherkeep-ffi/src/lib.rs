@@ -793,6 +793,38 @@ impl FfiVaultSession {
         })
     }
 
+    /// Export a v2 sync record with wrapped item key.
+    pub fn export_sync_record(
+        &self,
+        item_id: Vec<u8>,
+        ciphertext: Vec<u8>,
+        actor: Vec<u8>,
+        created_at: u64,
+        counter_start: u64,
+    ) -> Result<Vec<u8>, FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        let actor: [u8; 16] = actor
+            .as_slice()
+            .try_into()
+            .map_err(|_| FfiError::InvalidArgument)?;
+        self.with_state(|state| {
+            state
+                .session
+                .export_sync_record(id, &ciphertext, ActorId::from_bytes(actor), created_at, counter_start)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Apply a v2 sync record to a legacy JSON payload.
+    pub fn apply_sync_record(&self, sync_json: Vec<u8>) -> Result<Vec<u8>, FfiError> {
+        self.with_state(|state| {
+            state
+                .session
+                .apply_sync_record(&sync_json)
+                .map_err(FfiError::from)
+        })
+    }
+
     /// Migrate an encrypted legacy item into canonical sync JSON.
     pub fn migrate_item(
         &self,

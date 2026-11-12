@@ -66,6 +66,8 @@ declare class WasmVaultSession {
   encrypt_item(itemId: Uint8Array, plaintext: Uint8Array): Uint8Array;
   vault_id(): Uint8Array;
   migrate_item(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
+  export_sync_record(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
+  apply_sync_record(syncJson: Uint8Array): Uint8Array;
   decrypt_item(itemId: Uint8Array, ciphertext: Uint8Array): Uint8Array;
   save_item(itemId: Uint8Array, plaintext: Uint8Array): void;
   get_item(itemId: Uint8Array): Uint8Array;
@@ -82,3 +84,4 @@ declare class WasmVaultSession {
 }
 
 declare function merge_sync_records(local: string[], remote: string[]): string;
+declare function merge_sync_records_v2(local: string[], remote: string[]): string;

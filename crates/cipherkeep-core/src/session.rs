@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 
 use crate::crdt::ActorId;
-use crate::envelope::Envelope;
+use crate::envelope::{Aad, Envelope};
 use crate::error::{CoreError, ErrorCode, Result};
 use crate::header::{VaultHeader, NONCE_LEN};
 use crate::item::ITEM_SCHEMA_VERSION;
@@ -432,6 +432,144 @@ impl VaultSession {
         .to_sync_json()
     }
 
+    /// Export a v2 sync record containing the CRDT record and wrapped item key.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked, or a decryption/migration
+    /// error for corrupt blobs or invalid payloads.
+    pub fn export_sync_record(
+        &self,
+        item_id: ItemId,
+        blob: &[u8],
+        actor: ActorId,
+        created_at: u64,
+        counter_start: u64,
+    ) -> Result<Vec<u8>> {
+        let unlocked = self
+            .state
+            .as_ref()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        let (wrapped, sealed) = decode_item_blob(blob)?;
+        let vault = unlocked
+            .keyring
+            .first_vault()
+            .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+        let item_key = vault.unwrap_item_key(&wrapped, item_id, ITEM_SCHEMA_VERSION)?;
+        let plaintext = item_key.open_field(&sealed, item_id, ITEM_PAYLOAD_FIELD, 1, false)?;
+        let record = crate::sync::legacy::migrate_legacy_item(
+            plaintext.expose_secret(),
+            item_id,
+            &item_key,
+            actor,
+            created_at,
+            counter_start,
+        )?;
+        let record_value: serde_json::Value = serde_json::from_slice(&record.to_sync_json()?)
+            .map_err(|_| CoreError::new(ErrorCode::Internal))?;
+        serde_json::to_vec(&serde_json::json!({
+            "v": 2,
+            "item": hex(item_id.as_bytes()),
+            "key": hex(&wrapped.encode()),
+            "record": record_value,
+        }))
+        .map_err(|_| CoreError::new(ErrorCode::Internal))
+    }
+
+    /// Apply a v2 sync record back to a legacy JSON payload.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed records/wrapped keys, wrong vault keys and invalid
+    /// field envelopes.
+    pub fn apply_sync_record(&self, sync_json: &[u8]) -> Result<Vec<u8>> {
+        let unlocked = self
+            .state
+            .as_ref()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        let value: serde_json::Value =
+            serde_json::from_slice(sync_json).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+        if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
+            return Err(CoreError::new(ErrorCode::UnsupportedVersion));
+        }
+        let item_id = ItemId::from_bytes(
+            decode_hex(
+                value
+                    .get("item")
+                    .and_then(serde_json::Value::as_str)
+                    .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?,
+            )?
+            .try_into()
+            .map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
+        );
+        let wrapped = Envelope::decode(&decode_hex(
+            value
+                .get("key")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?,
+        )?)?;
+        let vault = unlocked
+            .keyring
+            .first_vault()
+            .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+        let item_key = vault.unwrap_item_key(&wrapped, item_id, ITEM_SCHEMA_VERSION)?;
+        let record = crate::item::ItemRecord::from_sync_json(
+            &serde_json::to_vec(value.get("record").ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?)
+                .map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
+        )?;
+        let mut legacy = serde_json::Map::new();
+        legacy.insert("v".into(), serde_json::json!(1));
+        legacy.insert(
+            "type".into(),
+            serde_json::json!(if record.item_type() == crate::item::ItemType::Totp {
+                "totp"
+            } else {
+                "login"
+            }),
+        );
+        for field in record.fields() {
+            let Some(envelope) = field.value() else { continue };
+            if field.is_tombstone() {
+                continue;
+            }
+            let plaintext = item_key.open_field(
+                envelope,
+                item_id,
+                field.field_id(),
+                field.clock().counter(),
+                false,
+            )?;
+            let text = String::from_utf8(plaintext.expose_secret().to_vec())
+                .map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+            let key = match field.field_id() {
+                crate::item::FIELD_TITLE => "title",
+                crate::item::FIELD_NOTES => "notes",
+                crate::item::FIELD_USERNAME => "username",
+                crate::item::FIELD_PASSWORD => "password",
+                crate::item::FIELD_URL => "url",
+                crate::item::FIELD_TOTP => "totpUri",
+                0x8001 => "folder",
+                0x8002 => "tags",
+                0x8003 => "favorite",
+                0x8004 => "autofillAllowed",
+                _ => continue,
+            };
+            if key == "tags" {
+                legacy.insert(
+                    key.into(),
+                    serde_json::Value::Array(
+                        text.split(',').filter(|tag| !tag.is_empty()).map(|tag| serde_json::json!(tag)).collect(),
+                    ),
+                );
+            } else if key == "favorite" || key == "autofillAllowed" {
+                legacy.insert(key.into(), serde_json::json!(text == "true"));
+            } else {
+                legacy.insert(key.into(), serde_json::json!(text));
+            }
+        }
+        serde_json::to_vec(&legacy).map_err(|_| CoreError::new(ErrorCode::Internal))
+    }
+
     /// List stored item ids. Requires an unlocked session.
     ///
     /// # Errors
@@ -702,6 +840,27 @@ fn make_recovery(keyring: &Keyring, vault_id: VaultId) -> Result<(Vec<u8>, Vec<S
 
 const ITEM_BLOB_VERSION: u8 = 1;
 const ITEM_PAYLOAD_FIELD: u16 = 0;
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return Err(CoreError::new(ErrorCode::CorruptData));
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            u8::from_str_radix(
+                std::str::from_utf8(pair).map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
+                16,
+            )
+            .map_err(|_| CoreError::new(ErrorCode::CorruptData))
+        })
+        .collect()
+}
 
 fn decode_item_blob(blob: &[u8]) -> Result<(crate::Envelope, crate::Envelope)> {
     if blob.len() < 3 || blob[0] != ITEM_BLOB_VERSION {

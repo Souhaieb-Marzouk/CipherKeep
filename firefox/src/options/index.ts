@@ -71,8 +71,25 @@ element<HTMLButtonElement>("syncNow").addEventListener("click", async () => {
     return;
   }
   status.textContent = `Synced ${reply.records} record(s); unresolved conflicts: ${reply.conflicts}.`;
+  await showConflicts();
 });
 
+async function showConflicts(): Promise<void> {
+  const output = element<HTMLPreElement>("syncConflicts");
+  const stored = await browser.storage.local.get("syncConflicts");
+  const conflicts = Array.isArray(stored.syncConflicts) ? stored.syncConflicts : [];
+  output.textContent =
+    conflicts.length === 0
+      ? ""
+      : `Unresolved conflicts:\n${conflicts
+          .map((value) => {
+            const conflict = value as { item?: string; field?: number; kind?: string };
+            return `${conflict.kind ?? "field"} · item ${conflict.item ?? "?"} · field ${conflict.field ?? "?"}`;
+          })
+          .join("\n")}`;
+}
+
+void showConflicts();
 void showSync();
 
 async function showRecipes(): Promise<void> {

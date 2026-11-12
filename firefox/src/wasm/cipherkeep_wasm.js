@@ -151,6 +151,31 @@ let wasm_bindgen = (function(exports) {
             wasm.__wbg_wasmvaultsession_free(ptr, 0);
         }
         /**
+         * Apply a v2 sync record to a legacy JSON payload.
+         * @param {Uint8Array | number[]} sync_json
+         * @returns {Uint8Array}
+         */
+        apply_sync_record(sync_json) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                const ptr0 = passArray8ToWasm0(sync_json, wasm.__wbindgen_export);
+                const len0 = WASM_VECTOR_LEN;
+                wasm.wasmvaultsession_apply_sync_record(retptr, this.__wbg_ptr, ptr0, len0);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                if (r3) {
+                    throw takeFromExternrefTable0(r2);
+                }
+                var v2 = getArrayU8FromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                return v2;
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
          * Persist this vault's header and recovery envelope.
          * @returns {Uint8Array}
          */
@@ -287,6 +312,49 @@ let wasm_bindgen = (function(exports) {
                 var v3 = getArrayU8FromWasm0(r0, r1).slice();
                 wasm.__wbindgen_export3(r0, r1 * 1, 1);
                 return v3;
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
+         * Export a v2 sync record with wrapped item key.
+         * @param {Uint8Array | number[]} item_id
+         * @param {Uint8Array | number[]} ciphertext
+         * @param {Uint8Array | number[]} actor
+         * @param {bigint} created_at
+         * @param {bigint} counter_start
+         * @returns {Uint8Array}
+         */
+        export_sync_record(item_id, ciphertext, actor, created_at, counter_start) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                const val4 = BigInt.asIntN(64, created_at);
+                const val5 = BigInt.asIntN(64, counter_start);
+                let ptr0, len0, ptr1, len1, ptr2, len2;
+                try {
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export);
+                    len0 = WASM_VECTOR_LEN;
+                    ptr1 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_export);
+                    len1 = WASM_VECTOR_LEN;
+                    ptr2 = passArray8ToWasm0(actor, wasm.__wbindgen_export);
+                    len2 = WASM_VECTOR_LEN;
+                } catch (e) {
+                    if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    throw e;
+                }
+                wasm.wasmvaultsession_export_sync_record(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, val4, val5);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                if (r3) {
+                    throw takeFromExternrefTable0(r2);
+                }
+                var v6 = getArrayU8FromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                return v6;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
             }
@@ -847,6 +915,49 @@ let wasm_bindgen = (function(exports) {
         }
     }
     exports.merge_sync_records = merge_sync_records;
+
+    /**
+     * Merge V2 sync records, preserving each item's wrapped key.
+     * @param {string[]} local
+     * @param {string[]} remote
+     * @returns {string}
+     */
+    function merge_sync_records_v2(local, remote) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passArrayJsValueToWasm0(local, wasm.__wbindgen_export);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passArrayJsValueToWasm0(remote, wasm.__wbindgen_export);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_export7(ptr1, len1); wasm.__wbindgen_export3(ptr1, len1 * 4, 4); }
+                if (ptr0) { wasm.__wbindgen_export7(ptr0, len0); wasm.__wbindgen_export3(ptr0, len0 * 4, 4); }
+                throw e;
+            }
+            wasm.merge_sync_records_v2(retptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr3 = r0;
+            var len3 = r1;
+            if (r3) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred4_0, deferred4_1, 1);
+        }
+    }
+    exports.merge_sync_records_v2 = merge_sync_records_v2;
 
     /**
      * Migrate legacy plaintext JSON into canonical encrypted sync JSON.
