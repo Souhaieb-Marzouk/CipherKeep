@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import dev.cipherkeep.app.data.BackupFileBridge
 import dev.cipherkeep.app.ui.theme.CKDimens
 
 /** Persisted Android SAF folder used by the local-folder sync adapter. */
@@ -37,6 +39,7 @@ fun SyncFolderSection(context: Context, controller: dev.cipherkeep.app.data.Sess
     var probe by remember { mutableStateOf<String?>(null) }
     var folderSync by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val activity = context as? FragmentActivity
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -61,7 +64,22 @@ fun SyncFolderSection(context: Context, controller: dev.cipherkeep.app.data.Sess
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(
-                onClick = { picker.launch(null) },
+                onClick = {
+                    BackupFileBridge.treeHandler = { uri ->
+                        runCatching {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri,
+                                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                            )
+                        }
+                        prefs.edit().putString("local_folder", uri.toString()).apply()
+                        folder = uri.toString()
+                    }
+                    activity?.startActivityForResult(
+                        Intent(Intent.ACTION_OPEN_DOCUMENT_TREE),
+                        BackupFileBridge.TREE_REQUEST_CODE,
+                    )
+                },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (folder == null) "Choose sync folder" else "Change sync folder") }
             if (folder != null) {

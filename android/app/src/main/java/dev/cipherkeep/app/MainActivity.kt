@@ -23,6 +23,7 @@ class MainActivity : FragmentActivity() {
                 when (requestCode) {
                     BackupFileBridge.REQUEST_CODE -> BackupFileBridge.handler?.invoke(uri)
                     BackupFileBridge.IMPORT_REQUEST_CODE -> BackupFileBridge.importHandler?.invoke(uri)
+                    BackupFileBridge.TREE_REQUEST_CODE -> BackupFileBridge.treeHandler?.invoke(uri)
                 }
             }
         }
