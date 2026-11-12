@@ -217,7 +217,10 @@ mod tests {
     fn signed(json: &str) -> (String, String) {
         let key = SigningKey::from_bytes(&[7u8; 32]);
         let signature = key.sign(json.as_bytes());
-        (HEXLOWER.encode(signature.to_bytes().as_slice()), HEXLOWER.encode(key.verifying_key().to_bytes().as_slice()))
+        (
+            HEXLOWER.encode(signature.to_bytes().as_slice()),
+            HEXLOWER.encode(key.verifying_key().to_bytes().as_slice()),
+        )
     }
 
     const REGISTRY: &str = r##"{"version":2,"recipes":[{"origin":"example.com","usernameSelector":"#user","passwordSelector":"#pass","submitSelector":"button[type=submit]"}]}"##;
@@ -225,7 +228,8 @@ mod tests {
     #[test]
     fn valid_signature_and_selector_are_accepted() {
         let (signature, key) = signed(REGISTRY);
-        let registry = verify_signed_registry(REGISTRY.as_bytes(), &signature, &key).expect("registry");
+        let registry =
+            verify_signed_registry(REGISTRY.as_bytes(), &signature, &key).expect("registry");
         assert_eq!(registry.version(), 2);
         assert!(registry.for_origin("EXAMPLE.com").is_some());
     }
@@ -235,15 +239,24 @@ mod tests {
         let (signature, key) = signed(REGISTRY);
         let tampered = REGISTRY.replace("#pass", "#evil");
         assert!(verify_signed_registry(tampered.as_bytes(), &signature, &key).is_err());
-        let other_key = HEXLOWER.encode(SigningKey::from_bytes(&[8u8; 32]).verifying_key().to_bytes().as_slice());
+        let other_key = HEXLOWER.encode(
+            SigningKey::from_bytes(&[8u8; 32])
+                .verifying_key()
+                .to_bytes()
+                .as_slice(),
+        );
         assert!(verify_signed_registry(REGISTRY.as_bytes(), &signature, &other_key).is_err());
     }
 
     #[test]
     fn rollback_and_bad_selectors_are_refused() {
         let (signature, key) = signed(REGISTRY);
-        let registry = verify_signed_registry(REGISTRY.as_bytes(), &signature, &key).expect("registry");
-        assert_eq!(registry.accept_if_newer(2).unwrap_err().code(), ErrorCode::Conflict);
+        let registry =
+            verify_signed_registry(REGISTRY.as_bytes(), &signature, &key).expect("registry");
+        assert_eq!(
+            registry.accept_if_newer(2).unwrap_err().code(),
+            ErrorCode::Conflict
+        );
         assert!(registry.accept_if_newer(1).is_ok());
     }
 

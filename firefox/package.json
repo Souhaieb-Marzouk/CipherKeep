@@ -13,9 +13,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:wasm-session": "node scripts/session-smoke.cjs",
-    "lint": "web-ext lint --source-dir dist --self-hosted",
+    "lint": "node scripts/lint-extension.mjs",
     "scan:csp": "node scripts/check-csp.mjs",
-    "build:xpi": "web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --overwrite-dest",
+    "build:xpi": "node scripts/pack-xpi.mjs",
     "check": "npm run typecheck && npm run tokens:check && npm run contrast:check && npm run build && npm test && npm run test:wasm-session && npm run scan:csp && npm run lint"
   },
   "devDependencies": {
@@ -23,9 +23,8 @@
     "@types/node": "^24.10.0",
     "esbuild": "^0.28.2",
     "fake-indexeddb": "^6.2.8",
-    "playwright": "^1.55.0",
+    "playwright": "^1.55.1",
     "typescript": "^5.9.3",
-    "vitest": "^5.1.0",
-    "web-ext": "^10.8.0"
+    "vitest": "^5.1.0"
   }
 }
