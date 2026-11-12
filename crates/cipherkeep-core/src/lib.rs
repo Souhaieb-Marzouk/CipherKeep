@@ -41,6 +41,7 @@ pub mod search;
 pub mod secret;
 pub mod session;
 pub mod shamir;
+pub mod sync;
 pub mod totp;
 
 pub use crdt::{ActorId, LamportClock, VersionVector};
@@ -92,6 +93,11 @@ pub use secret::{SecretBytes, SecretString};
 pub use session::{validate_master_password, CreatedVault, VaultBlob, VaultSession};
 pub use shamir::{
     combine_2_of_3, split_2_of_3, RecoveryShare, RECOVERY_SECRET_LEN, SHARE_COUNT, THRESHOLD,
+};
+pub use sync::{
+    local::LocalFolderAdapter, MemorySyncAdapter, SyncAdapter, SyncBatch, SyncCapabilities,
+    SyncManifest, SyncVersionVector, MAX_SYNC_BATCH_BYTES, MAX_SYNC_BLOBS, MAX_SYNC_DEVICES,
+    SYNC_PAD_BLOCK,
 };
 pub use totp::{
     parse_otpauth_uri, Totp, TotpAlgorithm, TotpEntry, DEFAULT_PERIOD, MAX_PERIOD, MAX_SECRET_LEN,
