@@ -2008,6 +2008,15 @@ private fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    val recipeRegistry = remember(context) {
+                        dev.cipherkeep.app.data.RecipeRegistry.load(context)
+                    }
+                    Text(
+                        text = recipeRegistry?.let { "Recipe registry v${it.version} · ${it.hash.take(16)}…" }
+                            ?: "Recipe registry unavailable or signature invalid",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     val eligible = controller.items.filter {
                         it.autofillAllowed && it.url.isNotBlank() && it.password.isNotEmpty()
                     }

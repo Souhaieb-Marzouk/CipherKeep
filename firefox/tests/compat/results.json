@@ -1,0 +1,44 @@
+[
+  {
+    "id": "plain-login",
+    "status": "pass",
+    "filled": true,
+    "submitted": false,
+    "hasPassword": true
+  },
+  {
+    "id": "shadow-login",
+    "status": "pass",
+    "filled": true,
+    "submitted": false,
+    "hasPassword": true
+  },
+  {
+    "id": "spa-login",
+    "status": "pass",
+    "filled": true,
+    "submitted": false,
+    "hasPassword": true
+  },
+  {
+    "id": "hidden-field",
+    "status": "pass",
+    "filled": false,
+    "submitted": false,
+    "hasPassword": false
+  },
+  {
+    "id": "lookalike-origin",
+    "status": "pass",
+    "filled": false,
+    "submitted": false,
+    "hasPassword": true
+  },
+  {
+    "id": "cross-origin-iframe",
+    "status": "pass",
+    "filled": false,
+    "submitted": false,
+    "hasPassword": false
+  }
+]
