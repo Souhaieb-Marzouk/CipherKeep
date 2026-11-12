@@ -375,6 +375,36 @@ async function performSync(): Promise<Response> {
         return { ok: true, kind: "sync", records: merged.records.length, conflicts: merged.conflicts.length };
 }
 
+async function localV2Records(active: WasmVaultSession): Promise<string[]> {
+  await ensureItemStore();
+  const records = await itemStore.list();
+  const actor = crypto.getRandomValues(new Uint8Array(16));
+  const result: string[] = [];
+  for (const record of records) {
+    if (record.id === FOLDER_META_ID) continue;
+    const exported = active.export_sync_record(
+      hexToBytes(record.id),
+      record.ciphertext,
+      actor,
+      Date.now(),
+      1,
+    );
+    result.push(new TextDecoder().decode(exported));
+  }
+  return result;
+}
+
+async function applyV2Records(active: WasmVaultSession, records: string[]): Promise<void> {
+  for (const raw of records) {
+    const wrapper = JSON.parse(raw) as { item?: string };
+    if (typeof wrapper.item !== "string") continue;
+    const legacy = active.apply_sync_record(new TextEncoder().encode(raw));
+    const ciphertext = active.encrypt_item(hexToBytes(wrapper.item), legacy);
+    legacy.fill(0);
+    await itemStore.put({ id: wrapper.item, ciphertext, updatedAt: Date.now() });
+  }
+}
+
 async function handle(request: Request): Promise<Response> {
   try {
     await ensureWasm();
@@ -522,6 +552,26 @@ async function handle(request: Request): Promise<Response> {
         payload.fill(0);
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "export-sync-bundle": {
+        const active = requireSession();
+        const records = await localV2Records(active);
+        return { ok: true, kind: "bundle", json: JSON.stringify({ v: 1, records }) };
+      }
+      case "import-sync-bundle": {
+        const active = requireSession();
+        const local = await localV2Records(active);
+        const parsed = JSON.parse(request.json) as { records?: unknown };
+        const remote = Array.isArray(parsed.records)
+          ? parsed.records.filter((value): value is string => typeof value === "string")
+          : [];
+        const merged = JSON.parse(merge_sync_records_v2(local, remote)) as {
+          records: string[];
+          conflicts: unknown[];
+        };
+        await applyV2Records(active, merged.records);
+        await browser.storage.local.set({ syncConflicts: merged.conflicts });
+        return { ok: true, kind: "sync", records: merged.records.length, conflicts: merged.conflicts.length };
       }
       case "resolve-conflict": {
         const active = requireSession();

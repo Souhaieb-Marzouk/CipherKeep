@@ -81,6 +81,7 @@
           <input id="syncToken" type="password" placeholder="token / app password" autocomplete="off" />
         </div>
         <div class="row"><button id="saveSync">Save sync settings</button><button id="testSync" class="secondary">Test connection</button><button id="syncNow">Sync now</button></div>
+        <div class="row"><button id="exportBundle" class="secondary">Download sync bundle</button><label class="secondary" style="padding:10px 14px;border-radius:8px;background:var(--ck-dark-surface-muted);cursor:pointer">Import sync bundle<input id="importBundle" type="file" accept="application/json" hidden /></label></div>
         <pre id="syncStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <pre id="syncConflicts" style="white-space:pre-wrap;color:var(--danger);font:12px/1.5 ui-monospace,monospace;margin:8px 0 0"></pre>
         <div id="syncConflictActions" class="row"></div>

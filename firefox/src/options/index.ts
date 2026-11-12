@@ -104,6 +104,38 @@ async function showConflicts(): Promise<void> {
     actions.append(keepLeft, keepRight);
   }
 }
+element<HTMLButtonElement>("exportBundle").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("syncStatus");
+  const reply: Response = await browser.runtime.sendMessage({ type: "export-sync-bundle" });
+  if (!reply.ok || reply.kind !== "bundle") {
+    status.textContent = reply.ok ? "Unexpected bundle response." : reply.error;
+    return;
+  }
+  const url = URL.createObjectURL(new Blob([reply.json], { type: "application/json" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "cipherkeep-sync-bundle.json";
+  anchor.click();
+  URL.revokeObjectURL(url);
+  status.textContent = "Sync bundle downloaded.";
+});
+
+element<HTMLInputElement>("importBundle").addEventListener("change", async () => {
+  const status = element<HTMLPreElement>("syncStatus");
+  const file = element<HTMLInputElement>("importBundle").files?.[0];
+  if (file === undefined) return;
+  const json = await file.text();
+  const reply: Response = await browser.runtime.sendMessage({ type: "import-sync-bundle", json });
+  if (!reply.ok) {
+    status.textContent = reply.error;
+    return;
+  }
+  if (reply.kind === "sync") {
+    status.textContent = `Imported bundle: ${reply.records} record(s), conflicts ${reply.conflicts}.`;
+    await showConflicts();
+  }
+});
+
 void showConflicts();
 void showSync();
 

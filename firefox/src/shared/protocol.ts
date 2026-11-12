@@ -47,6 +47,8 @@ export type Request =
   | { type: "sync-vault-id" }
   | { type: "sync-now" }
   | { type: "resolve-conflict"; item: string; field: number; keepRight: boolean }
+  | { type: "export-sync-bundle" }
+  | { type: "import-sync-bundle"; json: string }
   | {
       type: "update-item";
       id: string;
@@ -108,6 +110,8 @@ export type Response =
   | { ok: true; kind: "vault-id"; vaultId: string }
   | { ok: true; kind: "sync"; records: number; conflicts: number }
   | { ok: true; kind: "conflict-resolved" }
+  | { ok: true; kind: "bundle"; json: string }
+  | { ok: true; kind: "sync"; records: number; conflicts: number }
   | {
       ok: true;
       kind: "inspection";
@@ -161,6 +165,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "sync-vault-id",
       "sync-now",
       "resolve-conflict",
+      "export-sync-bundle",
+      "import-sync-bundle",
       "update-item",
     ].includes(value)
   );
@@ -269,6 +275,9 @@ export function isRequest(value: unknown): value is Request {
         Array.isArray(request.tags) &&
         typeof request.favorite === "boolean"
       );
+    case "export-sync-bundle":
+    case "import-sync-bundle":
+      return true;
     case "resolve-conflict":
       return true;
     case "sync-now":
