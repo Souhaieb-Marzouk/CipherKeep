@@ -1,5 +1,8 @@
 package dev.cipherkeep.app.ui
 
+import android.content.Context
+import android.content.Intent
+
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -94,6 +97,7 @@ import dev.cipherkeep.app.update.UpdatePreferences
 import dev.cipherkeep.app.update.UpdateScheduler
 import dev.cipherkeep.app.data.keystore.BiometricKeyManager
 import dev.cipherkeep.app.data.keystore.WrappedSecret
+import dev.cipherkeep.app.data.BackupFileBridge
 import dev.cipherkeep.app.data.SessionController
 import dev.cipherkeep.app.data.VaultItem
 import dev.cipherkeep.core.FfiException
@@ -2107,7 +2111,40 @@ private fun SettingsScreen(
                     onClick = {
                         backupMessage = null
                         val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
-                        exportLauncher.launch("cipherkeep-backup-$date.ckexp")
+                        val target = activity
+                        if (target == null) {
+                            backupMessage = "File picker unavailable."
+                        } else {
+                            BackupFileBridge.handler = { uri ->
+                                scope.launch {
+                                    controller.exportBackup(backupPassword)
+                                        .onSuccess { bytes ->
+                                            runCatching {
+                                                context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                                            }.onSuccess {
+                                                val checksum = MessageDigest.getInstance("SHA-256")
+                                                    .digest(bytes)
+                                                    .joinToString("") { "%02x".format(it) }
+                                                backupMessage = "Encrypted backup written (${bytes.size} bytes).\nSHA-256: $checksum"
+                                            }.onFailure {
+                                                backupMessage = "Could not write the backup file."
+                                            }
+                                        }
+                                        .onFailure {
+                                            backupMessage = "Backup encryption failed. Use a 12+ character export password."
+                                        }
+                                    backupPassword = ""
+                                }
+                            }
+                            target.startActivityForResult(
+                                Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    type = "application/octet-stream"
+                                    putExtra(Intent.EXTRA_TITLE, "cipherkeep-backup-$date.ckexp")
+                                },
+                                BackupFileBridge.REQUEST_CODE,
+                            )
+                        }
                     },
                     enabled = backupPassword.length >= 12,
                     modifier = Modifier.weight(1f),
@@ -2115,7 +2152,33 @@ private fun SettingsScreen(
                 OutlinedButton(
                     onClick = {
                         backupMessage = null
-                        importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                        val target = activity
+                        if (target == null) {
+                            backupMessage = "File picker unavailable."
+                        } else {
+                            BackupFileBridge.importHandler = { uri ->
+                                scope.launch {
+                                    val bytes = runCatching {
+                                        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                                    }.getOrNull()
+                                    if (bytes == null) {
+                                        backupMessage = "Could not read the selected file."
+                                    } else {
+                                        controller.importBackup(bytes, backupPassword)
+                                            .onSuccess { count -> backupMessage = "$count items restored." }
+                                            .onFailure { backupMessage = "Restore failed. Check the password and file." }
+                                    }
+                                    backupPassword = ""
+                                }
+                            }
+                            target.startActivityForResult(
+                                Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                                    addCategory(Intent.CATEGORY_OPENABLE)
+                                    type = "*/*"
+                                },
+                                BackupFileBridge.IMPORT_REQUEST_CODE,
+                            )
+                        }
                     },
                     enabled = backupPassword.length >= 12,
                     modifier = Modifier.weight(1f),
