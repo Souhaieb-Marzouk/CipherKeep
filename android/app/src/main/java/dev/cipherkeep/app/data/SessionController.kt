@@ -241,13 +241,31 @@ class SessionController(context: Context) {
                         password = json.optString("password"),
                         type = json.optString("type", "login"),
                         totpUri = json.optString("totpUri"),
+                        url = json.optString("url"),
+                        notes = json.optString("notes"),
+                        folder = json.optString("folder"),
+                        tags = json.optJSONArray("tags")?.let { array ->
+                            (0 until array.length()).mapNotNull { index ->
+                                array.optString(index).takeIf { it.isNotBlank() }
+                            }
+                        } ?: emptyList(),
+                        favorite = json.optBoolean("favorite"),
                     )
                 }.getOrNull()
             }
         }.getOrDefault(emptyList())
     }
 
-    suspend fun saveItem(title: String, username: String, password: String): Result<Unit> =
+    suspend fun saveItem(
+        title: String,
+        username: String,
+        password: String,
+        url: String = "",
+        notes: String = "",
+        folder: String = "",
+        tags: String = "",
+        favorite: Boolean = false,
+    ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val active = session ?: error("vault is locked")
@@ -259,6 +277,16 @@ class SessionController(context: Context) {
                     .put("title", title)
                     .put("username", username)
                     .put("password", password)
+                    .put("url", url)
+                    .put("notes", notes)
+                    .put("folder", folder)
+                    .put(
+                        "tags",
+                        org.json.JSONArray(
+                            tags.split(',').map(String::trim).filter(String::isNotEmpty),
+                        ),
+                    )
+                    .put("favorite", favorite)
                     .toString()
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)

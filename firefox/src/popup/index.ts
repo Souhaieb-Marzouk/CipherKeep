@@ -155,10 +155,16 @@ async function loadItems(): Promise<void> {
   renderItems(allItems);
 }
 
+function favoriteFiltered(items: ItemView[]): ItemView[] {
+  return element<HTMLInputElement>("favoriteFilter").checked
+    ? items.filter((item) => item.favorite)
+    : items;
+}
+
 async function runSearch(): Promise<void> {
   const query = element<HTMLInputElement>("searchItems").value.trim();
   if (query.length === 0) {
-    renderItems(allItems);
+    renderItems(favoriteFiltered(allItems));
     return;
   }
   const reply = await send({ type: "search", query });
@@ -166,8 +172,12 @@ async function runSearch(): Promise<void> {
     return;
   }
   const ids = new Set(reply.hits.map((hit) => hit.id));
-  renderItems(allItems.filter((item) => ids.has(item.id)));
+  renderItems(favoriteFiltered(allItems.filter((item) => ids.has(item.id))));
 }
+
+element<HTMLInputElement>("favoriteFilter").addEventListener("change", () => {
+  void runSearch();
+});
 
 element<HTMLInputElement>("searchItems").addEventListener("input", () => {
   if (searchTimer !== null) {
@@ -338,6 +348,11 @@ element<HTMLButtonElement>("copyTotp").addEventListener("click", async () => {
 element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
   const title = element<HTMLInputElement>("itemTitle");
   const username = element<HTMLInputElement>("itemUsername");
+  const url = element<HTMLInputElement>("itemUrl");
+  const notes = element<HTMLTextAreaElement>("itemNotes");
+  const folder = element<HTMLInputElement>("itemFolder");
+  const tags = element<HTMLInputElement>("itemTags");
+  const favorite = element<HTMLInputElement>("itemFavorite");
   const password = element<HTMLInputElement>("itemPassword");
   if (title.value.trim().length === 0 || password.value.length === 0) {
     showMessage("Title and password are required.");
@@ -347,10 +362,20 @@ element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
     type: "save-item",
     title: title.value.trim(),
     username: username.value.trim(),
+    url: url.value.trim(),
+    notes: notes.value,
+    folder: folder.value.trim(),
+    tags: tags.value.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0),
+    favorite: favorite.checked,
     password: password.value,
   });
   title.value = "";
   username.value = "";
+  url.value = "";
+  notes.value = "";
+  folder.value = "";
+  tags.value = "";
+  favorite.checked = false;
   password.value = "";
   if (!reply.ok) {
     showMessage(reply.error);

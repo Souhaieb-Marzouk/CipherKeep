@@ -9,7 +9,17 @@ export type Request =
   | { type: "activity" }
   | { type: "recover"; first: string; second: string; newPassword: string }
   | { type: "list-items" }
-  | { type: "save-item"; title: string; username: string; password: string }
+  | {
+      type: "save-item";
+      title: string;
+      username: string;
+      password: string;
+      url?: string;
+      notes?: string;
+      folder?: string;
+      tags?: string[];
+      favorite?: boolean;
+    }
   | { type: "delete-item"; id: string }
   | {
       type: "generate-password";
@@ -37,6 +47,11 @@ export interface ItemView {
   username: string;
   password: string;
   totpUri: string;
+  url: string;
+  notes: string;
+  folder: string;
+  tags: string[];
+  favorite: boolean;
 }
 
 export type Response =
@@ -116,7 +131,20 @@ export function isRequest(value: unknown): value is Request {
       return (
         isText(request.title, 512) &&
         isText(request.username, 512) &&
-        isText(request.password, 4_096)
+        isText(request.password, 4_096) &&
+        (request.url === undefined ||
+          (typeof request.url === "string" && request.url.length <= 2_048)) &&
+        (request.notes === undefined ||
+          (typeof request.notes === "string" && request.notes.length <= 65_536)) &&
+        (request.folder === undefined ||
+          (typeof request.folder === "string" && request.folder.length <= 512)) &&
+        (request.tags === undefined ||
+          (Array.isArray(request.tags) &&
+            request.tags.length <= 64 &&
+            request.tags.every(
+              (tag) => typeof tag === "string" && tag.length > 0 && tag.length <= 64,
+            ))) &&
+        (request.favorite === undefined || typeof request.favorite === "boolean")
       );
     case "delete-item":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);

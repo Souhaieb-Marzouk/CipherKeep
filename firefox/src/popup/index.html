@@ -122,6 +122,15 @@
         <input id="itemTitle" type="text" />
         <label for="itemUsername">Username</label>
         <input id="itemUsername" type="text" />
+        <label for="itemUrl">URL (optional)</label>
+        <input id="itemUrl" type="url" />
+        <label for="itemNotes">Notes (optional)</label>
+        <textarea id="itemNotes"></textarea>
+        <label for="itemFolder">Folder (optional)</label>
+        <input id="itemFolder" type="text" />
+        <label for="itemTags">Tags (comma separated)</label>
+        <input id="itemTags" type="text" />
+        <label class="check"><input id="itemFavorite" type="checkbox" /> Favorite</label>
         <label for="itemPassword">Password</label>
         <input id="itemPassword" type="password" />
         <div class="row">
@@ -130,6 +139,7 @@
         </div>
         <label for="searchItems">Search</label>
         <input id="searchItems" type="search" placeholder="Title or username" />
+        <label class="check"><input id="favoriteFilter" type="checkbox" /> Favorites only</label>
         <ul id="itemList" style="padding-left:18px; color:var(--muted); font-size:12px"></ul>
 
         <h2 style="font-size:16px;margin:18px 0 0">Generator</h2>

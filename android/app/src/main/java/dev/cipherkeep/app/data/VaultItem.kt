@@ -8,4 +8,9 @@ data class VaultItem(
     val password: String,
     val type: String = "login",
     val totpUri: String = "",
+    val url: String = "",
+    val notes: String = "",
+    val folder: String = "",
+    val tags: List<String> = emptyList(),
+    val favorite: Boolean = false,
 )

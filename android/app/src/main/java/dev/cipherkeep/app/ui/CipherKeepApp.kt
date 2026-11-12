@@ -698,10 +698,20 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
     var password by remember { mutableStateOf("") }
     var isTotp by remember { mutableStateOf(false) }
     var totpUri by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var folder by remember { mutableStateOf("") }
+    var tags by remember { mutableStateOf("") }
+    var favorite by remember { mutableStateOf(false) }
     DisposableEffect(Unit) {
         val reset = {
             password = ""
             totpUri = ""
+            url = ""
+            notes = ""
+            folder = ""
+            tags = ""
+            favorite = false
         }
         SecretInputRegistry.register(reset)
         onDispose { SecretInputRegistry.unregister(reset) }
@@ -752,6 +762,50 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 singleLine = true,
                 shape = MaterialTheme.shapes.small,
             )
+            if (!isTotp) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("URL (optional)") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                )
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Notes (optional)") },
+                    minLines = 2,
+                    maxLines = 4,
+                    shape = MaterialTheme.shapes.small,
+                )
+                OutlinedTextField(
+                    value = folder,
+                    onValueChange = { folder = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Folder (optional)") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                )
+                OutlinedTextField(
+                    value = tags,
+                    onValueChange = { tags = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Tags (comma separated)") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { favorite = !favorite },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(checked = favorite, onCheckedChange = { favorite = it })
+                    Text("Favorite")
+                }
+            }
             if (isTotp) {
                 OutlinedTextField(
                     value = totpUri,
@@ -792,11 +846,25 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                         val result = if (isTotp) {
                             controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
                         } else {
-                            controller.saveItem(title.trim(), username.trim(), password)
+                            controller.saveItem(
+                                title.trim(),
+                                username.trim(),
+                                password,
+                                url.trim(),
+                                notes,
+                                folder.trim(),
+                                tags,
+                                favorite,
+                            )
                         }
                         busy = false
                         password = ""
                         totpUri = ""
+                        url = ""
+                        notes = ""
+                        folder = ""
+                        tags = ""
+                        favorite = false
                         if (result.isSuccess) {
                             onBack()
                         } else {
@@ -1004,6 +1072,8 @@ private fun VaultScreen(
     onLock: () -> Unit,
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
+    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
+    var filterText by rememberSaveable { mutableStateOf("") }
     val searchIndex = remember(items) {
         FfiSearchIndex().also { index ->
             items.forEach { item ->
@@ -1012,9 +1082,11 @@ private fun VaultScreen(
                         id = item.id,
                         title = item.title,
                         username = item.username,
-                        url = "",
-                        folder = "",
-                        notes = "",
+                        url = item.url,
+                        folder = listOf(item.folder, item.tags.joinToString(" "))
+                            .filter(String::isNotBlank)
+                            .joinToString(" "),
+                        notes = item.notes,
                     ),
                 )
             }
@@ -1023,12 +1095,19 @@ private fun VaultScreen(
     DisposableEffect(searchIndex) {
         onDispose { searchIndex.close() }
     }
-    val visibleItems = remember(searchQuery, items, searchIndex) {
-        if (searchQuery.isBlank()) {
+    val visibleItems = remember(searchQuery, filterText, favoritesOnly, items, searchIndex) {
+        val searched = if (searchQuery.isBlank()) {
             items
         } else {
             val ids = searchIndex.search(searchQuery, 50u).map { it.id }
             items.filter { item -> ids.any { it.contentEquals(item.id) } }
+        }
+        val normalized = filterText.trim().lowercase()
+        searched.filter { item ->
+            (!favoritesOnly || item.favorite) &&
+                (normalized.isEmpty() ||
+                    item.folder.lowercase().contains(normalized) ||
+                    item.tags.any { it.lowercase().contains(normalized) })
         }
     }
     Scaffold(
@@ -1075,10 +1154,22 @@ private fun VaultScreen(
                     singleLine = true,
                     shape = MaterialTheme.shapes.small,
                 )
+                Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    TextButton(onClick = { favoritesOnly = false }) { Text("All") }
+                    TextButton(onClick = { favoritesOnly = true }) { Text("Favorites") }
+                }
+                OutlinedTextField(
+                    value = filterText,
+                    onValueChange = { filterText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Filter folder or tag") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                )
                 Spacer(Modifier.height(CKDimens.Space2))
                 if (visibleItems.isEmpty()) {
                     Text(
-                        text = if (items.isEmpty()) "No items yet. Use Add to create the first one." else "No matching items.",
+                        text = if (items.isEmpty()) "No items yet. Use Add to create the first one." else "No items match these filters.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -1238,6 +1329,9 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
             ) {
                 Column(modifier = Modifier.padding(CKDimens.Space4)) {
                     DetailRow("Username", item.username)
+                    if (item.url.isNotBlank()) {
+                        DetailRow("URL", item.url)
+                    }
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = CKDimens.Space3),
                         color = MaterialTheme.colorScheme.outline,
@@ -1246,6 +1340,9 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
                         label = "Password",
                         value = if (revealed) item.password else "Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢",
                     )
+                    if (item.notes.isNotBlank()) {
+                        DetailRow("Notes", item.notes)
+                    }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,

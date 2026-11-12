@@ -119,9 +119,9 @@ function rebuildSearch(items: ItemView[]): void {
       hexToBytes(item.id),
       item.title,
       item.username,
-      "",
-      "",
-      "",
+      item.url,
+      [item.folder, ...item.tags].filter((value) => value.length > 0).join(" "),
+      item.notes,
     );
   }
 }
@@ -140,6 +140,11 @@ async function listItems(): Promise<ItemView[]> {
         password?: unknown;
         type?: unknown;
         totpUri?: unknown;
+        url?: unknown;
+        notes?: unknown;
+        folder?: unknown;
+        tags?: unknown;
+        favorite?: unknown;
       };
       items.push({
         id: record.id,
@@ -147,6 +152,13 @@ async function listItems(): Promise<ItemView[]> {
         username: typeof json.username === "string" ? json.username : "",
         password: typeof json.password === "string" ? json.password : "",
         totpUri: typeof json.totpUri === "string" ? json.totpUri : "",
+        url: typeof json.url === "string" ? json.url : "",
+        notes: typeof json.notes === "string" ? json.notes : "",
+        folder: typeof json.folder === "string" ? json.folder : "",
+        tags: Array.isArray(json.tags)
+          ? json.tags.filter((tag): tag is string => typeof tag === "string")
+          : [],
+        favorite: json.favorite === true,
       });
     } catch {
       // A record from a different vault is skipped rather than exposed.
@@ -295,6 +307,11 @@ async function handle(request: Request): Promise<Response> {
             title: request.title,
             username: request.username,
             password: request.password,
+            url: request.url ?? "",
+            notes: request.notes ?? "",
+            folder: request.folder ?? "",
+            tags: request.tags ?? [],
+            favorite: request.favorite === true,
           }),
         );
         const ciphertext = active.encrypt_item(idBytes, payload);
