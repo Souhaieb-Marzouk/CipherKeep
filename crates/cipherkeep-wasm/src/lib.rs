@@ -627,6 +627,14 @@ impl WasmVaultSession {
     /// Returns a JS error object for a malformed id, locked session or
     /// authentication failure.
     #[wasm_bindgen]
+    /// The vault id used for sync namespaces and AAD.
+    pub fn vault_id(&self) -> Result<Vec<u8>, JsValue> {
+        self.inner
+            .vault_id()
+            .map(|id| id.as_bytes().to_vec())
+            .map_err(js_error)
+    }
+
     pub fn decrypt_item(&self, item_id: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, JsValue> {
         let id = ItemId::from_bytes(id_from_slice(&item_id).map_err(js_error)?);
         self.inner.decrypt_item(id, &ciphertext).map_err(js_error)
@@ -892,4 +900,41 @@ mod wasm_tests {
         let recovered = recovery_combine(shares[0].clone(), shares[2].clone()).expect("combine");
         assert_eq!(recovered, secret);
     }
+}
+
+
+/// Merge local and remote canonical ItemRecord JSON strings.
+///
+/// Returns `{records: [json string], conflicts: [{item, field, kind}]}`.
+#[wasm_bindgen]
+pub fn merge_sync_records(local: Vec<String>, remote: Vec<String>) -> Result<String, JsValue> {
+    use cipherkeep_core::item::ItemConflict;
+    use cipherkeep_core::{MergeEngine, MergeOutcome};
+    let mut engine = MergeEngine::new();
+    let mut conflicts = Vec::new();
+    for raw in local {
+        let record = cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes())
+            .map_err(js_error)?;
+        engine.insert_local(record).map_err(js_error)?;
+    }
+    for raw in remote {
+        let record = cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes())
+            .map_err(js_error)?;
+        let outcome: MergeOutcome = engine.merge_remote(&record).map_err(js_error)?;
+        for conflict in outcome.conflicts {
+            if let ItemConflict::Field(field) = conflict {
+                conflicts.push(serde_json::json!({
+                    "item": hex(field.item_id().as_bytes()),
+                    "field": field.left().field_id(),
+                    "kind": "field",
+                }));
+            }
+        }
+    }
+    let mut records = Vec::new();
+    for record in engine.records_for_sync().map_err(js_error)? {
+        records.push(String::from_utf8(record).map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?);
+    }
+    serde_json::to_string(&serde_json::json!({ "records": records, "conflicts": conflicts }))
+        .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
 }

@@ -47,10 +47,30 @@ element<HTMLButtonElement>("testSync").addEventListener("click", async () => {
   const config: SyncConfig = { ...EMPTY_SYNC_CONFIG, ...(stored.syncConfig ?? {}) };
   status.textContent = "Testing…";
   try {
-    status.textContent = await testSyncConnection(config);
+    const vaultReply: Response = await browser.runtime.sendMessage({ type: "sync-vault-id" });
+    if (!vaultReply.ok || vaultReply.kind !== "vault-id") {
+      status.textContent = "Unlock a vault before testing sync.";
+      return;
+    }
+    status.textContent = await testSyncConnection(config, vaultReply.vaultId);
   } catch (error) {
     status.textContent = `Test failed: ${error instanceof Error ? error.message : "unknown error"}`;
   }
+});
+
+element<HTMLButtonElement>("syncNow").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("syncStatus");
+  status.textContent = "Syncing…";
+  const reply: Response = await browser.runtime.sendMessage({ type: "sync-now" });
+  if (!reply.ok) {
+    status.textContent = reply.error;
+    return;
+  }
+  if (reply.kind !== "sync") {
+    status.textContent = "Unexpected sync response.";
+    return;
+  }
+  status.textContent = `Synced ${reply.records} record(s); unresolved conflicts: ${reply.conflicts}.`;
 });
 
 void showSync();

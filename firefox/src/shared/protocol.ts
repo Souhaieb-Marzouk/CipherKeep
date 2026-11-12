@@ -44,6 +44,8 @@ export type Request =
   | { type: "consume-autofill"; token: string }
   | { type: "inspect-autofill" }
   | { type: "recipe-status" }
+  | { type: "sync-vault-id" }
+  | { type: "sync-now" }
   | {
       type: "update-item";
       id: string;
@@ -102,6 +104,8 @@ export type Response =
   | { ok: true; kind: "backup"; data: string }
   | { ok: true; kind: "autofill-token"; token: string }
   | { ok: true; kind: "recipes"; version: number; hash: string }
+  | { ok: true; kind: "vault-id"; vaultId: string }
+  | { ok: true; kind: "sync"; records: number; conflicts: number }
   | {
       ok: true;
       kind: "inspection";
@@ -152,6 +156,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "consume-autofill",
       "inspect-autofill",
       "recipe-status",
+      "sync-vault-id",
+      "sync-now",
       "update-item",
     ].includes(value)
   );
@@ -260,6 +266,10 @@ export function isRequest(value: unknown): value is Request {
         Array.isArray(request.tags) &&
         typeof request.favorite === "boolean"
       );
+    case "sync-now":
+      return true;
+    case "sync-vault-id":
+      return true;
     case "recipe-status":
       return true;
     case "inspect-autofill":

@@ -186,6 +186,19 @@ impl fmt::Debug for VaultSession {
 }
 
 impl VaultSession {
+    /// The active vault id, if a vault is present.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Internal`] if the keyring has no vault.
+    pub fn vault_id(&self) -> Result<VaultId> {
+        self.state
+            .as_ref()
+            .and_then(|unlocked| unlocked.keyring.first_vault())
+            .map(crate::keys::VaultKey::id)
+            .ok_or_else(|| CoreError::new(ErrorCode::Internal))
+    }
+
     /// Create a vault with the pinned default KDF parameters.
     ///
     /// # Errors

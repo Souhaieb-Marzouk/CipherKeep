@@ -17,6 +17,7 @@ cipherkeep-core = { path = "../cipherkeep-core", version = "0.0.0" }
 getrandom.workspace = true
 js-sys = "0.3"
 serde.workspace = true
+serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
 zeroize.workspace = true

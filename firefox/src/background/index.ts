@@ -4,6 +4,8 @@ import { backoffSeconds, remainingSeconds } from "../shared/backoff";
 import { checkForUpdates } from "./updates";
 import { recipeForOrigin, verifyRegistry, type RecipeRegistry } from "../shared/recipes";
 import { RECIPE_PUBLIC_KEY } from "../shared/recipe-key";
+import { EMPTY_SYNC_CONFIG, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
+import { GitHubTransport, RelayTransport, WebDavTransport } from "../shared/sync-transport";
 
 let session: WasmVaultSession | null = null;
 let vaultBlob: string | null = null;
@@ -431,6 +433,67 @@ async function handle(request: Request): Promise<Response> {
         payload.fill(0);
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "sync-now": {
+        const active = requireSession();
+        const stored = await browser.storage.local.get(["syncConfig", "syncActor", "syncCreated"]);
+        const config: SyncConfig = { ...EMPTY_SYNC_CONFIG, ...(stored.syncConfig ?? {}) };
+        const errors = validateSyncConfig(config);
+        if (errors.length > 0) {
+          return { ok: false, error: errors.join("; ") };
+        }
+        let actor = stored.syncActor as string | undefined;
+        if (typeof actor !== "string" || actor.length !== 32) {
+          const bytes = crypto.getRandomValues(new Uint8Array(16));
+          actor = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+          await browser.storage.local.set({ syncActor: actor, syncCreated: Date.now() });
+        }
+        const created = typeof stored.syncCreated === "number" ? stored.syncCreated : Date.now();
+        const actorBytes = new Uint8Array(actor.match(/.{2}/g)!.map((value) => Number.parseInt(value, 16)));
+        await ensureItemStore();
+        const records = await itemStore.list();
+        const local: string[] = [];
+        for (const record of records) {
+          if (record.id === FOLDER_META_ID) continue;
+          const migrated = active.migrate_item(
+            hexToBytes(record.id),
+            record.ciphertext,
+            actorBytes,
+            created,
+            1,
+          );
+          local.push(new TextDecoder().decode(migrated));
+        }
+        const vaultId = Array.from(active.vault_id(), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        const transport =
+          config.transport === "github"
+            ? new GitHubTransport(config.owner, config.repo, config.branch, config.token)
+            : config.transport === "relay"
+              ? new RelayTransport(config.endpoint, config.token)
+              : new WebDavTransport(config.endpoint, config.username, config.token);
+        const remote = await transport.pull(vaultId);
+        let remoteRecords: string[] = [];
+        if (remote !== null) {
+          const parsed = JSON.parse(new TextDecoder().decode(remote.manifest)) as { records?: unknown };
+          if (Array.isArray(parsed.records)) {
+            remoteRecords = parsed.records.filter((value): value is string => typeof value === "string");
+          }
+        }
+        const merged = JSON.parse(merge_sync_records(local, remoteRecords)) as {
+          records: string[];
+          conflicts: unknown[];
+        };
+        const payload = new TextEncoder().encode(
+          JSON.stringify({ v: 1, vault: vaultId, records: merged.records }),
+        );
+        await transport.push(vaultId, payload, remote?.etag);
+        await browser.storage.local.set({ syncConflicts: merged.conflicts });
+        return { ok: true, kind: "sync", records: merged.records.length, conflicts: merged.conflicts.length };
+      }
+      case "sync-vault-id": {
+        const active = requireSession();
+        const id = Array.from(active.vault_id(), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        return { ok: true, kind: "vault-id", vaultId: id };
       }
       case "recipe-status":
         return {

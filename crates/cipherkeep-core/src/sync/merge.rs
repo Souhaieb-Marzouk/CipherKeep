@@ -115,6 +115,18 @@ impl MergeEngine {
         Ok(entry.clone())
     }
 
+    /// Canonical sync JSON for every tracked record.
+    ///
+    /// # Errors
+    ///
+    /// Returns the first serialization error.
+    pub fn records_for_sync(&self) -> Result<Vec<Vec<u8>>> {
+        self.records
+            .values()
+            .map(ItemRecord::to_sync_json)
+            .collect()
+    }
+
     /// Number of unresolved field conflicts.
     #[must_use]
     pub fn conflict_count(&self) -> usize {

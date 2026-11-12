@@ -58,10 +58,9 @@ export function configForStorage(config: SyncConfig): SyncConfig {
 }
 
 /** Test authentication/reachability without uploading data. */
-export async function testSyncConnection(config: SyncConfig): Promise<string> {
+export async function testSyncConnection(config: SyncConfig, vault: string): Promise<string> {
   const errors = validateSyncConfig(config);
   if (errors.length > 0) throw new Error(errors.join("; "));
-  const vault = "a".repeat(32);
   if (config.transport === "github") {
     const transport = new GitHubTransport(config.owner, config.repo, config.branch, config.token);
     await transport.pull(vault);
