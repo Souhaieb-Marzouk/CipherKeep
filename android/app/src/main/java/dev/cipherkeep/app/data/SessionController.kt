@@ -11,6 +11,7 @@ import dev.cipherkeep.core.numericCode
 import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.db.VaultRepository
+import org.json.JSONArray
 import org.json.JSONObject
 import dev.cipherkeep.core.totpCode
 import java.security.SecureRandom
@@ -44,6 +45,11 @@ sealed interface VaultUiState {
  * Owns the shared vault session and the persisted vault blob. All Argon2id work runs
  * on Dispatchers.IO; the controller never stores the master password.
  */
+private val FOLDER_META_ID = byteArrayOf(
+    0x43, 0x4b, 0x46, 0x4f, 0x4c, 0x44, 0x45, 0x52,
+    0x4d, 0x45, 0x54, 0x41, 0x30, 0x30, 0x30, 0x31,
+)
+
 class SessionController(context: Context) {
     private val blobs = VaultBlobStore(context.applicationContext)
     private val biometrics = BiometricStore(context.applicationContext)
@@ -232,6 +238,9 @@ class SessionController(context: Context) {
         val active = session ?: return
         items = runCatching {
             repo.list().mapNotNull { entity ->
+                if (entity.itemId.contentEquals(FOLDER_META_ID)) {
+                    return@mapNotNull null
+                }
                 runCatching {
                     val json = JSONObject(active.decryptItem(entity.itemId, entity.ciphertext).decodeToString())
                     VaultItem(
@@ -250,6 +259,7 @@ class SessionController(context: Context) {
                             }
                         } ?: emptyList(),
                         favorite = json.optBoolean("favorite"),
+                        updatedAt = entity.updatedAt,
                     )
                 }.getOrNull()
             }
@@ -335,7 +345,24 @@ class SessionController(context: Context) {
 
     suspend fun folderNames(): Result<List<String>> = withContext(Dispatchers.IO) {
         runCatching {
-            items.map { it.folder }.filter { it.isNotBlank() }.distinct().sorted()
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val names = readFolderNames(active, repo)
+            (names + items.map { it.folder }.filter { it.isNotBlank() })
+                .distinct()
+                .sorted()
+        }
+    }
+
+    suspend fun createFolder(name: String): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            require(name.isNotBlank() && name.length <= 64)
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val names = readFolderNames(active, repo).toMutableSet()
+            names.add(name.trim())
+            writeFolderNames(active, repo, names)
+            loadItems()
         }
     }
 
@@ -343,26 +370,70 @@ class SessionController(context: Context) {
         withContext(Dispatchers.IO) {
             runCatching {
                 require(newName.isNotBlank() && newName.length <= 64)
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
                 val target = newName.trim()
-                if (target != oldName) {
-                    rewriteFolder(oldName, target)
-                }
+                val names = readFolderNames(active, repo).toMutableSet()
+                names.remove(oldName)
+                names.add(target)
+                writeFolderNames(active, repo, names)
+                rewriteFolder(oldName, target)
                 loadItems()
             }
         }
 
     suspend fun deleteFolder(name: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val names = readFolderNames(active, repo).toMutableSet()
+            names.remove(name)
+            writeFolderNames(active, repo, names)
             rewriteFolder(name, "")
             loadItems()
         }
+    }
+
+    private suspend fun readFolderNames(active: FfiVaultSession, repo: VaultRepository): List<String> {
+        val entity = repo.get(FOLDER_META_ID) ?: return emptyList()
+        return runCatching {
+            val json = JSONObject(active.decryptItem(entity.itemId, entity.ciphertext).decodeToString())
+            val array = json.optJSONArray("folders") ?: return emptyList()
+            (0 until array.length()).mapNotNull { index ->
+                array.optString(index).takeIf { it.isNotBlank() }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    private suspend fun writeFolderNames(
+        active: FfiVaultSession,
+        repo: VaultRepository,
+        names: Set<String>,
+    ) {
+        val payload = JSONObject()
+            .put("v", 1)
+            .put("type", "folder-list")
+            .put("folders", JSONArray(names.sorted()))
+            .toString()
+            .encodeToByteArray()
+        val ciphertext = active.encryptItem(FOLDER_META_ID, payload)
+        payload.fill(0)
+        val previous = repo.get(FOLDER_META_ID)
+        repo.save(
+            itemId = FOLDER_META_ID,
+            ciphertext = ciphertext,
+            lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+            tombstone = false,
+            schemaVersion = 1,
+            updatedAt = System.currentTimeMillis(),
+        )
     }
 
     private suspend fun rewriteFolder(oldName: String, newName: String) {
         val active = session ?: error("vault is locked")
         val repo = repository ?: error("storage is unavailable")
         repo.list().forEach { entity ->
-            if (entity.tombstone) {
+            if (entity.tombstone || entity.itemId.contentEquals(FOLDER_META_ID)) {
                 return@forEach
             }
             val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)

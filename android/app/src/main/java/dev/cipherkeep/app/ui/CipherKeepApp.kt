@@ -1077,6 +1077,7 @@ private fun VaultScreen(
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
     var filterText by rememberSaveable { mutableStateOf("") }
     var showFolders by remember { mutableStateOf(false) }
+    var sortMode by rememberSaveable { mutableIntStateOf(0) }
     val searchIndex = remember(items) {
         FfiSearchIndex().also { index ->
             items.forEach { item ->
@@ -1111,7 +1112,13 @@ private fun VaultScreen(
                 (normalized.isEmpty() ||
                     item.folder.lowercase().contains(normalized) ||
                     item.tags.any { it.lowercase().contains(normalized) })
-        }
+        }.sortedWith(
+            when (sortMode) {
+                1 -> compareByDescending<VaultItem> { it.updatedAt }.thenBy { it.title }
+                2 -> compareBy<VaultItem> { it.folder }.thenBy { it.title }
+                else -> compareBy<VaultItem> { it.title }
+            },
+        )
     }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -1161,6 +1168,15 @@ private fun VaultScreen(
                     TextButton(onClick = { favoritesOnly = false }) { Text("All") }
                     TextButton(onClick = { favoritesOnly = true }) { Text("Favorites") }
                     TextButton(onClick = { showFolders = true }) { Text("Folders") }
+                    TextButton(onClick = { sortMode = (sortMode + 1) % 3 }) {
+                        Text(
+                            when (sortMode) {
+                                1 -> "Recent"
+                                2 -> "Folder"
+                                else -> "Title"
+                            },
+                        )
+                    }
                 }
                 OutlinedTextField(
                     value = filterText,
@@ -1201,7 +1217,7 @@ private fun VaultScreen(
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                text = item.username,
+                                text = if (item.totpUri.isNotEmpty()) "TOTP · ${item.username}" else item.username,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1232,6 +1248,7 @@ private fun VaultScreen(
 @Composable
 private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
     var names by remember { mutableStateOf<List<String>>(emptyList()) }
+    var newName by remember { mutableStateOf("") }
     var renameFrom by remember { mutableStateOf<String?>(null) }
     var renameTo by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
@@ -1252,6 +1269,26 @@ private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
                 modifier = Modifier.verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(CKDimens.Space2),
             ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = newName,
+                        onValueChange = { newName = it },
+                        modifier = Modifier.weight(1f),
+                        label = { Text("New folder") },
+                        singleLine = true,
+                    )
+                    TextButton(onClick = {
+                        error = null
+                        scope.launch {
+                            controller.createFolder(newName)
+                                .onSuccess {
+                                    newName = ""
+                                    reload()
+                                }
+                                .onFailure { error = "Folder could not be created." }
+                        }
+                    }) { Text("Add") }
+                }
                 if (names.isEmpty()) {
                     Text(
                         text = "No folders yet.",
