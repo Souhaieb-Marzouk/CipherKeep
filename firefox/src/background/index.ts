@@ -184,6 +184,33 @@ async function handle(request: Request): Promise<Response> {
         return status();
       case "check-updates":
         return { ok: true, kind: "update", update: await checkForUpdates() };
+      case "generate-password": {
+        const generated = generate_password(
+          request.length,
+          request.lowercase,
+          request.uppercase,
+          request.digits,
+          request.symbols,
+          request.excludeAmbiguous,
+        );
+        return {
+          ok: true,
+          kind: "generated",
+          value: generated.value,
+          entropyBits: generated.entropy_bits,
+          strength: generated.strength,
+        };
+      }
+      case "generate-passphrase": {
+        const generated = generate_passphrase(request.words, request.separator);
+        return {
+          ok: true,
+          kind: "generated",
+          value: generated.value,
+          entropyBits: generated.entropy_bits,
+          strength: generated.strength,
+        };
+      }
       case "create": {
         if (vaultBlob !== null) {
           return { ok: false, error: "A vault already exists." };

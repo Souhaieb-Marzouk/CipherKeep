@@ -51,7 +51,6 @@ The project is built for two places where people need their credentials most:
 - Browser autofill for Firefox.
 - Android autofill support.
 - One-time password (TOTP) support.
-- Password generator.
 - Secure import and export.
 - Richer item types, including secure notes.
 - Optional encrypted multi-device sync.

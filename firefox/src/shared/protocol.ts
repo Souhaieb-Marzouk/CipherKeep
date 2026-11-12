@@ -10,7 +10,17 @@ export type Request =
   | { type: "recover"; first: string; second: string; newPassword: string }
   | { type: "list-items" }
   | { type: "save-item"; title: string; username: string; password: string }
-  | { type: "delete-item"; id: string };
+  | { type: "delete-item"; id: string }
+  | {
+      type: "generate-password";
+      length: number;
+      lowercase: boolean;
+      uppercase: boolean;
+      digits: boolean;
+      symbols: boolean;
+      excludeAmbiguous: boolean;
+    }
+  | { type: "generate-passphrase"; words: number; separator: string };
 
 export interface ItemView {
   id: string;
@@ -30,6 +40,13 @@ export type Response =
   | { ok: true; kind: "ok"; shares?: string[] }
   | { ok: true; kind: "update"; update: UpdateReport }
   | { ok: true; kind: "items"; items: ItemView[] }
+  | {
+      ok: true;
+      kind: "generated";
+      value: string;
+      entropyBits: number;
+      strength: string;
+    }
   | { ok: false; error: string; code?: number };
 
 function isText(value: unknown, max: number): value is string {
@@ -50,6 +67,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "list-items",
       "save-item",
       "delete-item",
+      "generate-password",
+      "generate-passphrase",
     ].includes(value)
   );
 }
@@ -86,5 +105,27 @@ export function isRequest(value: unknown): value is Request {
       );
     case "delete-item":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
+    case "generate-password":
+      return (
+        typeof request.length === "number" &&
+        Number.isInteger(request.length) &&
+        request.length >= 8 &&
+        request.length <= 128 &&
+        typeof request.lowercase === "boolean" &&
+        typeof request.uppercase === "boolean" &&
+        typeof request.digits === "boolean" &&
+        typeof request.symbols === "boolean" &&
+        typeof request.excludeAmbiguous === "boolean" &&
+        (request.lowercase || request.uppercase || request.digits || request.symbols)
+      );
+    case "generate-passphrase":
+      return (
+        typeof request.words === "number" &&
+        Number.isInteger(request.words) &&
+        request.words >= 3 &&
+        request.words <= 12 &&
+        typeof request.separator === "string" &&
+        [...request.separator].length === 1
+      );
   }
 }

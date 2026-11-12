@@ -15,9 +15,10 @@ use wasm_bindgen::prelude::*;
 use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
-    combine_2_of_3, derive_master_key, split_2_of_3, Envelope, ItemId, ItemKey, KdfParams,
-    RecoveryShare, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
-    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
+    generate_password as core_generate_password, split_2_of_3, Envelope, ItemId, ItemKey,
+    KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob, VaultId,
+    VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 #[derive(Serialize)]
@@ -32,6 +33,84 @@ fn js_error(error: cipherkeep_core::CoreError) -> JsValue {
         message: error.message(),
     };
     serde_wasm_bindgen::to_value(&payload).unwrap_or_else(|_| JsValue::from_str("internal error"))
+}
+
+#[derive(Serialize)]
+struct WasmGeneratedSecret {
+    value: String,
+    entropy_bits: f64,
+    strength: &'static str,
+}
+
+/// Generate a password with the shared core generator.
+///
+/// # Errors
+///
+/// Returns a JS `{ code, message }` object for an impossible policy or CSPRNG
+/// failure.
+#[wasm_bindgen]
+pub fn generate_password(
+    length: u32,
+    lowercase: bool,
+    uppercase: bool,
+    digits: bool,
+    symbols: bool,
+    exclude_ambiguous: bool,
+) -> Result<JsValue, JsValue> {
+    let length = usize::try_from(length).map_err(|_| {
+        js_error(cipherkeep_core::CoreError::new(
+            cipherkeep_core::ErrorCode::InvalidArgument,
+        ))
+    })?;
+    let generated = core_generate_password(&PasswordPolicy {
+        length,
+        lowercase,
+        uppercase,
+        digits,
+        symbols,
+        exclude_ambiguous,
+    })
+    .map_err(js_error)?;
+    serde_wasm_bindgen::to_value(&WasmGeneratedSecret {
+        value: generated.expose_secret().to_string(),
+        entropy_bits: generated.entropy_bits(),
+        strength: generated.strength().as_str(),
+    })
+    .map_err(|_| JsValue::from_str("internal error"))
+}
+
+/// Generate an EFF-style passphrase with the shared core generator.
+///
+/// # Errors
+///
+/// Returns a JS `{ code, message }` object for an invalid policy or CSPRNG
+/// failure.
+#[wasm_bindgen]
+pub fn generate_passphrase(words: u32, separator: &str) -> Result<JsValue, JsValue> {
+    let words = usize::try_from(words).map_err(|_| {
+        js_error(cipherkeep_core::CoreError::new(
+            cipherkeep_core::ErrorCode::InvalidArgument,
+        ))
+    })?;
+    let mut characters = separator.chars();
+    let separator = characters.next().ok_or_else(|| {
+        js_error(cipherkeep_core::CoreError::new(
+            cipherkeep_core::ErrorCode::InvalidArgument,
+        ))
+    })?;
+    if characters.next().is_some() {
+        return Err(js_error(cipherkeep_core::CoreError::new(
+            cipherkeep_core::ErrorCode::InvalidArgument,
+        )));
+    }
+    let generated =
+        core_generate_passphrase(&PassphrasePolicy { words, separator }).map_err(js_error)?;
+    serde_wasm_bindgen::to_value(&WasmGeneratedSecret {
+        value: generated.expose_secret().to_string(),
+        entropy_bits: generated.entropy_bits(),
+        strength: generated.strength().as_str(),
+    })
+    .map_err(|_| JsValue::from_str("internal error"))
 }
 
 /// Return the shared core version.
@@ -512,6 +591,15 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use wasm_bindgen_test::*;
+
+    #[wasm_bindgen_test]
+    fn wasm_generator_returns_an_object() {
+        let generated = generate_password(20, true, true, true, true, true).expect("generate");
+        assert!(generated.is_object());
+        let phrase = generate_passphrase(6, "-").expect("passphrase");
+        assert!(phrase.is_object());
+        assert!(generate_passphrase(6, "--").is_err());
+    }
 
     #[wasm_bindgen_test]
     fn wasm_core_version() {

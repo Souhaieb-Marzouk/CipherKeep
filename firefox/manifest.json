@@ -15,7 +15,8 @@
   },
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "clipboardWrite"
   ],
   "background": {
     "scripts": [

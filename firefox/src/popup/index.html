@@ -129,6 +129,39 @@
           <button id="lockUnlocked" class="secondary">Lock vault</button>
         </div>
         <ul id="itemList" style="padding-left:18px; color:var(--muted); font-size:12px"></ul>
+
+        <h2 style="font-size:16px;margin:18px 0 0">Generator</h2>
+        <label for="genMode">Type</label>
+        <select id="genMode">
+          <option value="password">Password</option>
+          <option value="passphrase">Passphrase</option>
+        </select>
+        <div id="passwordOptions">
+          <label for="genLength">Length (8-128)</label>
+          <input id="genLength" type="number" min="8" max="128" value="20" />
+          <label class="check"><input id="genLower" type="checkbox" checked /> Lowercase</label>
+          <label class="check"><input id="genUpper" type="checkbox" checked /> Uppercase</label>
+          <label class="check"><input id="genDigits" type="checkbox" checked /> Digits</label>
+          <label class="check"><input id="genSymbols" type="checkbox" checked /> Symbols</label>
+          <label class="check"><input id="genAmbiguous" type="checkbox" /> Exclude ambiguous</label>
+        </div>
+        <div id="passphraseOptions" hidden>
+          <label for="genWords">Words (3-12)</label>
+          <input id="genWords" type="number" min="3" max="12" value="6" />
+          <label for="genSeparator">Separator</label>
+          <input id="genSeparator" type="text" maxlength="1" value="-" />
+        </div>
+        <div class="row">
+          <button id="generate">Generate</button>
+        </div>
+        <div id="generatedBox" hidden>
+          <div id="generatedValue" class="share"></div>
+          <p id="generatedMeta" class="note"></p>
+          <div class="row">
+            <button id="copyGenerated" class="secondary">Copy</button>
+            <button id="useGenerated" class="secondary">Use in password field</button>
+          </div>
+        </div>
         <p class="note">Items are encrypted by the background session, then stored as ciphertext in IndexedDB.</p>
       </section>
 

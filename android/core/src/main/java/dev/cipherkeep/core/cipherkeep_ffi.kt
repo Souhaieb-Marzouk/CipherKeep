@@ -344,7 +344,7 @@ internal inline fun<T, reified E: Throwable> uniffiTraitInterfaceCallWithError(
         }
     }
 }
-// Initial value and increment amount for handles. 
+// Initial value and increment amount for handles.
 // These ensure that Kotlin-generated handles always have the lowest bit set
 private const val UNIFFI_HANDLEMAP_INITIAL = 1.toLong()
 private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
@@ -354,7 +354,7 @@ private const val UNIFFI_HANDLEMAP_DELTA = 2.toLong()
 // This is used pass an opaque 64-bit handle representing a foreign object to the Rust code.
 internal class UniffiHandleMap<T: Any> {
     private val map = ConcurrentHashMap<Long, T>()
-    // Start 
+    // Start
     private val counter = java.util.concurrent.atomic.AtomicLong(UNIFFI_HANDLEMAP_INITIAL)
 
     val size: Int
@@ -675,6 +675,10 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_cipherkeep_ffi_checksum_func_generate_passphrase(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_blob(
@@ -718,74 +722,78 @@ internal object IntegrityCheckingUniffiLib {
     external fun ffi_cipherkeep_ffi_uniffi_contract_version(
     ): Int
 
-        
+
 }
 
 internal object UniffiLib {
-    
+
     // The Cleaner for the whole library
     internal val CLEANER: UniffiCleaner by lazy {
         UniffiCleaner.create()
     }
-    
+
 
     init {
         Native.register(UniffiLib::class.java, findLibraryName(componentName = "cipherkeep_ffi"))
-        
+
     }
 
     internal fun ensureInitialized() = Unit
-    external fun uniffi_cipherkeep_ffi_fn_clone_ffivaultsession(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_clone_ffivaultsession(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_free_ffivaultsession(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_free_ffivaultsession(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create(`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create(`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_open(`blob`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_open(`blob`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_recover(`blob`: RustBuffer.ByValue,`first`: RustBuffer.ByValue,`second`: RustBuffer.ByValue,`newPassword`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_recover(`blob`: RustBuffer.ByValue,`first`: RustBuffer.ByValue,`second`: RustBuffer.ByValue,`newPassword`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock(`blob`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock(`blob`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock_with_master_key(`blob`: RustBuffer.ByValue,`masterKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock_with_master_key(`blob`: RustBuffer.ByValue,`masterKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_biometric_master_key(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_biometric_master_key(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_blob(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_blob(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_decrypt_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`ciphertext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_decrypt_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`ciphertext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_delete_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_delete_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_encrypt_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_encrypt_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_failed_attempts(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_failed_attempts(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Int
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_get_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_get_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_is_locked(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_is_locked(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Byte
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_item_count(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_item_count(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_list_items(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_list_items(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_lock(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_lock(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_recovery_shares(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_recovery_shares(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_retry_after(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_retry_after(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Long
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_save_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_save_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_func_generate_passphrase(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun ffi_cipherkeep_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun uniffi_cipherkeep_ffi_fn_func_generate_password(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
-    external fun ffi_cipherkeep_ffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+    external fun ffi_cipherkeep_ffi_rustbuffer_from_bytes(`bytes`: ForeignBytes.ByValue,uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+    external fun ffi_cipherkeep_ffi_rustbuffer_free(`buf`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rustbuffer_reserve(`buf`: RustBuffer.ByValue,`additional`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rust_future_poll_u8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -793,7 +801,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_u8(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_u8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Int
     external fun ffi_cipherkeep_ffi_rust_future_poll_i8(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -801,7 +809,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_i8(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_i8(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Byte
     external fun ffi_cipherkeep_ffi_rust_future_poll_u16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -809,7 +817,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_u16(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_u16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Int
     external fun ffi_cipherkeep_ffi_rust_future_poll_i16(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -817,7 +825,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_i16(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_i16(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Short
     external fun ffi_cipherkeep_ffi_rust_future_poll_u32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -825,7 +833,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_u32(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_u32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Int
     external fun ffi_cipherkeep_ffi_rust_future_poll_i32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -833,7 +841,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_i32(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_i32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Int
     external fun ffi_cipherkeep_ffi_rust_future_poll_u64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -841,7 +849,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_u64(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_u64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Long
     external fun ffi_cipherkeep_ffi_rust_future_poll_i64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -849,7 +857,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_i64(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_i64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Long
     external fun ffi_cipherkeep_ffi_rust_future_poll_f32(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -857,7 +865,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_f32(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_f32(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Float
     external fun ffi_cipherkeep_ffi_rust_future_poll_f64(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -865,7 +873,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_f64(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_f64(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Double
     external fun ffi_cipherkeep_ffi_rust_future_poll_rust_buffer(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -873,7 +881,7 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_rust_buffer(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_rust_buffer(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rust_future_poll_void(`handle`: Long,`callback`: UniffiRustFutureContinuationCallback,`callbackData`: Long,
     ): Unit
@@ -881,10 +889,10 @@ internal object UniffiLib {
     ): Unit
     external fun ffi_cipherkeep_ffi_rust_future_free_void(`handle`: Long,
     ): Unit
-    external fun ffi_cipherkeep_ffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    external fun ffi_cipherkeep_ffi_rust_future_complete_void(`handle`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-        
+
 }
 
 private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
@@ -898,6 +906,12 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_passphrase() and 0xFFFF) != 55064) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_password() and 0xFFFF) != 64626) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key() and 0xFFFF) != 2948) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1033,7 +1047,7 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
         }
     }
 
-/** 
+/**
  * Placeholder object used to signal that we're constructing an interface with a FFI handle.
  *
  * This is the first argument for interface constructors that input a raw handle. It exists is that
@@ -1044,7 +1058,7 @@ inline fun <T : Disposable?, R> T.use(block: (T) -> R) =
  * */
 object UniffiWithHandle
 
-/** 
+/**
  * Used to instantiate an interface without an actual pointer, for fakes in tests, mostly.
  *
  * @suppress
@@ -1158,6 +1172,29 @@ public object FfiConverterULong: FfiConverter<ULong, Long> {
 
     override fun write(value: ULong, buf: ByteBuffer) {
         buf.putLong(value.toLong())
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterDouble: FfiConverter<Double, Double> {
+    override fun lift(value: Double): Double {
+        return value
+    }
+
+    override fun read(buf: ByteBuffer): Double {
+        return buf.getDouble()
+    }
+
+    override fun lower(value: Double): Double {
+        return value
+    }
+
+    override fun allocationSize(value: Double) = 8UL
+
+    override fun write(value: Double, buf: ByteBuffer) {
+        buf.putDouble(value)
     }
 }
 
@@ -1364,7 +1401,7 @@ public object FfiConverterByteArray: FfiConverterRustBuffer<ByteArray> {
  * arrays after use.
  */
 public interface FfiVaultSessionInterface {
-    
+
     /**
      * Copy the master key for an immediate biometric Keystore wrap.
      *
@@ -1373,12 +1410,12 @@ public interface FfiVaultSessionInterface {
      * Returns a redacted [`FfiError`] when the session is locked.
      */
     fun `biometricMasterKey`(): kotlin.ByteArray
-    
+
     /**
      * Persist this vault's header and recovery envelope.
      */
     fun `blob`(): kotlin.ByteArray
-    
+
     /**
      * Decrypt an item payload previously returned by `encryptItem`.
      *
@@ -1388,7 +1425,7 @@ public interface FfiVaultSessionInterface {
      * authentication failure.
      */
     fun `decryptItem`(`itemId`: kotlin.ByteArray, `ciphertext`: kotlin.ByteArray): kotlin.ByteArray
-    
+
     /**
      * Delete an item.
      *
@@ -1397,7 +1434,7 @@ public interface FfiVaultSessionInterface {
      * Returns a redacted [`FfiError`] when the session is locked.
      */
     fun `deleteItem`(`itemId`: kotlin.ByteArray)
-    
+
     /**
      * Encrypt an item payload for platform storage without keeping it in the session map.
      *
@@ -1407,12 +1444,12 @@ public interface FfiVaultSessionInterface {
      * cryptographic failure.
      */
     fun `encryptItem`(`itemId`: kotlin.ByteArray, `plaintext`: kotlin.ByteArray): kotlin.ByteArray
-    
+
     /**
      * Consecutive failed unlock attempts.
      */
     fun `failedAttempts`(): kotlin.UInt
-    
+
     /**
      * Decrypt an item payload.
      *
@@ -1422,12 +1459,12 @@ public interface FfiVaultSessionInterface {
      * authentication failure.
      */
     fun `getItem`(`itemId`: kotlin.ByteArray): kotlin.ByteArray
-    
+
     /**
      * Whether the session is locked.
      */
     fun `isLocked`(): kotlin.Boolean
-    
+
     /**
      * Number of stored items.
      *
@@ -1436,7 +1473,7 @@ public interface FfiVaultSessionInterface {
      * Returns a redacted [`FfiError`] when the session is locked.
      */
     fun `itemCount`(): kotlin.ULong
-    
+
     /**
      * List stored item ids.
      *
@@ -1445,22 +1482,22 @@ public interface FfiVaultSessionInterface {
      * Returns a redacted [`FfiError`] when the session is locked.
      */
     fun `listItems`(): List<kotlin.ByteArray>
-    
+
     /**
      * Lock and drop the master key/keyring.
      */
     fun `lock`()
-    
+
     /**
      * One-time recovery shares, newest first. Empty after a normal unlock.
      */
     fun `recoveryShares`(): List<kotlin.String>
-    
+
     /**
      * Seconds until another unlock is allowed.
      */
     fun `retryAfter`(): kotlin.ULong
-    
+
     /**
      * Encrypt and store an opaque item payload.
      *
@@ -1470,7 +1507,7 @@ public interface FfiVaultSessionInterface {
      * cryptographic failure.
      */
     fun `saveItem`(`itemId`: kotlin.ByteArray, `plaintext`: kotlin.ByteArray)
-    
+
     /**
      * Unlock this handle again after [`FfiVaultSession::lock`].
      *
@@ -1479,7 +1516,7 @@ public interface FfiVaultSessionInterface {
      * As [`FfiVaultSession::unlock`].
      */
     fun `unlockAgain`(`password`: kotlin.ByteArray)
-    
+
     companion object
 }
 
@@ -1591,7 +1628,7 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
         }
     }
 
-    
+
     /**
      * Copy the master key for an immediate biometric Keystore wrap.
      *
@@ -1610,9 +1647,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Persist this vault's header and recovery envelope.
      */override fun `blob`(): kotlin.ByteArray {
@@ -1626,9 +1663,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Decrypt an item payload previously returned by `encryptItem`.
      *
@@ -1643,16 +1680,16 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_decrypt_item(
         it,
-        
+
         FfiConverterByteArray.lower(`itemId`),
         FfiConverterByteArray.lower(`ciphertext`),_status)
 }
     }
     )
     }
-    
 
-    
+
+
     /**
      * Delete an item.
      *
@@ -1661,19 +1698,19 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
      * Returns a redacted [`FfiError`] when the session is locked.
      */
     @Throws(FfiException::class)override fun `deleteItem`(`itemId`: kotlin.ByteArray)
-        = 
+        =
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_delete_item(
         it,
-        
+
         FfiConverterByteArray.lower(`itemId`),_status)
 }
     }
-    
-    
 
-    
+
+
+
     /**
      * Encrypt an item payload for platform storage without keeping it in the session map.
      *
@@ -1688,16 +1725,16 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_encrypt_item(
         it,
-        
+
         FfiConverterByteArray.lower(`itemId`),
         FfiConverterByteArray.lower(`plaintext`),_status)
 }
     }
     )
     }
-    
 
-    
+
+
     /**
      * Consecutive failed unlock attempts.
      */override fun `failedAttempts`(): kotlin.UInt {
@@ -1711,9 +1748,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Decrypt an item payload.
      *
@@ -1728,15 +1765,15 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_get_item(
         it,
-        
+
         FfiConverterByteArray.lower(`itemId`),_status)
 }
     }
     )
     }
-    
 
-    
+
+
     /**
      * Whether the session is locked.
      */override fun `isLocked`(): kotlin.Boolean {
@@ -1750,9 +1787,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Number of stored items.
      *
@@ -1771,9 +1808,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * List stored item ids.
      *
@@ -1792,13 +1829,13 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Lock and drop the master key/keyring.
      */override fun `lock`()
-        = 
+        =
     callWithHandle {
     uniffiRustCall() { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_lock(
@@ -1806,10 +1843,10 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
         _status)
 }
     }
-    
-    
 
-    
+
+
+
     /**
      * One-time recovery shares, newest first. Empty after a normal unlock.
      */override fun `recoveryShares`(): List<kotlin.String> {
@@ -1823,9 +1860,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Seconds until another unlock is allowed.
      */override fun `retryAfter`(): kotlin.ULong {
@@ -1839,9 +1876,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     }
     )
     }
-    
 
-    
+
+
     /**
      * Encrypt and store an opaque item payload.
      *
@@ -1851,20 +1888,20 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
      * cryptographic failure.
      */
     @Throws(FfiException::class)override fun `saveItem`(`itemId`: kotlin.ByteArray, `plaintext`: kotlin.ByteArray)
-        = 
+        =
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_save_item(
         it,
-        
+
         FfiConverterByteArray.lower(`itemId`),
         FfiConverterByteArray.lower(`plaintext`),_status)
 }
     }
-    
-    
 
-    
+
+
+
     /**
      * Unlock this handle again after [`FfiVaultSession::lock`].
      *
@@ -1873,26 +1910,26 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
      * As [`FfiVaultSession::unlock`].
      */
     @Throws(FfiException::class)override fun `unlockAgain`(`password`: kotlin.ByteArray)
-        = 
+        =
     callWithHandle {
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(
         it,
-        
+
         FfiConverterByteArray.lower(`password`),_status)
 }
     }
-    
-    
-
-    
-
-    
 
 
-    
+
+
+
+
+
+
+
     companion object {
-        
+
     /**
      * Create a new vault and return the session with its recovery shares.
      *
@@ -1905,15 +1942,15 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
             return FfiConverterTypeFfiVaultSession.lift(
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create(
-    
-        
+
+
         FfiConverterByteArray.lower(`password`),_status)
 }
     )
     }
-    
 
-        
+
+
     /**
      * Open a persisted vault in the locked state.
      *
@@ -1927,15 +1964,15 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
             return FfiConverterTypeFfiVaultSession.lift(
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_open(
-    
-        
+
+
         FfiConverterByteArray.lower(`blob`),_status)
 }
     )
     }
-    
 
-        
+
+
     /**
      * Recover with any two shares and set a new master password.
      *
@@ -1948,8 +1985,8 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
             return FfiConverterTypeFfiVaultSession.lift(
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_recover(
-    
-        
+
+
         FfiConverterByteArray.lower(`blob`),
         FfiConverterString.lower(`first`),
         FfiConverterString.lower(`second`),
@@ -1957,9 +1994,9 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
 }
     )
     }
-    
 
-        
+
+
     /**
      * Unlock a persisted vault blob.
      *
@@ -1972,16 +2009,16 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
             return FfiConverterTypeFfiVaultSession.lift(
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock(
-    
-        
+
+
         FfiConverterByteArray.lower(`blob`),
         FfiConverterByteArray.lower(`password`),_status)
 }
     )
     }
-    
 
-        
+
+
     /**
      * Unlock with a master key unwrapped by BiometricPrompt.
      *
@@ -1994,18 +2031,18 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
             return FfiConverterTypeFfiVaultSession.lift(
     uniffiRustCallWithError(FfiException) { _status ->
     UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_unlock_with_master_key(
-    
-        
+
+
         FfiConverterByteArray.lower(`blob`),
         FfiConverterByteArray.lower(`masterKey`),_status)
 }
     )
     }
-    
 
-        
+
+
     }
-    
+
 }
 
 
@@ -2034,6 +2071,187 @@ public object FfiConverterTypeFfiVaultSession: FfiConverter<FfiVaultSession, Lon
 
 
 
+/**
+ * A generated secret and its honest entropy estimate.
+ */
+data class FfiGeneratedSecret (
+    /**
+     * Generated value. Kotlin must copy it only for immediate use.
+     */
+    var `value`: kotlin.String
+    ,
+    /**
+     * Entropy estimate in bits.
+     */
+    var `entropyBits`: kotlin.Double
+    ,
+    /**
+     * Plain-language strength label.
+     */
+    var `strength`: kotlin.String
+
+){
+
+
+
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiGeneratedSecret: FfiConverterRustBuffer<FfiGeneratedSecret> {
+    override fun read(buf: ByteBuffer): FfiGeneratedSecret {
+        return FfiGeneratedSecret(
+            FfiConverterString.read(buf),
+            FfiConverterDouble.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiGeneratedSecret) = (
+            FfiConverterString.allocationSize(value.`value`) +
+            FfiConverterDouble.allocationSize(value.`entropyBits`) +
+            FfiConverterString.allocationSize(value.`strength`)
+    )
+
+    override fun write(value: FfiGeneratedSecret, buf: ByteBuffer) {
+            FfiConverterString.write(value.`value`, buf)
+            FfiConverterDouble.write(value.`entropyBits`, buf)
+            FfiConverterString.write(value.`strength`, buf)
+    }
+}
+
+
+
+/**
+ * Passphrase generator options exposed to Kotlin.
+ */
+data class FfiPassphrasePolicy (
+    /**
+     * Number of words.
+     */
+    var `words`: kotlin.UInt
+    ,
+    /**
+     * Single-character separator.
+     */
+    var `separator`: kotlin.String
+
+){
+
+
+
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiPassphrasePolicy: FfiConverterRustBuffer<FfiPassphrasePolicy> {
+    override fun read(buf: ByteBuffer): FfiPassphrasePolicy {
+        return FfiPassphrasePolicy(
+            FfiConverterUInt.read(buf),
+            FfiConverterString.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiPassphrasePolicy) = (
+            FfiConverterUInt.allocationSize(value.`words`) +
+            FfiConverterString.allocationSize(value.`separator`)
+    )
+
+    override fun write(value: FfiPassphrasePolicy, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`words`, buf)
+            FfiConverterString.write(value.`separator`, buf)
+    }
+}
+
+
+
+/**
+ * Password generator options exposed to Kotlin.
+ */
+data class FfiPasswordPolicy (
+    /**
+     * Total character count.
+     */
+    var `length`: kotlin.UInt
+    ,
+    /**
+     * Include lowercase letters.
+     */
+    var `lowercase`: kotlin.Boolean
+    ,
+    /**
+     * Include uppercase letters.
+     */
+    var `uppercase`: kotlin.Boolean
+    ,
+    /**
+     * Include digits.
+     */
+    var `digits`: kotlin.Boolean
+    ,
+    /**
+     * Include symbols.
+     */
+    var `symbols`: kotlin.Boolean
+    ,
+    /**
+     * Remove I, l, 1, O, 0 and o.
+     */
+    var `excludeAmbiguous`: kotlin.Boolean
+
+){
+
+
+
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiPasswordPolicy: FfiConverterRustBuffer<FfiPasswordPolicy> {
+    override fun read(buf: ByteBuffer): FfiPasswordPolicy {
+        return FfiPasswordPolicy(
+            FfiConverterUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiPasswordPolicy) = (
+            FfiConverterUInt.allocationSize(value.`length`) +
+            FfiConverterBoolean.allocationSize(value.`lowercase`) +
+            FfiConverterBoolean.allocationSize(value.`uppercase`) +
+            FfiConverterBoolean.allocationSize(value.`digits`) +
+            FfiConverterBoolean.allocationSize(value.`symbols`) +
+            FfiConverterBoolean.allocationSize(value.`excludeAmbiguous`)
+    )
+
+    override fun write(value: FfiPasswordPolicy, buf: ByteBuffer) {
+            FfiConverterUInt.write(value.`length`, buf)
+            FfiConverterBoolean.write(value.`lowercase`, buf)
+            FfiConverterBoolean.write(value.`uppercase`, buf)
+            FfiConverterBoolean.write(value.`digits`, buf)
+            FfiConverterBoolean.write(value.`symbols`, buf)
+            FfiConverterBoolean.write(value.`excludeAmbiguous`, buf)
+    }
+}
+
+
+
 
 
 /**
@@ -2044,7 +2262,7 @@ public object FfiConverterTypeFfiVaultSession: FfiConverter<FfiVaultSession, Lon
  * sides honest.
  */
 sealed class FfiException: kotlin.Exception() {
-    
+
     /**
      * Caller input was malformed or outside an allowed range.
      */
@@ -2053,7 +2271,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * A format or schema version is newer than this build supports.
      */
@@ -2062,7 +2280,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * The vault could not be opened. Deliberately generic.
      */
@@ -2071,7 +2289,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * Data is malformed or fails an integrity check.
      */
@@ -2080,7 +2298,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * The operation requires an unlocked vault.
      */
@@ -2089,7 +2307,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * The requested record does not exist.
      */
@@ -2098,7 +2316,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * A concurrent change requires resolution.
      */
@@ -2107,7 +2325,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * A resource limit was exceeded.
      */
@@ -2116,7 +2334,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * Platform storage failed.
      */
@@ -2125,7 +2343,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * Internal invariant failure.
      */
@@ -2134,7 +2352,7 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
+
     /**
      * Parameters fail the security policy.
      */
@@ -2143,16 +2361,16 @@ sealed class FfiException: kotlin.Exception() {
         override val message
             get() = ""
     }
-    
 
-    
+
+
 
 
     companion object ErrorHandler : UniffiRustCallStatusErrorHandler<FfiException> {
         override fun lift(error_buf: RustBuffer.ByValue): FfiException = FfiConverterTypeFfiError.lift(error_buf)
     }
 
-    
+
 }
 
 /**
@@ -2160,7 +2378,7 @@ sealed class FfiException: kotlin.Exception() {
  */
 public object FfiConverterTypeFfiError : FfiConverterRustBuffer<FfiException> {
     override fun read(buf: ByteBuffer): FfiException {
-        
+
 
         return when(buf.getInt()) {
             1 -> FfiException.InvalidArgument()
@@ -2333,4 +2551,41 @@ public object FfiConverterSequenceByteArray: FfiConverterRustBuffer<List<kotlin.
         }
     }
 }
+        /**
+         * Generate an EFF-style passphrase with the shared core generator.
+         *
+         * # Errors
+         *
+         * Returns [`FfiError::PolicyRejected`] for an invalid policy or
+         * [`FfiError::Internal`] if the OS CSPRNG fails.
+         */
+    @Throws(FfiException::class) fun `generatePassphrase`(`policy`: FfiPassphrasePolicy): FfiGeneratedSecret {
+            return FfiConverterTypeFfiGeneratedSecret.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_generate_passphrase(
 
+
+        FfiConverterTypeFfiPassphrasePolicy.lower(`policy`),_status)
+}
+    )
+    }
+
+
+        /**
+         * Generate a password with the shared core generator.
+         *
+         * # Errors
+         *
+         * Returns [`FfiError::PolicyRejected`] for an impossible policy or
+         * [`FfiError::Internal`] if the OS CSPRNG fails.
+         */
+    @Throws(FfiException::class) fun `generatePassword`(`policy`: FfiPasswordPolicy): FfiGeneratedSecret {
+            return FfiConverterTypeFfiGeneratedSecret.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_generate_password(
+
+
+        FfiConverterTypeFfiPasswordPolicy.lower(`policy`),_status)
+}
+    )
+    }

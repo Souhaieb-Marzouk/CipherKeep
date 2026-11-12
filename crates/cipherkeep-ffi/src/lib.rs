@@ -17,9 +17,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
-    combine_2_of_3, derive_master_key, split_2_of_3, Envelope, ErrorCode, ItemId, ItemKey,
-    KdfParams, RecoveryShare, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession,
-    DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
+    generate_password as core_generate_password, split_2_of_3, Envelope, ErrorCode, ItemId,
+    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob,
+    VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 uniffi::setup_scaffolding!();
@@ -103,6 +104,89 @@ impl From<cipherkeep_core::CoreError> for FfiError {
             _ => Self::Internal,
         }
     }
+}
+
+/// Password generator options exposed to Kotlin.
+#[derive(Clone, Copy, Debug, uniffi::Record)]
+pub struct FfiPasswordPolicy {
+    /// Total character count.
+    pub length: u32,
+    /// Include lowercase letters.
+    pub lowercase: bool,
+    /// Include uppercase letters.
+    pub uppercase: bool,
+    /// Include digits.
+    pub digits: bool,
+    /// Include symbols.
+    pub symbols: bool,
+    /// Remove I, l, 1, O, 0 and o.
+    pub exclude_ambiguous: bool,
+}
+
+/// Passphrase generator options exposed to Kotlin.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiPassphrasePolicy {
+    /// Number of words.
+    pub words: u32,
+    /// Single-character separator.
+    pub separator: String,
+}
+
+/// A generated secret and its honest entropy estimate.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiGeneratedSecret {
+    /// Generated value. Kotlin must copy it only for immediate use.
+    pub value: String,
+    /// Entropy estimate in bits.
+    pub entropy_bits: f64,
+    /// Plain-language strength label.
+    pub strength: String,
+}
+
+/// Generate a password with the shared core generator.
+///
+/// # Errors
+///
+/// Returns [`FfiError::PolicyRejected`] for an impossible policy or
+/// [`FfiError::Internal`] if the OS CSPRNG fails.
+#[uniffi::export]
+pub fn generate_password(policy: FfiPasswordPolicy) -> Result<FfiGeneratedSecret, FfiError> {
+    let length = usize::try_from(policy.length).map_err(|_| FfiError::InvalidArgument)?;
+    let generated = core_generate_password(&PasswordPolicy {
+        length,
+        lowercase: policy.lowercase,
+        uppercase: policy.uppercase,
+        digits: policy.digits,
+        symbols: policy.symbols,
+        exclude_ambiguous: policy.exclude_ambiguous,
+    })?;
+    Ok(FfiGeneratedSecret {
+        value: generated.expose_secret().to_string(),
+        entropy_bits: generated.entropy_bits(),
+        strength: generated.strength().as_str().to_string(),
+    })
+}
+
+/// Generate an EFF-style passphrase with the shared core generator.
+///
+/// # Errors
+///
+/// Returns [`FfiError::PolicyRejected`] for an invalid policy or
+/// [`FfiError::Internal`] if the OS CSPRNG fails.
+#[uniffi::export]
+pub fn generate_passphrase(policy: FfiPassphrasePolicy) -> Result<FfiGeneratedSecret, FfiError> {
+    let words = usize::try_from(policy.words).map_err(|_| FfiError::InvalidArgument)?;
+    let mut characters = policy.separator.chars();
+    let separator = characters.next().ok_or(FfiError::InvalidArgument)?;
+    if characters.next().is_some() {
+        return Err(FfiError::InvalidArgument);
+    }
+    let generated = core_generate_passphrase(&PassphrasePolicy { words, separator })?;
+    Ok(FfiGeneratedSecret {
+        value: generated.expose_secret().to_string(),
+        entropy_bits: generated.entropy_bits(),
+        strength: generated.strength().as_str().to_string(),
+    })
 }
 
 /// Return the shared core version.
@@ -641,6 +725,54 @@ fn now_secs() -> u64 {
 mod tests {
     use super::*;
     use cipherkeep_core::Aad;
+
+    #[test]
+    fn generator_crosses_the_ffi_boundary() {
+        let generated = generate_password(FfiPasswordPolicy {
+            length: 20,
+            lowercase: true,
+            uppercase: true,
+            digits: true,
+            symbols: true,
+            exclude_ambiguous: true,
+        })
+        .expect("generate");
+        assert_eq!(generated.value.len(), 20);
+        assert!(generated
+            .value
+            .chars()
+            .any(|character| character.is_ascii_lowercase()));
+        assert!(generated
+            .value
+            .chars()
+            .any(|character| character.is_ascii_uppercase()));
+        assert!(generated
+            .value
+            .chars()
+            .any(|character| character.is_ascii_digit()));
+        assert!(generated.entropy_bits > 100.0);
+
+        let phrase = generate_passphrase(FfiPassphrasePolicy {
+            words: 6,
+            separator: "-".to_string(),
+        })
+        .expect("passphrase");
+        assert_eq!(phrase.value.split('-').count(), 6);
+        assert_eq!(phrase.strength, "Fair");
+    }
+
+    #[test]
+    fn generator_rejects_an_invalid_separator() {
+        let error = generate_passphrase(FfiPassphrasePolicy {
+            words: 6,
+            separator: "--".to_string(),
+        })
+        .unwrap_err();
+        assert_eq!(
+            error.numeric_code(),
+            ErrorCode::InvalidArgument.numeric_code()
+        );
+    }
 
     #[test]
     fn error_codes_match_core_codes() {

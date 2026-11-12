@@ -85,6 +85,7 @@ async function refresh(): Promise<void> {
     }
     if (reply.locked) {
       status.classList.remove("unlocked");
+      clearGenerated();
     }
   } catch {
     status.textContent = "Background unavailable";
@@ -145,6 +146,80 @@ async function loadItems(): Promise<void> {
   }
 }
 
+function clearGenerated(): void {
+  element<HTMLDivElement>("generatedValue").textContent = "";
+  element<HTMLParagraphElement>("generatedMeta").textContent = "";
+  element<HTMLElement>("generatedBox").hidden = true;
+}
+
+function syncGeneratorMode(): void {
+  const passphrase = element<HTMLSelectElement>("genMode").value === "passphrase";
+  element<HTMLElement>("passwordOptions").hidden = passphrase;
+  element<HTMLElement>("passphraseOptions").hidden = !passphrase;
+  clearGenerated();
+}
+
+element<HTMLSelectElement>("genMode").addEventListener("change", syncGeneratorMode);
+
+element<HTMLButtonElement>("generate").addEventListener("click", async () => {
+  const mode = element<HTMLSelectElement>("genMode").value;
+  const reply =
+    mode === "passphrase"
+      ? await send({
+          type: "generate-passphrase",
+          words: element<HTMLInputElement>("genWords").valueAsNumber,
+          separator: element<HTMLInputElement>("genSeparator").value || "-",
+        })
+      : await send({
+          type: "generate-password",
+          length: element<HTMLInputElement>("genLength").valueAsNumber,
+          lowercase: element<HTMLInputElement>("genLower").checked,
+          uppercase: element<HTMLInputElement>("genUpper").checked,
+          digits: element<HTMLInputElement>("genDigits").checked,
+          symbols: element<HTMLInputElement>("genSymbols").checked,
+          excludeAmbiguous: element<HTMLInputElement>("genAmbiguous").checked,
+        });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    clearGenerated();
+    return;
+  }
+  if (reply.kind !== "generated") {
+    showMessage("Generator returned an unexpected response.");
+    return;
+  }
+  element<HTMLDivElement>("generatedValue").textContent = reply.value;
+  element<HTMLParagraphElement>("generatedMeta").textContent =
+    `${Math.round(reply.entropyBits)} bits Â· ${reply.strength}`;
+  element<HTMLElement>("generatedBox").hidden = false;
+  showMessage("");
+});
+
+element<HTMLButtonElement>("copyGenerated").addEventListener("click", async () => {
+  const value = element<HTMLDivElement>("generatedValue").textContent ?? "";
+  if (value.length === 0) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    showMessage("Copied. Clipboard is cleared after 30 seconds while this popup stays open.", true);
+    window.setTimeout(() => {
+      void navigator.clipboard.writeText("").catch(() => undefined);
+    }, 30_000);
+  } catch {
+    showMessage("Clipboard is unavailable; select the value manually.");
+  }
+});
+
+element<HTMLButtonElement>("useGenerated").addEventListener("click", () => {
+  const value = element<HTMLDivElement>("generatedValue").textContent ?? "";
+  if (value.length === 0) {
+    return;
+  }
+  element<HTMLInputElement>("itemPassword").value = value;
+  showMessage("Inserted into the password field; it is not saved until you click Save item.", true);
+});
+
 element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
   const title = element<HTMLInputElement>("itemTitle");
   const username = element<HTMLInputElement>("itemUsername");
@@ -178,6 +253,7 @@ element<HTMLButtonElement>("lockUnlocked").addEventListener("click", lockVault);
 async function lockVault(): Promise<void> {
   await send({ type: "lock" });
   clearShares();
+  clearGenerated();
   showMessage("Locked. The in-memory keyring was dropped.", true);
   await refresh();
 }

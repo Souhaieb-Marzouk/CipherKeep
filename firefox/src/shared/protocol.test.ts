@@ -18,6 +18,33 @@ describe("request validation", () => {
     expect(isRequest({ type: "delete-item", id: "a".repeat(32) })).toBe(true);
   });
 
+  it("validates generator policies before the background runs them", () => {
+    expect(
+      isRequest({
+        type: "generate-password",
+        length: 20,
+        lowercase: true,
+        uppercase: true,
+        digits: true,
+        symbols: true,
+        excludeAmbiguous: false,
+      }),
+    ).toBe(true);
+    expect(
+      isRequest({
+        type: "generate-password",
+        length: 7,
+        lowercase: true,
+        uppercase: false,
+        digits: false,
+        symbols: false,
+        excludeAmbiguous: false,
+      }),
+    ).toBe(false);
+    expect(isRequest({ type: "generate-passphrase", words: 6, separator: "-" })).toBe(true);
+    expect(isRequest({ type: "generate-passphrase", words: 6, separator: "--" })).toBe(false);
+  });
+
   it("rejects unknown request types", () => {
     expect(isRequest({ type: "drop-all" })).toBe(false);
   });

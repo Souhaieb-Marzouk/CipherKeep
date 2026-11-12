@@ -9,6 +9,23 @@ declare const wasm_bindgen: {
   WasmVaultSession: typeof WasmVaultSession;
 };
 
+interface WasmGeneratedSecret {
+  value: string;
+  entropy_bits: number;
+  strength: string;
+}
+
+declare function generate_password(
+  length: number,
+  lowercase: boolean,
+  uppercase: boolean,
+  digits: boolean,
+  symbols: boolean,
+  excludeAmbiguous: boolean,
+): WasmGeneratedSecret;
+
+declare function generate_passphrase(words: number, separator: string): WasmGeneratedSecret;
+
 declare class WasmVaultSession {
   static create(password: Uint8Array): WasmVaultSession;
   static open(blob: Uint8Array): WasmVaultSession;

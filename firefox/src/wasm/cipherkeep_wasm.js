@@ -35,7 +35,7 @@ let wasm_bindgen = (function(exports) {
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
                 var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
                 var v1 = getArrayU8FromWasm0(r0, r1).slice();
-                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                wasm.__wbindgen_export5(r0, r1 * 1, 1);
                 return v1;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -53,7 +53,7 @@ let wasm_bindgen = (function(exports) {
         static create(password) {
             try {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export4);
+                const ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export3);
                 const len0 = WASM_VECTOR_LEN;
                 wasm.wasmvaultsession_create(retptr, ptr0, len0);
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -83,13 +83,13 @@ let wasm_bindgen = (function(exports) {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
                 let ptr0, len0, ptr1, len1;
                 try {
-                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export3);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_export4);
+                    ptr1 = passArray8ToWasm0(ciphertext, wasm.__wbindgen_export3);
                     len1 = WASM_VECTOR_LEN;
                 } catch (e) {
-                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
                     throw e;
                 }
                 wasm.wasmvaultsession_decrypt_item(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
@@ -101,7 +101,7 @@ let wasm_bindgen = (function(exports) {
                     throw takeFromExternrefTable0(r2);
                 }
                 var v3 = getArrayU8FromWasm0(r0, r1).slice();
-                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                wasm.__wbindgen_export5(r0, r1 * 1, 1);
                 return v3;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -118,7 +118,7 @@ let wasm_bindgen = (function(exports) {
         delete_item(item_id) {
             try {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                const ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export3);
                 const len0 = WASM_VECTOR_LEN;
                 wasm.wasmvaultsession_delete_item(retptr, this.__wbg_ptr, ptr0, len0);
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -147,13 +147,13 @@ let wasm_bindgen = (function(exports) {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
                 let ptr0, len0, ptr1, len1;
                 try {
-                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export3);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export4);
+                    ptr1 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export3);
                     len1 = WASM_VECTOR_LEN;
                 } catch (e) {
-                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
                     throw e;
                 }
                 wasm.wasmvaultsession_encrypt_item(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
@@ -165,7 +165,7 @@ let wasm_bindgen = (function(exports) {
                     throw takeFromExternrefTable0(r2);
                 }
                 var v3 = getArrayU8FromWasm0(r0, r1).slice();
-                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                wasm.__wbindgen_export5(r0, r1 * 1, 1);
                 return v3;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -192,7 +192,7 @@ let wasm_bindgen = (function(exports) {
         get_item(item_id) {
             try {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                const ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export3);
                 const len0 = WASM_VECTOR_LEN;
                 wasm.wasmvaultsession_get_item(retptr, this.__wbg_ptr, ptr0, len0);
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -203,7 +203,7 @@ let wasm_bindgen = (function(exports) {
                     throw takeFromExternrefTable0(r2);
                 }
                 var v2 = getArrayU8FromWasm0(r0, r1).slice();
-                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                wasm.__wbindgen_export5(r0, r1 * 1, 1);
                 return v2;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -260,7 +260,7 @@ let wasm_bindgen = (function(exports) {
                     throw takeFromExternrefTable0(r2);
                 }
                 var v1 = getArrayJsValueFromWasm0(r0, r1);
-                wasm.__wbindgen_export3(r0, r1 * 4, 4);
+                wasm.__wbindgen_export5(r0, r1 * 4, 4);
                 return v1;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -286,7 +286,7 @@ let wasm_bindgen = (function(exports) {
         static open(blob) {
             try {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export4);
+                const ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export3);
                 const len0 = WASM_VECTOR_LEN;
                 wasm.wasmvaultsession_open(retptr, ptr0, len0);
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -318,19 +318,19 @@ let wasm_bindgen = (function(exports) {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
                 let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3;
                 try {
-                    ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export4);
+                    ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export3);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passStringToWasm0(first, wasm.__wbindgen_export4, wasm.__wbindgen_export7);
+                    ptr1 = passStringToWasm0(first, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
                     len1 = WASM_VECTOR_LEN;
-                    ptr2 = passStringToWasm0(second, wasm.__wbindgen_export4, wasm.__wbindgen_export7);
+                    ptr2 = passStringToWasm0(second, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
                     len2 = WASM_VECTOR_LEN;
-                    ptr3 = passArray8ToWasm0(new_password, wasm.__wbindgen_export4);
+                    ptr3 = passArray8ToWasm0(new_password, wasm.__wbindgen_export3);
                     len3 = WASM_VECTOR_LEN;
                 } catch (e) {
-                    if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
-                    if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
-                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    if (ptr3) { wasm.__wbindgen_export5(ptr3, len3 * 1, 1); }
+                    if (ptr2) { wasm.__wbindgen_export5(ptr2, len2 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
                     throw e;
                 }
                 wasm.wasmvaultsession_recover(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
@@ -356,7 +356,7 @@ let wasm_bindgen = (function(exports) {
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
                 var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
                 var v1 = getArrayJsValueFromWasm0(r0, r1);
-                wasm.__wbindgen_export3(r0, r1 * 4, 4);
+                wasm.__wbindgen_export5(r0, r1 * 4, 4);
                 return v1;
             } finally {
                 wasm.__wbindgen_add_to_stack_pointer(16);
@@ -385,13 +385,13 @@ let wasm_bindgen = (function(exports) {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
                 let ptr0, len0, ptr1, len1;
                 try {
-                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export4);
+                    ptr0 = passArray8ToWasm0(item_id, wasm.__wbindgen_export3);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export4);
+                    ptr1 = passArray8ToWasm0(plaintext, wasm.__wbindgen_export3);
                     len1 = WASM_VECTOR_LEN;
                 } catch (e) {
-                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
                     throw e;
                 }
                 wasm.wasmvaultsession_save_item(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
@@ -419,13 +419,13 @@ let wasm_bindgen = (function(exports) {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
                 let ptr0, len0, ptr1, len1;
                 try {
-                    ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export4);
+                    ptr0 = passArray8ToWasm0(blob, wasm.__wbindgen_export3);
                     len0 = WASM_VECTOR_LEN;
-                    ptr1 = passArray8ToWasm0(password, wasm.__wbindgen_export4);
+                    ptr1 = passArray8ToWasm0(password, wasm.__wbindgen_export3);
                     len1 = WASM_VECTOR_LEN;
                 } catch (e) {
-                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
-                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
                     throw e;
                 }
                 wasm.wasmvaultsession_unlock(retptr, ptr0, len0, ptr1, len1);
@@ -451,7 +451,7 @@ let wasm_bindgen = (function(exports) {
         unlock_again(password) {
             try {
                 const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
-                const ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export4);
+                const ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export3);
                 const len0 = WASM_VECTOR_LEN;
                 wasm.wasmvaultsession_unlock_again(retptr, this.__wbg_ptr, ptr0, len0);
                 var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
@@ -466,6 +466,69 @@ let wasm_bindgen = (function(exports) {
     }
     if (Symbol.dispose) WasmVaultSession.prototype[Symbol.dispose] = WasmVaultSession.prototype.free;
     exports.WasmVaultSession = WasmVaultSession;
+
+    /**
+     * Generate an EFF-style passphrase with the shared core generator.
+     *
+     * # Errors
+     *
+     * Returns a JS `{ code, message }` object for an invalid policy or CSPRNG
+     * failure.
+     * @param {number} words
+     * @param {string} separator
+     * @returns {any}
+     */
+    function generate_passphrase(words, separator) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val2 = +words;
+            const ptr0 = passStringToWasm0(separator, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.generate_passphrase(retptr, val2, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeFromExternrefTable0(r1);
+            }
+            return takeFromExternrefTable0(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    exports.generate_passphrase = generate_passphrase;
+
+    /**
+     * Generate a password with the shared core generator.
+     *
+     * # Errors
+     *
+     * Returns a JS `{ code, message }` object for an impossible policy or CSPRNG
+     * failure.
+     * @param {number} length
+     * @param {boolean} lowercase
+     * @param {boolean} uppercase
+     * @param {boolean} digits
+     * @param {boolean} symbols
+     * @param {boolean} exclude_ambiguous
+     * @returns {any}
+     */
+    function generate_password(length, lowercase, uppercase, digits, symbols, exclude_ambiguous) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            wasm.generate_password(retptr, length, lowercase, uppercase, digits, symbols, exclude_ambiguous);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeFromExternrefTable0(r1);
+            }
+            return takeFromExternrefTable0(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    exports.generate_password = generate_password;
     function __wbg_get_imports() {
         const import0 = {
             __proto__: null,
@@ -612,7 +675,7 @@ let wasm_bindgen = (function(exports) {
         for (let i = ptr; i < ptr + 4 * len; i += 4) {
             result.push(wasm.__wbindgen_externrefs.get(mem.getUint32(i, true)));
         }
-        wasm.__wbindgen_export6(ptr, len);
+        wasm.__wbindgen_export7(ptr, len);
         return result;
     }
 
@@ -701,7 +764,7 @@ let wasm_bindgen = (function(exports) {
 
     function takeFromExternrefTable0(idx) {
         const value = wasm.__wbindgen_externrefs.get(idx);
-        wasm.__wbindgen_export5(idx);
+        wasm.__wbindgen_export6(idx);
         return value;
     }
 
