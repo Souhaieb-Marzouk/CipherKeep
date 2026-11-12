@@ -381,6 +381,11 @@ class SessionController(context: Context) {
             }
         }
 
+    fun syncNamespace(): String {
+        val active = session ?: error("vault is locked")
+        return active.vaultId().joinToString("") { "%02x".format(it) }
+    }
+
     suspend fun syncNow(endpoint: String, token: String, namespace: String): SyncOutcome =
         withContext(Dispatchers.IO) {
             val active = session ?: error("vault is locked")

@@ -735,6 +735,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_unlock_again(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_vault_id(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffisearchindex_new(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create(
@@ -833,6 +835,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_vault_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_export_portable(`itemsJson`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_passphrase(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -1054,6 +1058,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_unlock_again() and 0xFFFF) != 46383) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_vault_id() and 0xFFFF) != 43541) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_constructor_ffisearchindex_new() and 0xFFFF) != 56256) {
@@ -2034,6 +2041,11 @@ public interface FfiVaultSessionInterface {
      */
     fun `unlockAgain`(`password`: kotlin.ByteArray)
     
+    /**
+     * The unlocked vault id used for sync namespaces.
+     */
+    fun `vaultId`(): kotlin.ByteArray
+    
     companion object
 }
 
@@ -2499,6 +2511,23 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
 }
     }
     
+    
+
+    
+    /**
+     * The unlocked vault id used for sync namespaces.
+     */
+    @Throws(FfiException::class)override fun `vaultId`(): kotlin.ByteArray {
+            return FfiConverterByteArray.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_vault_id(
+        it,
+        _status)
+}
+    }
+    )
+    }
     
 
     

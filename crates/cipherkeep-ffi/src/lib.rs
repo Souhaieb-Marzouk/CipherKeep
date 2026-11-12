@@ -831,6 +831,17 @@ impl FfiVaultSession {
         })
     }
 
+    /// The unlocked vault id used for sync namespaces.
+    pub fn vault_id(&self) -> Result<Vec<u8>, FfiError> {
+        self.with_state(|state| {
+            state
+                .session
+                .vault_id()
+                .map(|id| id.as_bytes().to_vec())
+                .map_err(FfiError::from)
+        })
+    }
+
     /// Migrate an encrypted legacy item into canonical sync JSON.
     pub fn migrate_item(
         &self,

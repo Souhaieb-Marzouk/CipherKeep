@@ -5,7 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.security.SecureRandom
 
 data class SyncOutcome(val records: Int, val conflicts: Int)
 
@@ -20,13 +19,6 @@ class AndroidSyncEngine(private val context: Context, private val controller: Se
             }
         }
 
-    fun namespace(): String {
-        val existing = prefs.getString("namespace", null)
-        if (existing != null) return existing
-        val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
-        return bytes.joinToString("") { "%02x".format(it) }.also {
-            prefs.edit().putString("namespace", it).apply()
-        }
-    }
+    fun namespace(): String = controller.syncNamespace()
 
 }
