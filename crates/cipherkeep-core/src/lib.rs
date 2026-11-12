@@ -37,6 +37,7 @@ pub mod lock;
 pub mod secret;
 pub mod session;
 pub mod shamir;
+pub mod totp;
 
 pub use crdt::{ActorId, LamportClock, VersionVector};
 pub use envelope::{
@@ -74,6 +75,10 @@ pub use secret::{SecretBytes, SecretString};
 pub use session::{validate_master_password, CreatedVault, VaultBlob, VaultSession};
 pub use shamir::{
     combine_2_of_3, split_2_of_3, RecoveryShare, RECOVERY_SECRET_LEN, SHARE_COUNT, THRESHOLD,
+};
+pub use totp::{
+    parse_otpauth_uri, Totp, TotpAlgorithm, TotpEntry, DEFAULT_PERIOD, MAX_PERIOD, MAX_SECRET_LEN,
+    MIN_PERIOD, MIN_SECRET_LEN,
 };
 
 /// The version of the core crate.
