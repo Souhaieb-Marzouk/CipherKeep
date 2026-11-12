@@ -650,10 +650,18 @@ impl WasmVaultSession {
         counter_start: u64,
     ) -> Result<Vec<u8>, JsValue> {
         let id = ItemId::from_bytes(id_from_slice(&item_id).map_err(js_error)?);
-        let actor: [u8; 16] = actor.as_slice().try_into()
+        let actor: [u8; 16] = actor
+            .as_slice()
+            .try_into()
             .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
         self.inner
-            .export_sync_record(id, &ciphertext, ActorId::from_bytes(actor), created_at, counter_start)
+            .export_sync_record(
+                id,
+                &ciphertext,
+                ActorId::from_bytes(actor),
+                created_at,
+                counter_start,
+            )
             .map_err(js_error)
     }
 
@@ -924,7 +932,6 @@ mod wasm_tests {
     }
 }
 
-
 /// Merge local and remote canonical ItemRecord JSON strings.
 ///
 /// Returns `{records: [json string], conflicts: [{item, field, kind}]}`.
@@ -935,13 +942,13 @@ pub fn merge_sync_records(local: Vec<String>, remote: Vec<String>) -> Result<Str
     let mut engine = MergeEngine::new();
     let mut conflicts = Vec::new();
     for raw in local {
-        let record = cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes())
-            .map_err(js_error)?;
+        let record =
+            cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes()).map_err(js_error)?;
         engine.insert_local(record).map_err(js_error)?;
     }
     for raw in remote {
-        let record = cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes())
-            .map_err(js_error)?;
+        let record =
+            cipherkeep_core::item::ItemRecord::from_sync_json(raw.as_bytes()).map_err(js_error)?;
         let outcome: MergeOutcome = engine.merge_remote(&record).map_err(js_error)?;
         for conflict in outcome.conflicts {
             if let ItemConflict::Field(field) = conflict {
@@ -955,12 +962,13 @@ pub fn merge_sync_records(local: Vec<String>, remote: Vec<String>) -> Result<Str
     }
     let mut records = Vec::new();
     for record in engine.records_for_sync().map_err(js_error)? {
-        records.push(String::from_utf8(record).map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?);
+        records.push(
+            String::from_utf8(record).map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?,
+        );
     }
     serde_json::to_string(&serde_json::json!({ "records": records, "conflicts": conflicts }))
         .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
 }
-
 
 /// Merge V2 sync records, preserving each item's wrapped key.
 #[wasm_bindgen]
@@ -970,16 +978,24 @@ pub fn merge_sync_records_v2(local: Vec<String>, remote: Vec<String>) -> Result<
     use std::collections::BTreeMap;
 
     fn parse(raw: &str) -> Result<(String, String, Vec<u8>), JsValue> {
-        let value: serde_json::Value =
-            serde_json::from_str(raw).map_err(|_| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        let value: serde_json::Value = serde_json::from_str(raw)
+            .map_err(|_| js_error(CoreError::new(ErrorCode::CorruptData)))?;
         if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
             return Err(js_error(CoreError::new(ErrorCode::UnsupportedVersion)));
         }
-        let item = value.get("item").and_then(serde_json::Value::as_str)
-            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?.to_string();
-        let key = value.get("key").and_then(serde_json::Value::as_str)
-            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?.to_string();
-        let record = value.get("record").ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        let item = value
+            .get("item")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?
+            .to_string();
+        let key = value
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?
+            .to_string();
+        let record = value
+            .get("record")
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
         let bytes = serde_json::to_vec(record)
             .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?;
         Ok((item, key, bytes))
@@ -990,7 +1006,10 @@ pub fn merge_sync_records_v2(local: Vec<String>, remote: Vec<String>) -> Result<
     for raw in local {
         let (item, key, bytes) = parse(&raw)?;
         keys.insert(item, key);
-        engine.insert_local(cipherkeep_core::item::ItemRecord::from_sync_json(&bytes).map_err(js_error)?)
+        engine
+            .insert_local(
+                cipherkeep_core::item::ItemRecord::from_sync_json(&bytes).map_err(js_error)?,
+            )
             .map_err(js_error)?;
     }
     let mut conflicts = Vec::new();
@@ -1013,11 +1032,64 @@ pub fn merge_sync_records_v2(local: Vec<String>, remote: Vec<String>) -> Result<
     for raw in engine.records_for_sync().map_err(js_error)? {
         let record = cipherkeep_core::item::ItemRecord::from_sync_json(&raw).map_err(js_error)?;
         let id = hex(record.id().as_bytes());
-        let key = keys.get(&id).ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        let key = keys
+            .get(&id)
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
         let value: serde_json::Value = serde_json::from_slice(&raw)
             .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?;
         records.push(serde_json::json!({"v":2,"item":id,"key":key,"record":value}).to_string());
     }
     serde_json::to_string(&serde_json::json!({ "records": records, "conflicts": conflicts }))
+        .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
+}
+
+/// Resolve one V2 field conflict by choosing left or right.
+#[wasm_bindgen]
+pub fn resolve_sync_conflict(
+    local: String,
+    remote: String,
+    field_id: u16,
+    keep_right: bool,
+) -> Result<String, JsValue> {
+    use cipherkeep_core::item::ItemRecord;
+    fn split(raw: &str) -> Result<(serde_json::Value, ItemRecord, String), JsValue> {
+        let value: serde_json::Value = serde_json::from_str(raw)
+            .map_err(|_| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
+            return Err(js_error(CoreError::new(ErrorCode::UnsupportedVersion)));
+        }
+        let key = value
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?
+            .to_string();
+        let record = value
+            .get("record")
+            .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        let bytes = serde_json::to_vec(record)
+            .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?;
+        Ok((
+            value,
+            ItemRecord::from_sync_json(&bytes).map_err(js_error)?,
+            key,
+        ))
+    }
+    let (local_value, local_record, local_key) = split(&local)?;
+    let (_remote_value, remote_record, _) = split(&remote)?;
+    let resolved = cipherkeep_core::MergeEngine::resolve_field_conflict(
+        &local_record,
+        &remote_record,
+        field_id,
+        keep_right,
+    )
+    .map_err(js_error)?;
+    let record: serde_json::Value =
+        serde_json::from_slice(&resolved.to_sync_json().map_err(js_error)?)
+            .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))?;
+    let item = local_value
+        .get("item")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+    serde_json::to_string(&serde_json::json!({"v":2,"item":item,"key":local_key,"record":record}))
         .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
 }

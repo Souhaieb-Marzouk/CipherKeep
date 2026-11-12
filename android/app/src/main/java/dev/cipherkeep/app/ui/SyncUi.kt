@@ -7,6 +7,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
@@ -128,6 +129,7 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
     var endpoint by remember { mutableStateOf("https://cipherkeep-relay.marzouk-souhaieb.workers.dev") }
     var token by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
+    var conflicts by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
     val scope = rememberCoroutineScope()
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Column(
@@ -162,11 +164,29 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
                                 { "Synced ${it.records} record(s); conflicts ${it.conflicts}." },
                                 { "Sync failed." },
                             )
+                        conflicts = controller.conflictItems()
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Sync now") }
             message?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+            conflicts.forEach { (item, field) ->
+                Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Text("${item.take(8)}… f$field", style = MaterialTheme.typography.labelSmall)
+                    TextButton(onClick = {
+                        scope.launch {
+                            controller.resolveConflict(item, field, false)
+                            conflicts = controller.conflictItems()
+                        }
+                    }) { Text("Keep left") }
+                    TextButton(onClick = {
+                        scope.launch {
+                            controller.resolveConflict(item, field, true)
+                            conflicts = controller.conflictItems()
+                        }
+                    }) { Text("Keep right") }
+                }
+            }
             Text(
                 "The token is not saved. Use a test vault until conflict resolution is complete.",
                 style = MaterialTheme.typography.labelSmall,

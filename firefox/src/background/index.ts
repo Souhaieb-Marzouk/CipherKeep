@@ -360,6 +360,18 @@ async function performSync(): Promise<Response> {
           await itemStore.put({ id, ciphertext, updatedAt: Date.now() });
         }
         await browser.storage.local.set({ syncConflicts: merged.conflicts });
+        const conflictInputs = (merged.conflicts as Array<{ item: string; field: number }>).map((conflict) => {
+          const localRaw = local.find((raw) => {
+            try { return (JSON.parse(raw) as { item?: string }).item === conflict.item; } catch { return false; }
+          });
+          const remoteRaw = remoteRecords.find((raw) => {
+            try { return (JSON.parse(raw) as { item?: string }).item === conflict.item; } catch { return false; }
+          });
+          return localRaw !== undefined && remoteRaw !== undefined
+            ? { ...conflict, local: localRaw, remote: remoteRaw }
+            : null;
+        }).filter((value): value is { item: string; field: number; local: string; remote: string } => value !== null);
+        await browser.storage.local.set({ syncConflictInputs: conflictInputs });
         return { ok: true, kind: "sync", records: merged.records.length, conflicts: merged.conflicts.length };
 }
 
@@ -510,6 +522,29 @@ async function handle(request: Request): Promise<Response> {
         payload.fill(0);
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "resolve-conflict": {
+        const active = requireSession();
+        const stored = await browser.storage.local.get("syncConflictInputs");
+        const inputs = Array.isArray(stored.syncConflictInputs) ? stored.syncConflictInputs as Array<{item:string;field:number;local:string;remote:string}> : [];
+        const input = inputs.find((entry) => entry.item === request.item && entry.field === request.field);
+        if (input === undefined) {
+          return { ok: false, error: "Conflict no longer available." };
+        }
+        const resolved = resolve_sync_conflict(input.local, input.remote, request.field, request.keepRight);
+        const wrapper = JSON.parse(resolved) as { item?: string };
+        if (typeof wrapper.item !== "string") {
+          return { ok: false, error: "Resolved record is invalid." };
+        }
+        const legacy = active.apply_sync_record(new TextEncoder().encode(resolved));
+        const ciphertext = active.encrypt_item(hexToBytes(wrapper.item), legacy);
+        legacy.fill(0);
+        await itemStore.put({ id: wrapper.item, ciphertext, updatedAt: Date.now() });
+        await browser.storage.local.set({
+          syncConflictInputs: inputs.filter((entry) => !(entry.item === request.item && entry.field === request.field)),
+          syncConflicts: (await browser.storage.local.get("syncConflicts")).syncConflicts?.filter?.((entry: {item?:string;field?:number}) => !(entry.item === request.item && entry.field === request.field)) ?? [],
+        });
+        return { ok: true, kind: "conflict-resolved" };
       }
       case "sync-now":
         return await performSync();

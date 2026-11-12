@@ -12,6 +12,8 @@ use crate::error::{CoreError, ErrorCode, Result};
 pub struct LocalFolderAdapter {
     root: PathBuf,
     vault: [u8; 16],
+    #[cfg(test)]
+    fail_manifest: bool,
 }
 
 impl LocalFolderAdapter {
@@ -27,7 +29,12 @@ impl LocalFolderAdapter {
         } else {
             fs::create_dir_all(&root).map_err(|_| CoreError::new(ErrorCode::Storage))?;
         }
-        let adapter = Self { root, vault };
+        let adapter = Self {
+            root,
+            vault,
+            #[cfg(test)]
+            fail_manifest: false,
+        };
         adapter.vault_dir()?;
         Ok(adapter)
     }
@@ -104,6 +111,10 @@ impl SyncAdapter for LocalFolderAdapter {
         for item in &batch.manifests {
             let path = self.blob_path(&item.item_id, item.blob_version)?;
             write_atomic(&path, &item.ciphertext)?;
+        }
+        #[cfg(test)]
+        if self.fail_manifest {
+            return Err(CoreError::new(ErrorCode::Storage));
         }
         write_atomic(&manifest, &batch.encode()?)?;
         Ok(())
@@ -228,6 +239,25 @@ mod tests {
             .iter()
             .any(|name| name.starts_with("manifest-") && name.ends_with(".json")));
         assert!(files.iter().any(|name| name.ends_with(".blob")));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn interrupted_manifest_write_keeps_previous_manifest() {
+        let root = temp_dir();
+        let mut adapter = LocalFolderAdapter::new(&root, [1u8; 16]).expect("adapter");
+        adapter.push(&batch([2u8; 16], 1)).expect("first push");
+        adapter.fail_manifest = true;
+        assert!(adapter.push(&batch([2u8; 16], 2)).is_err());
+        adapter.fail_manifest = false;
+        let pulled = adapter.pull(&SyncVersionVector::default()).expect("pull");
+        assert_eq!(pulled.len(), 1);
+        assert_eq!(
+            pulled[0]
+                .versions
+                .get(crate::keys::DeviceId::from_bytes([2u8; 16])),
+            1
+        );
         let _ = fs::remove_dir_all(root);
     }
 

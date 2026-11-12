@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use crate::error::{CoreError, ErrorCode, Result};
-use crate::item::{FieldConflict, ItemConflict, ItemRecord};
+use crate::item::{FieldConflict, FieldRecord, ItemConflict, ItemRecord};
 
 /// Outcome of merging one remote item.
 #[derive(Clone, Debug)]
@@ -113,6 +113,36 @@ impl MergeEngine {
             .ok_or_else(|| CoreError::new(ErrorCode::NotFound))?;
         entry.put_field(record)?;
         Ok(entry.clone())
+    }
+
+    /// Resolve one field conflict by choosing the left or right record.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::NotFound`] if the conflict does not exist.
+    pub fn resolve_field_conflict(
+        local: &ItemRecord,
+        remote: &ItemRecord,
+        field_id: u16,
+        keep_right: bool,
+    ) -> Result<ItemRecord> {
+        let result = local.merge(remote)?;
+        let mut merged = result.item;
+        let conflict = result
+            .conflicts
+            .iter()
+            .find_map(|conflict| match conflict {
+                ItemConflict::Field(field) if field.left().field_id() == field_id => Some(field),
+                _ => None,
+            })
+            .ok_or_else(|| CoreError::new(ErrorCode::NotFound))?;
+        let chosen: FieldRecord = if keep_right {
+            conflict.right().clone()
+        } else {
+            conflict.left().clone()
+        };
+        merged.put_field(chosen)?;
+        Ok(merged)
     }
 
     /// Canonical sync JSON for every tracked record.

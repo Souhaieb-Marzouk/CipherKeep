@@ -76,19 +76,34 @@ element<HTMLButtonElement>("syncNow").addEventListener("click", async () => {
 
 async function showConflicts(): Promise<void> {
   const output = element<HTMLPreElement>("syncConflicts");
+  const actions = element<HTMLDivElement>("syncConflictActions");
+  actions.replaceChildren();
   const stored = await browser.storage.local.get("syncConflicts");
   const conflicts = Array.isArray(stored.syncConflicts) ? stored.syncConflicts : [];
   output.textContent =
     conflicts.length === 0
       ? ""
-      : `Unresolved conflicts:\n${conflicts
-          .map((value) => {
-            const conflict = value as { item?: string; field?: number; kind?: string };
-            return `${conflict.kind ?? "field"} · item ${conflict.item ?? "?"} · field ${conflict.field ?? "?"}`;
-          })
-          .join("\n")}`;
+      : `Unresolved conflicts: ${conflicts.length}`;
+  for (const value of conflicts) {
+    const conflict = value as { item?: string; field?: number; kind?: string };
+    if (typeof conflict.item !== "string" || typeof conflict.field !== "number") continue;
+    const label = `${conflict.kind ?? "field"} · ${conflict.item.slice(0, 8)}… · field ${conflict.field}`;
+    const keepLeft = document.createElement("button");
+    keepLeft.textContent = `Keep left: ${label}`;
+    keepLeft.className = "secondary";
+    keepLeft.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ type: "resolve-conflict", item: conflict.item, field: conflict.field, keepRight: false });
+      await showConflicts();
+    });
+    const keepRight = document.createElement("button");
+    keepRight.textContent = `Keep right: ${label}`;
+    keepRight.addEventListener("click", async () => {
+      await browser.runtime.sendMessage({ type: "resolve-conflict", item: conflict.item, field: conflict.field, keepRight: true });
+      await showConflicts();
+    });
+    actions.append(keepLeft, keepRight);
+  }
 }
-
 void showConflicts();
 void showSync();
 

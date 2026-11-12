@@ -85,3 +85,5 @@ declare class WasmVaultSession {
 
 declare function merge_sync_records(local: string[], remote: string[]): string;
 declare function merge_sync_records_v2(local: string[], remote: string[]): string;
+
+declare function resolve_sync_conflict(local: string, remote: string, fieldId: number, keepRight: boolean): string;

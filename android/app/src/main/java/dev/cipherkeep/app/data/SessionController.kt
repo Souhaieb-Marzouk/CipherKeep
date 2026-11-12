@@ -8,6 +8,7 @@ import androidx.compose.runtime.setValue
 import dev.cipherkeep.core.FfiException
 import dev.cipherkeep.core.FfiVaultSession
 import dev.cipherkeep.core.mergeSyncRecordsV2
+import dev.cipherkeep.core.resolveSyncConflict
 import dev.cipherkeep.core.numericCode
 import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
@@ -54,6 +55,7 @@ private val FOLDER_META_ID = byteArrayOf(
 )
 
 class SessionController(context: Context) {
+    private val appContext = context.applicationContext
     private val blobs = VaultBlobStore(context.applicationContext)
     private val biometrics = BiometricStore(context.applicationContext)
     private val storage = VaultStorage(context.applicationContext)
@@ -386,6 +388,33 @@ class SessionController(context: Context) {
             }
             val merged = JSONObject(mergeSyncRecordsV2(local, remote))
             val records = merged.optJSONArray("records") ?: JSONArray()
+            val conflicts = merged.optJSONArray("conflicts") ?: JSONArray()
+            val inputs = JSONArray()
+            for (index in 0 until conflicts.length()) {
+                val conflict = conflicts.getJSONObject(index)
+                val item = conflict.optString("item")
+                val field = conflict.optInt("field", -1)
+                if (item.isEmpty() || field < 0) continue
+                val localRaw = local.firstOrNull { raw ->
+                    runCatching { JSONObject(raw).optString("item") == item }.getOrDefault(false)
+                }
+                val remoteRaw = remote.firstOrNull { raw ->
+                    runCatching { JSONObject(raw).optString("item") == item }.getOrDefault(false)
+                }
+                if (localRaw != null && remoteRaw != null) {
+                    inputs.put(
+                        JSONObject()
+                            .put("item", item)
+                            .put("field", field)
+                            .put("local", localRaw)
+                            .put("remote", remoteRaw),
+                    )
+                }
+            }
+            appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                .edit()
+                .putString("conflict_inputs", inputs.toString())
+                .apply()
             for (index in 0 until records.length()) {
                 val raw = records.getString(index)
                 val wrapper = JSONObject(raw)
@@ -413,8 +442,73 @@ class SessionController(context: Context) {
                 .encodeToByteArray()
             client.putManifest(namespace, payload, null)
             loadItems()
-            SyncOutcome(records.length(), merged.optJSONArray("conflicts")?.length() ?: 0)
+            SyncOutcome(records.length(), conflicts.length())
         }
+
+    suspend fun resolveConflict(item: String, field: Int, keepRight: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val prefs = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                val inputs = JSONArray(prefs.getString("conflict_inputs", "[]") ?: "[]")
+                var selected: JSONObject? = null
+                val remaining = JSONArray()
+                for (index in 0 until inputs.length()) {
+                    val entry = inputs.getJSONObject(index)
+                    if (selected == null && entry.optString("item") == item && entry.optInt("field") == field) {
+                        selected = entry
+                    } else {
+                        remaining.put(entry)
+                    }
+                }
+                val entry = selected ?: error("conflict not found")
+                val resolved = resolveSyncConflict(
+                    entry.getString("local"),
+                    entry.getString("remote"),
+                    field.toUShort(),
+                    keepRight,
+                )
+                val wrapper = JSONObject(resolved)
+                val idHex = wrapper.getString("item")
+                val legacy = active.applySyncRecord(resolved.encodeToByteArray())
+                val id = ByteArray(16) { offset ->
+                    idHex.substring(offset * 2, offset * 2 + 2).toInt(16).toByte()
+                }
+                val ciphertext = active.encryptItem(id, legacy)
+                legacy.fill(0)
+                val previous = repo.get(id)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                prefs.edit().putString("conflict_inputs", remaining.toString()).apply()
+                loadItems()
+            }
+        }
+
+    suspend fun conflictItems(): List<Pair<String, Int>> =
+        JSONArray(
+            appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                .getString("conflict_inputs", "[]") ?: "[]",
+        ).let { inputs ->
+            (0 until inputs.length()).mapNotNull { index ->
+                val entry = inputs.getJSONObject(index)
+                val item = entry.optString("item")
+                val field = entry.optInt("field", -1)
+                if (item.isEmpty() || field < 0) null else item to field
+            }
+        }
+
+    suspend fun conflictCount(): Int =
+        JSONArray(
+            appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                .getString("conflict_inputs", "[]") ?: "[]",
+        ).length()
 
     suspend fun exportSyncRecordLength(): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {

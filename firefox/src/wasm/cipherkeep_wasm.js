@@ -1009,6 +1009,53 @@ let wasm_bindgen = (function(exports) {
     exports.migrate_legacy_item = migrate_legacy_item;
 
     /**
+     * Resolve one V2 field conflict by choosing left or right.
+     * @param {string} local
+     * @param {string} remote
+     * @param {number} field_id
+     * @param {boolean} keep_right
+     * @returns {string}
+     */
+    function resolve_sync_conflict(local, remote, field_id, keep_right) {
+        let deferred6_0;
+        let deferred6_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val3 = +field_id;
+            const val4 = +keep_right;
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passStringToWasm0(local, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(remote, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            wasm.resolve_sync_conflict(retptr, ptr0, len0, ptr1, len1, val3, val4);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr5 = r0;
+            var len5 = r1;
+            if (r3) {
+                ptr5 = 0; len5 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred6_0 = ptr5;
+            deferred6_1 = len5;
+            return getStringFromWasm0(ptr5, len5);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred6_0, deferred6_1, 1);
+        }
+    }
+    exports.resolve_sync_conflict = resolve_sync_conflict;
+
+    /**
      * Generate a TOTP code from an otpauth URI.
      *
      * # Errors

@@ -810,7 +810,13 @@ impl FfiVaultSession {
         self.with_state(|state| {
             state
                 .session
-                .export_sync_record(id, &ciphertext, ActorId::from_bytes(actor), created_at, counter_start)
+                .export_sync_record(
+                    id,
+                    &ciphertext,
+                    ActorId::from_bytes(actor),
+                    created_at,
+                    counter_start,
+                )
                 .map_err(FfiError::from)
         })
     }
@@ -1169,13 +1175,9 @@ mod tests {
     }
 }
 
-
 /// Merge V2 sync records, preserving wrapped item keys.
 #[uniffi::export]
-pub fn merge_sync_records_v2(
-    local: Vec<String>,
-    remote: Vec<String>,
-) -> Result<String, FfiError> {
+pub fn merge_sync_records_v2(local: Vec<String>, remote: Vec<String>) -> Result<String, FfiError> {
     use cipherkeep_core::item::ItemConflict;
     use cipherkeep_core::MergeEngine;
     use std::collections::BTreeMap;
@@ -1206,8 +1208,7 @@ pub fn merge_sync_records_v2(
     for raw in local {
         let (item, key, bytes) = parse(&raw)?;
         keys.insert(item, key);
-        engine
-            .insert_local(cipherkeep_core::item::ItemRecord::from_sync_json(&bytes)?)?;
+        engine.insert_local(cipherkeep_core::item::ItemRecord::from_sync_json(&bytes)?)?;
     }
     let mut conflicts = Vec::new();
     for raw in remote {
@@ -1228,14 +1229,64 @@ pub fn merge_sync_records_v2(
     let mut records = Vec::new();
     for raw in engine.records_for_sync()? {
         let record = cipherkeep_core::item::ItemRecord::from_sync_json(&raw)?;
-        let id = record.id().as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+        let id = record
+            .id()
+            .as_bytes()
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
         let key = keys.get(&id).ok_or(FfiError::CorruptData)?;
         let value: serde_json::Value =
             serde_json::from_slice(&raw).map_err(|_| FfiError::Internal)?;
-        records.push(
-            serde_json::json!({"v":2,"item":id,"key":key,"record":value}).to_string(),
-        );
+        records.push(serde_json::json!({"v":2,"item":id,"key":key,"record":value}).to_string());
     }
     serde_json::to_string(&serde_json::json!({"records":records,"conflicts":conflicts}))
         .map_err(|_| FfiError::Internal)
+}
+
+/// Resolve one V2 field conflict by choosing left or right.
+#[uniffi::export]
+pub fn resolve_sync_conflict(
+    local: String,
+    remote: String,
+    field_id: u16,
+    keep_right: bool,
+) -> Result<String, FfiError> {
+    use cipherkeep_core::item::ItemRecord;
+    fn split(raw: &str) -> Result<(serde_json::Value, ItemRecord, String), FfiError> {
+        let value: serde_json::Value =
+            serde_json::from_str(raw).map_err(|_| FfiError::CorruptData)?;
+        if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
+            return Err(FfiError::UnsupportedVersion);
+        }
+        let key = value
+            .get("key")
+            .and_then(serde_json::Value::as_str)
+            .ok_or(FfiError::CorruptData)?
+            .to_string();
+        let record = value.get("record").ok_or(FfiError::CorruptData)?;
+        let bytes = serde_json::to_vec(record).map_err(|_| FfiError::Internal)?;
+        Ok((value, ItemRecord::from_sync_json(&bytes)?, key))
+    }
+    let (local_value, local_record, local_key) = split(&local)?;
+    let (_remote_value, remote_record, _remote_key) = split(&remote)?;
+    let resolved = cipherkeep_core::MergeEngine::resolve_field_conflict(
+        &local_record,
+        &remote_record,
+        field_id,
+        keep_right,
+    )?;
+    let record: serde_json::Value =
+        serde_json::from_slice(&resolved.to_sync_json()?).map_err(|_| FfiError::Internal)?;
+    let item = local_value
+        .get("item")
+        .and_then(serde_json::Value::as_str)
+        .ok_or(FfiError::CorruptData)?;
+    serde_json::to_string(&serde_json::json!({
+        "v": 2,
+        "item": item,
+        "key": local_key,
+        "record": record,
+    }))
+    .map_err(|_| FfiError::Internal)
 }

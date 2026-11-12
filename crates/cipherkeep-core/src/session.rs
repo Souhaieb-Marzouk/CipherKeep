@@ -487,8 +487,8 @@ impl VaultSession {
             .state
             .as_ref()
             .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
-        let value: serde_json::Value =
-            serde_json::from_slice(sync_json).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+        let value: serde_json::Value = serde_json::from_slice(sync_json)
+            .map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
         if value.get("v").and_then(serde_json::Value::as_u64) != Some(2) {
             return Err(CoreError::new(ErrorCode::UnsupportedVersion));
         }
@@ -514,8 +514,12 @@ impl VaultSession {
             .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
         let item_key = vault.unwrap_item_key(&wrapped, item_id, ITEM_SCHEMA_VERSION)?;
         let record = crate::item::ItemRecord::from_sync_json(
-            &serde_json::to_vec(value.get("record").ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?)
-                .map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
+            &serde_json::to_vec(
+                value
+                    .get("record")
+                    .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?,
+            )
+            .map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
         )?;
         let mut legacy = serde_json::Map::new();
         legacy.insert("v".into(), serde_json::json!(1));
@@ -528,7 +532,9 @@ impl VaultSession {
             }),
         );
         for field in record.fields() {
-            let Some(envelope) = field.value() else { continue };
+            let Some(envelope) = field.value() else {
+                continue;
+            };
             if field.is_tombstone() {
                 continue;
             }
@@ -558,7 +564,10 @@ impl VaultSession {
                 legacy.insert(
                     key.into(),
                     serde_json::Value::Array(
-                        text.split(',').filter(|tag| !tag.is_empty()).map(|tag| serde_json::json!(tag)).collect(),
+                        text.split(',')
+                            .filter(|tag| !tag.is_empty())
+                            .map(|tag| serde_json::json!(tag))
+                            .collect(),
                     ),
                 );
             } else if key == "favorite" || key == "autofillAllowed" {
