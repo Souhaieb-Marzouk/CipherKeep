@@ -51,6 +51,7 @@ await build({
 await cp(resolve(root, "manifest.json"), resolve(dist, "manifest.json"));
 await cp(resolve(root, "src/popup/index.html"), resolve(dist, "popup.html"));
 await cp(resolve(root, "src/styles/tokens.css"), resolve(dist, "tokens.css"));
+await cp(resolve(root, "recipes"), resolve(dist, "recipes"), { recursive: true });
 await cp(resolve(root, "src/options/index.html"), resolve(dist, "options.html"));
 await cp(resolve(root, "src/icons"), resolve(dist, "icons"), { recursive: true });
 await cp(

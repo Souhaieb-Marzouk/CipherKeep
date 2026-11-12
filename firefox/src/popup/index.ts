@@ -237,7 +237,12 @@ element<HTMLButtonElement>("unlock").addEventListener("click", async () => {
   await refresh();
 });
 
-async function fillActiveTab(username: string, password: string): Promise<void> {
+async function fillActiveTab(
+  username: string,
+  password: string,
+  usernameSelector?: string,
+  passwordSelector?: string,
+): Promise<void> {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id) {
     showMessage("No active page to fill.");
@@ -245,7 +250,7 @@ async function fillActiveTab(username: string, password: string): Promise<void> 
   }
   const result = await browser.scripting.executeScript({
     target: { tabId: tab.id },
-    func: (user: string, pass: string) => {
+    func: (user: string, pass: string, userSelector?: string, passSelector?: string) => {
       const roots: ParentNode[] = [document];
       for (let index = 0; index < roots.length && index < 8; index += 1) {
         const root = roots[index]!;
@@ -271,7 +276,26 @@ async function fillActiveTab(username: string, password: string): Promise<void> 
       };
       let passwordField: HTMLInputElement | null = null;
       let usernameField: HTMLInputElement | null = null;
+      if (passSelector) {
+        for (const root of roots) {
+          const candidate = root.querySelector<HTMLInputElement>(passSelector);
+          if (candidate && visible(candidate)) {
+            passwordField = candidate;
+            break;
+          }
+        }
+      }
+      if (userSelector) {
+        for (const root of roots) {
+          const candidate = root.querySelector<HTMLInputElement>(userSelector);
+          if (candidate && visible(candidate)) {
+            usernameField = candidate;
+            break;
+          }
+        }
+      }
       for (const root of roots) {
+        if (usernameField !== null && passwordField !== null) break;
         for (const element of Array.from(root.querySelectorAll<HTMLInputElement>("input"))) {
           if (!visible(element)) {
             continue;
@@ -306,7 +330,7 @@ async function fillActiveTab(username: string, password: string): Promise<void> 
       set(passwordField, pass);
       return passwordField !== null;
     },
-    args: [username, password],
+    args: [username, password, usernameSelector, passwordSelector],
   });
   const filled = result.some((entry) => entry.result === true);
   showMessage(filled ? "Filled username/password. Review before submitting." : "No fillable password field found.", filled);
@@ -361,7 +385,12 @@ function renderItems(items: ItemView[]): void {
         if (credentials.kind !== "credentials") {
           return;
         }
-        await fillActiveTab(credentials.username, credentials.password);
+        await fillActiveTab(
+          credentials.username,
+          credentials.password,
+          credentials.usernameSelector,
+          credentials.passwordSelector,
+        );
       });
       row.append(" ", fill);
     }

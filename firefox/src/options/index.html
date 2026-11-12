@@ -42,12 +42,19 @@
       <h1>CipherKeep settings</h1>
       <p>Version 0.1.0 shell. No account, no telemetry, no remote scripts.</p>
 
-      <h2>Site access</h2>
+      <h2>Autofill</h2>
       <div class="card">
         <p>
-          This build holds <strong>no host permissions</strong> and does not inject into any page.
-          Per-origin autofill permission is intentionally deferred until autofill is implemented.
+          Autofill runs only after an explicit popup action, on an exact item origin that was
+          enabled in the item editor. It uses <code>activeTab</code>/<code>scripting</code>,
+          never submits a form and holds no broad host permissions.
         </p>
+      </div>
+
+      <h2>Recipe registry</h2>
+      <div class="card">
+        <p>The offline registry is signature-verified before use. Hash is SHA-256 of the canonical JSON.</p>
+        <pre id="recipeStatus" style="white-space:pre-wrap; color:var(--muted); font:12px/1.5 ui-monospace, monospace; margin:0"></pre>
       </div>
 
       <h2>Updates</h2>

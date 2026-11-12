@@ -8,6 +8,18 @@ function element<T extends HTMLElement>(id: string): T {
   return found as T;
 }
 
+async function showRecipes(): Promise<void> {
+  const output = element<HTMLPreElement>("recipeStatus");
+  const reply: Response = await browser.runtime.sendMessage({ type: "recipe-status" });
+  if (!reply.ok || reply.kind !== "recipes") {
+    output.textContent = reply.ok ? "Unexpected recipe response." : reply.error;
+    return;
+  }
+  output.textContent = `Version: ${reply.version}\nSHA-256: ${reply.hash || "not verified"}`;
+}
+
+void showRecipes();
+
 element<HTMLButtonElement>("checkUpdates").addEventListener("click", async () => {
   const output = element<HTMLPreElement>("updateResult");
   output.textContent = "Checking GitHub Releases…";

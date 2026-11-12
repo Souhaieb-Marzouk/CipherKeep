@@ -2,12 +2,22 @@ import { isRequest, type ItemView, type Request, type Response, type SearchHit }
 import { CiphertextStore } from "../shared/ciphertext-store";
 import { backoffSeconds, remainingSeconds } from "../shared/backoff";
 import { checkForUpdates } from "./updates";
+import { recipeForOrigin, verifyRegistry, type RecipeRegistry } from "../shared/recipes";
+import { RECIPE_PUBLIC_KEY } from "../shared/recipe-key";
 
 let session: WasmVaultSession | null = null;
 let vaultBlob: string | null = null;
 let shares: string[] = [];
 let searchIndex: WasmSearchIndex | null = null;
-const autofillTokens = new Map<string, { username: string; password: string; expiresAt: number }>();
+let recipeRegistry: RecipeRegistry | null = null;
+let recipeHash = "";
+const autofillTokens = new Map<string, {
+  username: string;
+  password: string;
+  usernameSelector?: string;
+  passwordSelector?: string;
+  expiresAt: number;
+}>();
 let wasmReady: Promise<unknown> | null = null;
 const LOCK_ALARM = "cipherkeep-auto-lock";
 const itemStore = new CiphertextStore();
@@ -56,6 +66,25 @@ function base64ToBytes(encoded: string): Uint8Array {
     bytes[i] = binary.charCodeAt(i);
   }
   return bytes;
+}
+
+async function loadRecipes(): Promise<void> {
+  try {
+    const json = await (await fetch(browser.runtime.getURL("recipes/registry.json"))).text();
+    const signature = await (await fetch(browser.runtime.getURL("recipes/registry.sig"))).text();
+    const registry = await verifyRegistry(json, signature.trim(), RECIPE_PUBLIC_KEY);
+    const stored = await browser.storage.local.get("recipeVersion");
+    const current = typeof stored.recipeVersion === "number" ? stored.recipeVersion : 0;
+    if (registry.version < current) {
+      return;
+    }
+    recipeRegistry = registry;
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(json)));
+    recipeHash = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    await browser.storage.local.set({ recipeVersion: registry.version });
+  } catch {
+    // Invalid bundles fail closed; autofill continues with heuristics only.
+  }
 }
 
 async function load(): Promise<void> {
@@ -395,6 +424,13 @@ async function handle(request: Request): Promise<Response> {
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
       }
+      case "recipe-status":
+        return {
+          ok: true,
+          kind: "recipes",
+          version: recipeRegistry?.version ?? 0,
+          hash: recipeHash,
+        };
       case "inspect-autofill": {
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
         if (!tab?.url) {
@@ -432,10 +468,15 @@ async function handle(request: Request): Promise<Response> {
         if (active.is_locked()) {
           return { ok: false, error: "Vault is locked." };
         }
+        const recipe = recipeRegistry === null ? undefined : recipeForOrigin(recipeRegistry, tabHost);
         const token = crypto.randomUUID();
         autofillTokens.set(token, {
           username: item.username,
           password: item.password,
+          ...(recipe === undefined ? {} : {
+            usernameSelector: recipe.usernameSelector,
+            passwordSelector: recipe.passwordSelector,
+          }),
           expiresAt: Date.now() + 5_000,
         });
         return { ok: true, kind: "autofill-token", token };
@@ -452,6 +493,10 @@ async function handle(request: Request): Promise<Response> {
           kind: "credentials",
           username: entry.username,
           password: entry.password,
+          ...(entry.usernameSelector === undefined ? {} : {
+            usernameSelector: entry.usernameSelector,
+            passwordSelector: entry.passwordSelector,
+          }),
         };
       }
       case "import-backup": {
@@ -647,7 +692,7 @@ async function handle(request: Request): Promise<Response> {
   }
 }
 
-void load().catch(() => {
+void Promise.all([load(), loadRecipes()]).catch(() => {
   // Status reports locked; no secret is logged from this path.
 });
 

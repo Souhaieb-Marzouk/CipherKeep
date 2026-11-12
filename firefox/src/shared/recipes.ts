@@ -46,7 +46,6 @@ function validSelector(selector: string): boolean {
     selector.length <= 512 &&
     !/[\u0000-\u001f]/.test(selector) &&
     !selector.toLowerCase().includes("javascript:") &&
-    !selector.includes("eval(") &&
     !selector.includes("innerHTML")
   );
 }
