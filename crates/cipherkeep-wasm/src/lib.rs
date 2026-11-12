@@ -15,11 +15,12 @@ use wasm_bindgen::prelude::*;
 use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
-    combine_2_of_3, derive_master_key, export_backup, import_backup, generate_passphrase as core_generate_passphrase,
-    generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope, ItemId,
-    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SearchDocument,
-    SearchIndex, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
-    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    combine_2_of_3, derive_master_key, export_backup,
+    generate_passphrase as core_generate_passphrase, generate_password as core_generate_password,
+    import_backup, parse_otpauth_uri, split_2_of_3, Envelope, ItemId, ItemKey, KdfParams,
+    PassphrasePolicy, PasswordPolicy, RecoveryShare, SearchDocument, SearchIndex, SecretBytes,
+    VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB,
+    DEFAULT_PARALLELISM,
 };
 
 #[derive(Serialize)]

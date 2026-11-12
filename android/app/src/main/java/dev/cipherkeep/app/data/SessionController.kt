@@ -261,6 +261,7 @@ class SessionController(context: Context) {
                             }
                         } ?: emptyList(),
                         favorite = json.optBoolean("favorite"),
+                        autofillAllowed = json.optBoolean("autofillAllowed"),
                         updatedAt = entity.updatedAt,
                     )
                 }.getOrNull()
@@ -277,6 +278,7 @@ class SessionController(context: Context) {
         folder: String = "",
         tags: String = "",
         favorite: Boolean = false,
+        autofillAllowed: Boolean = false,
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -299,6 +301,7 @@ class SessionController(context: Context) {
                         ),
                     )
                     .put("favorite", favorite)
+                    .put("autofillAllowed", autofillAllowed)
                     .toString()
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)
@@ -360,7 +363,8 @@ class SessionController(context: Context) {
                         .put("notes", item.notes)
                         .put("folder", item.folder)
                         .put("tags", JSONArray(item.tags))
-                        .put("favorite", item.favorite),
+                        .put("favorite", item.favorite)
+                        .put("autofillAllowed", item.autofillAllowed),
                 )
             }
             val payload = JSONObject().put("v", 1).put("items", array).toString().encodeToByteArray()
@@ -377,9 +381,27 @@ class SessionController(context: Context) {
                 val json = JSONObject(plaintext.decodeToString())
                 plaintext.fill(0)
                 val array = json.getJSONArray("items")
+                if (array.length() > 5_000) {
+                    error("backup item limit exceeded")
+                }
                 var imported = 0
                 for (index in 0 until array.length()) {
                     val item = array.getJSONObject(index)
+                    val type = item.optString("type")
+                    if (type != "login" && type != "totp") {
+                        continue
+                    }
+                    val itemTitle = item.optString("title")
+                    if (itemTitle.isBlank() || itemTitle.length > 512 ||
+                        item.optString("username").length > 4_096 ||
+                        item.optString("password").length > 65_536 ||
+                        item.optString("url").length > 2_048 ||
+                        item.optString("notes").length > 65_536 ||
+                        item.optString("folder").length > 64 ||
+                        item.optString("totpUri").length > 4_096
+                    ) {
+                        continue
+                    }
                     val title = item.optString("title")
                     if (title.isBlank()) {
                         continue
@@ -399,6 +421,7 @@ class SessionController(context: Context) {
                             item.optString("folder"),
                             tags,
                             item.optBoolean("favorite"),
+                            item.optBoolean("autofillAllowed"),
                         ).getOrThrow()
                     }
                     imported += 1
@@ -440,8 +463,13 @@ class SessionController(context: Context) {
                 val names = readFolderNames(active, repo).toMutableSet()
                 names.remove(oldName)
                 names.add(target)
-                writeFolderNames(active, repo, names)
-                rewriteFolder(oldName, target)
+                val changed = rewriteFolder(oldName, target)
+                try {
+                    writeFolderNames(active, repo, names)
+                } catch (error: Throwable) {
+                    restoreItems(repo, changed)
+                    throw error
+                }
                 loadItems()
             }
         }
@@ -452,8 +480,13 @@ class SessionController(context: Context) {
             val repo = repository ?: error("storage is unavailable")
             val names = readFolderNames(active, repo).toMutableSet()
             names.remove(name)
-            writeFolderNames(active, repo, names)
-            rewriteFolder(name, "")
+            val changed = rewriteFolder(name, "")
+            try {
+                writeFolderNames(active, repo, names)
+            } catch (error: Throwable) {
+                restoreItems(repo, changed)
+                throw error
+            }
             loadItems()
         }
     }
@@ -493,30 +526,66 @@ class SessionController(context: Context) {
         )
     }
 
-    private suspend fun rewriteFolder(oldName: String, newName: String) {
+    private suspend fun rewriteFolder(
+        oldName: String,
+        newName: String,
+    ): List<dev.cipherkeep.app.data.db.ItemEntity> {
         val active = session ?: error("vault is locked")
         val repo = repository ?: error("storage is unavailable")
-        repo.list().forEach { entity ->
-            if (entity.tombstone || entity.itemId.contentEquals(FOLDER_META_ID)) {
-                return@forEach
+        val changed = mutableListOf<dev.cipherkeep.app.data.db.ItemEntity>()
+        try {
+            repo.list().forEach { entity ->
+                if (entity.tombstone || entity.itemId.contentEquals(FOLDER_META_ID)) {
+                    return@forEach
+                }
+                val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)
+                val json = JSONObject(plaintext.decodeToString())
+                plaintext.fill(0)
+                if (json.optString("folder") != oldName) {
+                    return@forEach
+                }
+                json.put("folder", newName)
+                val payload = json.toString().encodeToByteArray()
+                val ciphertext = active.encryptItem(entity.itemId, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = entity.itemId,
+                    ciphertext = ciphertext,
+                    lamport = maxOf(entity.lamport + 1, 2),
+                    tombstone = false,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                changed.add(entity)
             }
-            val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)
-            val json = JSONObject(plaintext.decodeToString())
-            plaintext.fill(0)
-            if (json.optString("folder") != oldName) {
-                return@forEach
+        } catch (error: Throwable) {
+            changed.forEach { original ->
+                repo.save(
+                    itemId = original.itemId,
+                    ciphertext = original.ciphertext,
+                    lamport = original.lamport,
+                    tombstone = original.tombstone,
+                    schemaVersion = original.schemaVersion,
+                    updatedAt = original.updatedAt,
+                )
             }
-            json.put("folder", newName)
-            val payload = json.toString().encodeToByteArray()
-            val ciphertext = active.encryptItem(entity.itemId, payload)
-            payload.fill(0)
+            throw error
+        }
+        return changed
+    }
+
+    private suspend fun restoreItems(
+        repo: VaultRepository,
+        items: List<dev.cipherkeep.app.data.db.ItemEntity>,
+    ) {
+        items.forEach { original ->
             repo.save(
-                itemId = entity.itemId,
-                ciphertext = ciphertext,
-                lamport = maxOf(entity.lamport + 1, 2),
-                tombstone = false,
-                schemaVersion = entity.schemaVersion,
-                updatedAt = System.currentTimeMillis(),
+                itemId = original.itemId,
+                ciphertext = original.ciphertext,
+                lamport = original.lamport,
+                tombstone = original.tombstone,
+                schemaVersion = original.schemaVersion,
+                updatedAt = original.updatedAt,
             )
         }
     }
@@ -531,6 +600,7 @@ class SessionController(context: Context) {
         folder: String,
         tags: String,
         favorite: Boolean,
+        autofillAllowed: Boolean = item.autofillAllowed,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             require(title.isNotBlank())
@@ -552,6 +622,7 @@ class SessionController(context: Context) {
                     JSONArray(tags.split(',').map(String::trim).filter(String::isNotEmpty)),
                 )
                 .put("favorite", favorite)
+                .put("autofillAllowed", autofillAllowed)
                 .toString()
                 .encodeToByteArray()
             val ciphertext = active.encryptItem(item.id, payload)

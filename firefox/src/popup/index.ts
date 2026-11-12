@@ -27,6 +27,14 @@ let selectedItem: ItemView | null = null;
 function closeDetail(): void {
   selectedItem = null;
   element<HTMLElement>("detailPanel").hidden = true;
+  for (const id of [
+    "detailTitleInput", "detailUsername", "detailPassword", "detailUrl",
+    "detailNotes", "detailFolder", "detailTags",
+  ]) {
+    element<HTMLInputElement | HTMLTextAreaElement>(id).value = "";
+  }
+  element<HTMLInputElement>("detailFavorite").checked = false;
+  element<HTMLInputElement>("detailAutofill").checked = false;
   element<HTMLInputElement>("detailPassword").type = "password";
 }
 
@@ -42,6 +50,7 @@ function openDetail(item: ItemView): void {
   element<HTMLInputElement>("detailFolder").value = item.folder;
   element<HTMLInputElement>("detailTags").value = item.tags.join(", ");
   element<HTMLInputElement>("detailFavorite").checked = item.favorite;
+  element<HTMLInputElement>("detailAutofill").checked = item.autofillAllowed;
 }
 
 element<HTMLButtonElement>("closeDetail").addEventListener("click", closeDetail);
@@ -87,6 +96,7 @@ element<HTMLButtonElement>("saveDetail").addEventListener("click", async () => {
     folder: element<HTMLInputElement>("detailFolder").value.trim(),
     tags: element<HTMLInputElement>("detailTags").value.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0),
     favorite: element<HTMLInputElement>("detailFavorite").checked,
+    autofillAllowed: element<HTMLInputElement>("detailAutofill").checked,
   });
   if (!reply.ok) {
     showMessage(reply.error);
@@ -245,8 +255,20 @@ async function fillActiveTab(username: string, password: string): Promise<void> 
           }
         }
       }
-      const visible = (element: HTMLInputElement): boolean =>
-        element.offsetParent !== null && !element.disabled && !element.readOnly;
+      const visible = (element: HTMLInputElement): boolean => {
+        if (element.offsetParent === null || element.disabled || element.readOnly) {
+          return false;
+        }
+        if (element.getAttribute("aria-hidden") === "true") {
+          return false;
+        }
+        const style = window.getComputedStyle(element);
+        if (style.display === "none" || style.visibility !== "visible" || Number(style.opacity) < 0.1) {
+          return false;
+        }
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
       let passwordField: HTMLInputElement | null = null;
       let usernameField: HTMLInputElement | null = null;
       for (const root of roots) {
@@ -328,10 +350,18 @@ function renderItems(items: ItemView[]): void {
           showMessage(reply.error);
           return;
         }
-        if (reply.kind !== "credentials") {
+        if (reply.kind !== "autofill-token") {
           return;
         }
-        await fillActiveTab(reply.username, reply.password);
+        const credentials = await send({ type: "consume-autofill", token: reply.token });
+        if (!credentials.ok) {
+          showMessage(credentials.error);
+          return;
+        }
+        if (credentials.kind !== "credentials") {
+          return;
+        }
+        await fillActiveTab(credentials.username, credentials.password);
       });
       row.append(" ", fill);
     }
@@ -671,6 +701,7 @@ element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
   const folder = element<HTMLInputElement>("itemFolder");
   const tags = element<HTMLInputElement>("itemTags");
   const favorite = element<HTMLInputElement>("itemFavorite");
+  const autofillAllowed = element<HTMLInputElement>("itemAutofill");
   const password = element<HTMLInputElement>("itemPassword");
   if (title.value.trim().length === 0 || password.value.length === 0) {
     showMessage("Title and password are required.");
@@ -685,6 +716,7 @@ element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
     folder: folder.value.trim(),
     tags: tags.value.split(",").map((tag) => tag.trim()).filter((tag) => tag.length > 0),
     favorite: favorite.checked,
+    autofillAllowed: autofillAllowed.checked,
     password: password.value,
   });
   title.value = "";
@@ -694,6 +726,7 @@ element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
   folder.value = "";
   tags.value = "";
   favorite.checked = false;
+  autofillAllowed.checked = false;
   password.value = "";
   if (!reply.ok) {
     showMessage(reply.error);

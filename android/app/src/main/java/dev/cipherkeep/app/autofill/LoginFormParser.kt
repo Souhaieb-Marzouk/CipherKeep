@@ -1,6 +1,7 @@
 package dev.cipherkeep.app.autofill
 
 import android.app.assist.AssistStructure
+import android.os.Build
 import android.view.View
 import android.view.autofill.AutofillId
 
@@ -29,6 +30,9 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
     val packageName = structure.activityComponent?.packageName
     for (index in 0 until structure.windowNodeCount) {
         val root = structure.getWindowNodeAt(index).rootViewNode
+        if (domain.isNullOrBlank() && !root.webDomain.isNullOrBlank()) {
+            domain = root.webDomain
+        }
         walk(root) { node ->
             val hints = node.autofillHints?.joinToString(" ").orEmpty().lowercase()
             val identity = "${node.idEntry.orEmpty()} ${node.hint.orEmpty()}".lowercase()
@@ -43,15 +47,17 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
                     identity.contains("email") ||
                     identity.contains("login")
                 )
-            if (node.autofillId != null && node.visibility == View.VISIBLE && node.isEnabled) {
+            val autofillable = Build.VERSION.SDK_INT < 28 ||
+                (node.importantForAutofill != View.IMPORTANT_FOR_AUTOFILL_NO &&
+                    node.importantForAutofill != View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS)
+            if (node.autofillId != null && autofillable &&
+                node.visibility == View.VISIBLE && node.isEnabled
+            ) {
                 if (password && passwordId == null) {
                     passwordId = node.autofillId
                 } else if (username && usernameId == null) {
                     usernameId = node.autofillId
                 }
-            }
-            if (domain.isNullOrBlank() && !node.webDomain.isNullOrBlank()) {
-                domain = node.webDomain
             }
         }
     }

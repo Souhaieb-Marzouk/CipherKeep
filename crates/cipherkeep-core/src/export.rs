@@ -19,13 +19,15 @@ use crate::secret::SecretBytes;
 /// Export file magic.
 pub const EXPORT_MAGIC: [u8; 8] = *b"CKEXP1\0\0";
 /// Current export format version.
-pub const EXPORT_VERSION: u16 = 1;
+pub const EXPORT_VERSION: u16 = 2;
 /// Fixed header length before the encrypted envelope.
 pub const EXPORT_HEADER_LEN: usize = 8 + 2 + 4 + 4 + 1 + 16;
 /// Maximum accepted export size.
 pub const MAX_EXPORT_BYTES: usize = 24 * 1024 * 1024;
 /// Minimum separate export-password length.
 pub const MIN_EXPORT_PASSWORD_LEN: usize = 12;
+/// Plaintext is padded to this block size before encryption.
+pub const EXPORT_PAD_BLOCK: usize = 4 * 1024;
 
 /// Encrypt portable item JSON under a separate export password.
 ///
@@ -55,7 +57,20 @@ pub fn export_backup(items_json: &[u8], export_password: &str) -> Result<Vec<u8>
     let key = derive_master_key(&password, &params)?;
     let header = encode_header(&params);
     let aad = Aad::export(&header);
-    let plaintext = Zeroizing::new(items_json.to_vec());
+    let length =
+        u32::try_from(items_json.len()).map_err(|_| CoreError::new(ErrorCode::LimitExceeded))?;
+    let unpadded = 4usize
+        .checked_add(items_json.len())
+        .ok_or_else(|| CoreError::new(ErrorCode::LimitExceeded))?;
+    let padded_len = unpadded
+        .checked_add(EXPORT_PAD_BLOCK - 1)
+        .ok_or_else(|| CoreError::new(ErrorCode::LimitExceeded))?
+        / EXPORT_PAD_BLOCK
+        * EXPORT_PAD_BLOCK;
+    let mut padded = Zeroizing::new(vec![0u8; padded_len]);
+    padded[..4].copy_from_slice(&length.to_be_bytes());
+    padded[4..4 + items_json.len()].copy_from_slice(items_json);
+    let plaintext = padded;
     let envelope = Envelope::seal(&key, &aad, &plaintext)?;
     let mut output = header;
     output.extend_from_slice(&envelope.encode());
@@ -73,9 +88,7 @@ pub fn import_backup(export_bytes: &[u8], export_password: &str) -> Result<Secre
     if export_bytes.len() < EXPORT_HEADER_LEN || export_bytes.len() > MAX_EXPORT_BYTES {
         return Err(CoreError::new(ErrorCode::CorruptData));
     }
-    if export_password.len() < MIN_EXPORT_PASSWORD_LEN
-        || export_password.len() > 1_024
-    {
+    if export_password.len() < MIN_EXPORT_PASSWORD_LEN || export_password.len() > 1_024 {
         return Err(CoreError::new(ErrorCode::PolicyRejected));
     }
     let header = &export_bytes[..EXPORT_HEADER_LEN];
@@ -84,7 +97,22 @@ pub fn import_backup(export_bytes: &[u8], export_password: &str) -> Result<Secre
     let password = SecretBytes::from_slice(export_password.as_bytes());
     let key = derive_master_key(&password, &params)?;
     let aad = Aad::export(header);
-    envelope.open(&key, &aad)
+    let plaintext = envelope.open(&key, &aad)?;
+    if plaintext.len() < 4 {
+        return Err(CoreError::new(ErrorCode::CorruptData));
+    }
+    let length = u32::from_be_bytes([
+        plaintext.expose_secret()[0],
+        plaintext.expose_secret()[1],
+        plaintext.expose_secret()[2],
+        plaintext.expose_secret()[3],
+    ]) as usize;
+    if length > plaintext.len() - 4 {
+        return Err(CoreError::new(ErrorCode::CorruptData));
+    }
+    Ok(SecretBytes::from_slice(
+        &plaintext.expose_secret()[4..4 + length],
+    ))
 }
 
 fn encode_header(params: &KdfParams) -> Vec<u8> {
@@ -118,7 +146,8 @@ fn decode_header(header: &[u8]) -> Result<KdfParams> {
 mod tests {
     use super::*;
 
-    const ITEMS: &[u8] = br#"{"items":[{"title":"Example","username":"alice","password":"secret"}]}"#;
+    const ITEMS: &[u8] =
+        br#"{"items":[{"title":"Example","username":"alice","password":"secret"}]}"#;
 
     #[test]
     fn export_round_trip_returns_items() {
@@ -159,7 +188,7 @@ mod tests {
     #[test]
     fn future_version_is_refused_before_decryption() {
         let mut bytes = export_backup(ITEMS, "correct horse battery staple").expect("export");
-        bytes[9] = 2;
+        bytes[9] = 3;
         assert_eq!(
             import_backup(&bytes, "correct horse battery staple")
                 .unwrap_err()

@@ -19,6 +19,7 @@ export type Request =
       folder?: string;
       tags?: string[];
       favorite?: boolean;
+      autofillAllowed?: boolean;
     }
   | { type: "delete-item"; id: string }
   | {
@@ -40,6 +41,7 @@ export type Request =
   | { type: "export-backup"; password: string }
   | { type: "import-backup"; password: string; data: string }
   | { type: "autofill-request"; id: string }
+  | { type: "consume-autofill"; token: string }
   | {
       type: "update-item";
       id: string;
@@ -51,6 +53,7 @@ export type Request =
       folder: string;
       tags: string[];
       favorite: boolean;
+      autofillAllowed: boolean;
     };
 
 export interface SearchHit {
@@ -70,6 +73,7 @@ export interface ItemView {
   folder: string;
   tags: string[];
   favorite: boolean;
+  autofillAllowed: boolean;
   updatedAt: number;
 }
 
@@ -94,6 +98,7 @@ export type Response =
   | { ok: true; kind: "totp"; code: string; secondsRemaining: number }
   | { ok: true; kind: "search"; hits: SearchHit[] }
   | { ok: true; kind: "backup"; data: string }
+  | { ok: true; kind: "autofill-token"; token: string }
   | { ok: true; kind: "credentials"; username: string; password: string }
   | { ok: false; error: string; code?: number };
 
@@ -126,6 +131,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "export-backup",
       "import-backup",
       "autofill-request",
+      "consume-autofill",
       "update-item",
     ].includes(value)
   );
@@ -172,7 +178,8 @@ export function isRequest(value: unknown): value is Request {
             request.tags.every(
               (tag) => typeof tag === "string" && tag.length > 0 && tag.length <= 64,
             ))) &&
-        (request.favorite === undefined || typeof request.favorite === "boolean")
+        (request.favorite === undefined || typeof request.favorite === "boolean") &&
+        (request.autofillAllowed === undefined || typeof request.autofillAllowed === "boolean")
       );
     case "delete-item":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
@@ -233,6 +240,8 @@ export function isRequest(value: unknown): value is Request {
         Array.isArray(request.tags) &&
         typeof request.favorite === "boolean"
       );
+    case "consume-autofill":
+      return typeof request.token === "string" && request.token.length <= 128;
     case "autofill-request":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
     case "import-backup":

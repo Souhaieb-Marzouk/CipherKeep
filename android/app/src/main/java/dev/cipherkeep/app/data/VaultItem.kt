@@ -13,5 +13,6 @@ data class VaultItem(
     val folder: String = "",
     val tags: List<String> = emptyList(),
     val favorite: Boolean = false,
+    val autofillAllowed: Boolean = false,
     val updatedAt: Long = 0,
 )

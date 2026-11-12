@@ -7,6 +7,7 @@ let session: WasmVaultSession | null = null;
 let vaultBlob: string | null = null;
 let shares: string[] = [];
 let searchIndex: WasmSearchIndex | null = null;
+const autofillTokens = new Map<string, { username: string; password: string; expiresAt: number }>();
 let wasmReady: Promise<unknown> | null = null;
 const LOCK_ALARM = "cipherkeep-auto-lock";
 const itemStore = new CiphertextStore();
@@ -97,6 +98,7 @@ async function lockSession(): Promise<void> {
   shares = [];
   searchIndex?.clear();
   searchIndex = null;
+  autofillTokens.clear();
   await browser.alarms.clear(LOCK_ALARM);
   try {
     await browser.runtime.sendMessage({ type: "locked" });
@@ -177,6 +179,7 @@ async function listItems(): Promise<ItemView[]> {
         folder?: unknown;
         tags?: unknown;
         favorite?: unknown;
+        autofillAllowed?: unknown;
       };
       items.push({
         id: record.id,
@@ -191,6 +194,7 @@ async function listItems(): Promise<ItemView[]> {
           ? json.tags.filter((tag): tag is string => typeof tag === "string")
           : [],
         favorite: json.favorite === true,
+        autofillAllowed: json.autofillAllowed === true,
         updatedAt: record.updatedAt,
       });
     } catch {
@@ -383,6 +387,7 @@ async function handle(request: Request): Promise<Response> {
           folder: request.folder,
           tags: request.tags,
           favorite: request.favorite,
+          autofillAllowed: request.autofillAllowed,
         });
         const payload = new TextEncoder().encode(JSON.stringify(json));
         const ciphertext = active.encrypt_item(hexToBytes(record.id), payload);
@@ -399,8 +404,8 @@ async function handle(request: Request): Promise<Response> {
         const tabHost = new URL(tab.url).hostname;
         const items = await listItems();
         const item = items.find((candidate) => candidate.id === request.id);
-        if (!item || item.url.length === 0) {
-          return { ok: false, error: "Item is not available for this page." };
+        if (!item || item.url.length === 0 || !item.autofillAllowed) {
+          return { ok: false, error: "Autofill is not enabled for this item." };
         }
         const itemHost = new URL(item.url).hostname;
         if (itemHost.toLowerCase() !== tabHost.toLowerCase()) {
@@ -409,11 +414,26 @@ async function handle(request: Request): Promise<Response> {
         if (active.is_locked()) {
           return { ok: false, error: "Vault is locked." };
         }
+        const token = crypto.randomUUID();
+        autofillTokens.set(token, {
+          username: item.username,
+          password: item.password,
+          expiresAt: Date.now() + 5_000,
+        });
+        return { ok: true, kind: "autofill-token", token };
+      }
+      case "consume-autofill": {
+        requireSession();
+        const entry = autofillTokens.get(request.token);
+        autofillTokens.delete(request.token);
+        if (!entry || entry.expiresAt < Date.now()) {
+          return { ok: false, error: "Autofill token expired." };
+        }
         return {
           ok: true,
           kind: "credentials",
-          username: item.username,
-          password: item.password,
+          username: entry.username,
+          password: entry.password,
         };
       }
       case "import-backup": {
@@ -423,17 +443,48 @@ async function handle(request: Request): Promise<Response> {
         const json = JSON.parse(new TextDecoder().decode(plaintext)) as { items?: unknown };
         plaintext.fill(0);
         const items = Array.isArray(json.items) ? json.items : [];
+        if (items.length > 5_000) {
+          return { ok: false, error: "Backup item limit exceeded." };
+        }
         let imported = 0;
         for (const raw of items) {
           if (typeof raw !== "object" || raw === null) {
             continue;
           }
           const item = raw as Record<string, unknown>;
-          if (typeof item.title !== "string" || item.title.length === 0) {
+          const text = (value: unknown, max: number): string | null =>
+            typeof value === "string" && value.length <= max ? value : null;
+          const title = text(item.title, 512);
+          const type = item.type === "totp" ? "totp" : item.type === "login" ? "login" : null;
+          const username = text(item.username, 4_096);
+          const password = text(item.password, 65_536);
+          const url = text(item.url, 2_048);
+          const notes = text(item.notes, 65_536);
+          const folder = text(item.folder, 64);
+          const totpUri = text(item.totpUri, 4_096);
+          const tags = Array.isArray(item.tags)
+            ? item.tags.filter((tag): tag is string => typeof tag === "string" && tag.length <= 64).slice(0, 64)
+            : [];
+          if (!title || title.length === 0 || !type || username === null || password === null ||
+              url === null || notes === null || folder === null || totpUri === null) {
             continue;
           }
+          if (type === "totp") {
+            try {
+              totp_code(totpUri ?? "", Math.floor(Date.now() / 1000));
+            } catch {
+              continue;
+            }
+          }
           const idBytes = crypto.getRandomValues(new Uint8Array(16));
-          const payload = new TextEncoder().encode(JSON.stringify({ v: 1, ...item }));
+          const payload = new TextEncoder().encode(
+            JSON.stringify({
+              v: 1, type, title, username, password, url, notes, folder, tags,
+              favorite: item.favorite === true,
+              autofillAllowed: item.autofillAllowed === true,
+              totpUri: type === "totp" ? totpUri : "",
+            }),
+          );
           const ciphertext = active.encrypt_item(idBytes, payload);
           payload.fill(0);
           await itemStore.put({ id: bytesToHex(idBytes), ciphertext, updatedAt: Date.now() });
@@ -459,13 +510,13 @@ async function handle(request: Request): Promise<Response> {
         if (newName.length > 0) {
           updatedNames.push(newName);
         }
-        await writeFolderNames(active, updatedNames);
         const records = await itemStore.list();
-        for (const record of records) {
-          if (record.id === FOLDER_META_ID) {
-            continue;
-          }
-          try {
+        const changed: typeof records = [];
+        try {
+          for (const record of records) {
+            if (record.id === FOLDER_META_ID) {
+              continue;
+            }
             const plaintext = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
             const json = JSON.parse(new TextDecoder().decode(plaintext)) as {
               folder?: unknown;
@@ -484,9 +535,14 @@ async function handle(request: Request): Promise<Response> {
               ciphertext,
               updatedAt: Date.now(),
             });
-          } catch {
-            // A record from another vault is skipped.
+            changed.push(record);
           }
+          await writeFolderNames(active, updatedNames);
+        } catch (error) {
+          for (const original of changed) {
+            await itemStore.put(original);
+          }
+          throw error;
         }
         return { ok: true, kind: "items", items: await listItems() };
       }

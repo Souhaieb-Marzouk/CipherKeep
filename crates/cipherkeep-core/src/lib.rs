@@ -48,14 +48,14 @@ pub use envelope::{
     SUITE_XCHACHA20_POLY1305, TAG_LEN,
 };
 pub use error::{CoreError, ErrorCode, Result};
+pub use export::{
+    export_backup, import_backup, EXPORT_HEADER_LEN, EXPORT_MAGIC, EXPORT_VERSION,
+    MAX_EXPORT_BYTES, MIN_EXPORT_PASSWORD_LEN,
+};
 pub use generator::{
     generate_passphrase, generate_password, wordlist_is_valid, wordlist_len, GeneratedSecret,
     PassphrasePolicy, PasswordPolicy, StrengthLabel, EFF_WORDLIST_LEN, MAX_PASSPHRASE_WORDS,
     MAX_PASSWORD_LEN, MIN_PASSPHRASE_WORDS, MIN_PASSWORD_LEN,
-};
-pub use export::{
-    export_backup, import_backup, EXPORT_HEADER_LEN, EXPORT_MAGIC, EXPORT_VERSION, MAX_EXPORT_BYTES,
-    MIN_EXPORT_PASSWORD_LEN,
 };
 pub use header::{
     VaultHeader, AAD_PREFIX_LEN, MAX_KEYRING_CIPHERTEXT_LEN, MIN_HEADER_LEN, NONCE_LEN,

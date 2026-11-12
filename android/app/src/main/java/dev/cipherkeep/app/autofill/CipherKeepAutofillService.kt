@@ -30,7 +30,7 @@ class CipherKeepAutofillService : AutofillService() {
             return
         }
         val items = AutofillRegistry.unlockedItems()
-            .filter { originMatches(it.url, form.webDomain) && it.password.isNotEmpty() }
+            .filter { it.autofillAllowed && originMatches(it.url, form.webDomain) && it.password.isNotEmpty() }
             .take(5)
         if (items.isEmpty()) {
             callback.onSuccess(null)
@@ -48,6 +48,11 @@ class CipherKeepAutofillService : AutofillService() {
                 setValue(form.passwordId, AutofillValue.forText(item.password), presentation)
             }.build()
             response.addDataset(dataset)
+        }
+        // Re-check the lock state immediately before releasing plaintext datasets.
+        if (!AutofillRegistry.isUnlocked()) {
+            callback.onSuccess(null)
+            return
         }
         callback.onSuccess(response.build())
     }

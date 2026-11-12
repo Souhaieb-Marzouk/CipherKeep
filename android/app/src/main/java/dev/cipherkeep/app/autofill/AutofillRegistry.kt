@@ -9,6 +9,9 @@ object AutofillRegistry {
     @Volatile
     var controller: SessionController? = null
 
+    fun isUnlocked(): Boolean =
+        controller?.state is VaultUiState.Unlocked
+
     fun unlockedItems(): List<VaultItem> {
         val active = controller ?: return emptyList()
         return if (active.state is VaultUiState.Unlocked) active.items else emptyList()

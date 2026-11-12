@@ -1573,8 +1573,14 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
     var folder by remember { mutableStateOf(item.folder) }
     var tags by remember { mutableStateOf(item.tags.joinToString(",")) }
     var favorite by remember { mutableStateOf(item.favorite) }
+    var autofillAllowed by remember { mutableStateOf(item.autofillAllowed) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    DisposableEffect(Unit) {
+        val reset = { password = "" }
+        SecretInputRegistry.register(reset)
+        onDispose { SecretInputRegistry.unregister(reset) }
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit item") },
@@ -1600,6 +1606,13 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
                     Checkbox(favorite, onCheckedChange = { favorite = it })
                     Text("Favorite")
                 }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable { autofillAllowed = !autofillAllowed },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Checkbox(autofillAllowed, onCheckedChange = { autofillAllowed = it })
+                    Text("Allow autofill for this item's exact origin")
+                }
                 if (error != null) {
                     Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
                 }
@@ -1614,7 +1627,7 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
                 scope.launch {
                     controller.updateItem(
                         item, title.trim(), username.trim(), password, url.trim(), notes,
-                        folder.trim(), tags, favorite,
+                        folder.trim(), tags, favorite, autofillAllowed,
                     ).onSuccess { onDismiss() }
                         .onFailure { error = "Item could not be saved." }
                 }
