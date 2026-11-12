@@ -1,3 +1,4 @@
+// Standalone harness: npm i --no-save miniflare esbuild before running.
 import { build } from "esbuild";
 import { Miniflare } from "miniflare";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
