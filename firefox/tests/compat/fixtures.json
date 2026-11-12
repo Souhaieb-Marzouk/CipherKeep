@@ -1,0 +1,8 @@
+[
+  { "id": "plain-login", "pattern": "plain", "shadow": false, "iframe": false, "expected": "fill" },
+  { "id": "shadow-login", "pattern": "shadow", "shadow": true, "iframe": false, "expected": "fill" },
+  { "id": "spa-login", "pattern": "spa", "shadow": false, "iframe": false, "expected": "fill" },
+  { "id": "hidden-field", "pattern": "hidden", "shadow": false, "iframe": false, "expected": "refuse" },
+  { "id": "lookalike-origin", "pattern": "plain", "shadow": false, "iframe": false, "expected": "refuse" },
+  { "id": "cross-origin-iframe", "pattern": "iframe", "shadow": false, "iframe": true, "expected": "refuse" }
+]

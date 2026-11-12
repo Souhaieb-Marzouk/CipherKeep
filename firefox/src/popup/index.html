@@ -4,17 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CipherKeep</title>
+    <link rel="stylesheet" href="tokens.css" />
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0b1120; --surface: #111827; --primary: #312e81; --accent: #2dd4bf;
-        --text: #f8fafc; --muted: #94a3b8; --danger: #f87171; --line: #1e293b;
+        --bg: var(--ck-dark-background); --surface: var(--ck-dark-surface); --primary: var(--ck-dark-primary-container);
+        --accent: var(--ck-dark-accent); --text: var(--ck-dark-text); --muted: var(--ck-dark-text-muted);
+        --danger: var(--ck-dark-danger); --line: var(--ck-dark-surface-muted);
       }
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
       body {
         margin: 0; width: 360px; background: var(--bg); color: var(--text);
-        font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
+        font: 0.875rem/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
       }
       main { padding: 16px; }
       .brand { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
@@ -23,8 +25,8 @@
         border-radius: 11px; background: linear-gradient(135deg, #2dd4bf, #312e81);
         color: #042f2e; font-weight: 800;
       }
-      h1 { margin: 0; font-size: 20px; letter-spacing: -0.02em; }
-      .sub { margin: 2px 0 0; color: var(--muted); font-size: 11px; }
+      h1 { margin: 0; font-size: 1.25rem; letter-spacing: -0.02em; }
+      .sub { margin: 2px 0 0; color: var(--muted); font-size: 0.6875rem; }
       .status {
         margin: 0 0 12px; padding: 8px 10px; border-radius: 9px;
         background: var(--surface); color: var(--muted); font-size: 12px;
@@ -55,19 +57,24 @@
       .check { display: flex; gap: 8px; align-items: center; margin-top: 10px; color: var(--muted); font-size: 12px; }
       .check input { width: auto; }
       .note { margin-top: 12px; color: var(--muted); font-size: 11px; }
+      :focus-visible { outline: var(--ck-border-width-focus, 2px) solid var(--ck-dark-focus); outline-offset: 2px; }
+      button, input, select, textarea { min-height: var(--ck-size-touchTarget); }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
     </style>
   </head>
   <body>
     <main>
       <div class="brand">
-        <div class="mark">CK</div>
+        <div class="mark" aria-hidden="true">CK</div>
         <div>
           <h1>CipherKeep</h1>
           <p class="sub">Local-only vault</p>
         </div>
       </div>
 
-      <p id="status" class="status">Checking vault…</p>
+      <p id="status" class="status" role="status" aria-live="polite">Checking vault…</p>
 
       <section id="setupPanel" hidden>
         <label for="setupPassword">Master password</label>
@@ -78,6 +85,12 @@
           <button id="create">Create vault</button>
         </div>
         <p class="note">12 characters minimum. The password is never stored.</p>
+        <h2 style="font-size:16px;margin:18px 0 0">First steps</h2>
+        <ol class="note">
+          <li>Create the vault and save all three recovery shares offline.</li>
+          <li>Add logins, TOTP entries and notes.</li>
+          <li>Open an item and enable autofill for its exact origin.</li>
+        </ol>
       </section>
 
       <section id="unlockPanel" hidden>
@@ -161,6 +174,10 @@
           <button id="importBackup" class="secondary">Restore</button>
         </div>
         <input id="backupFile" type="file" accept=".ckexp,application/octet-stream" hidden />
+
+        <h2 style="font-size:16px;margin:18px 0 0">Autofill Inspector</h2>
+        <button id="inspectAutofill" class="secondary">Inspect this page</button>
+        <p id="inspection" class="note"></p>
 
         <label for="searchItems">Search</label>
         <input id="searchItems" type="search" placeholder="Title or username" />
@@ -255,7 +272,7 @@
         <p class="note">Items are encrypted by the background session, then stored as ciphertext in IndexedDB.</p>
       </section>
 
-      <p id="message" class="message"></p>
+      <p id="message" class="message" role="status" aria-live="polite"></p>
       <p class="note">No account, no telemetry, no remote scripts. Browser restart locks the vault.</p>
     </main>
     <script src="popup.js"></script>

@@ -5,13 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "node esbuild.mjs",
+    "tokens:check": "node scripts/generate-tokens.mjs --check",
+    "contrast:check": "node scripts/check-contrast.mjs",
+    "compat:dashboard": "node scripts/build-compat-dashboard.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:wasm-session": "node scripts/session-smoke.cjs",
     "lint": "web-ext lint --source-dir dist --self-hosted",
     "scan:csp": "node scripts/check-csp.mjs",
     "build:xpi": "web-ext build --source-dir dist --artifacts-dir web-ext-artifacts --overwrite-dest",
-    "check": "npm run typecheck && npm run build && npm test && npm run test:wasm-session && npm run scan:csp && npm run lint"
+    "check": "npm run typecheck && npm run tokens:check && npm run contrast:check && npm run build && npm test && npm run test:wasm-session && npm run scan:csp && npm run lint"
   },
   "devDependencies": {
     "@types/firefox-webext-browser": "^143.0.1",

@@ -62,6 +62,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -70,6 +71,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import android.provider.Settings
 import dev.cipherkeep.app.data.SensitiveClipboard
 import dev.cipherkeep.core.FfiPassphrasePolicy
 import dev.cipherkeep.core.FfiPasswordPolicy
@@ -110,6 +112,11 @@ fun CipherKeepApp() {
     val controller = remember {
         SessionController(context).also { dev.cipherkeep.app.autofill.AutofillRegistry.controller = it }
     }
+    val reduceMotion = Settings.Global.getFloat(
+        context.contentResolver,
+        Settings.Global.ANIMATOR_DURATION_SCALE,
+        1f,
+    ) == 0f
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(controller, lifecycleOwner) {
@@ -151,7 +158,13 @@ fun CipherKeepApp() {
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator()
+                    if (reduceMotion) {
+                        Text("Loading vault…")
+                    } else {
+                        CircularProgressIndicator(
+                            modifier = Modifier.semantics { contentDescription = "Loading vault" },
+                        )
+                    }
                 }
                 VaultUiState.Setup -> SetupScreen(controller)
                 is VaultUiState.Recovery -> RecoveryScreen(controller, state)
@@ -265,7 +278,9 @@ private fun SetupScreen(controller: SessionController) {
         contentAlignment = Alignment.Center,
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             BrandMark()
@@ -282,6 +297,19 @@ private fun SetupScreen(controller: SessionController) {
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(top = CKDimens.Space2),
             )
+            Spacer(Modifier.height(CKDimens.Space4))
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                ),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    Text("First steps", style = MaterialTheme.typography.titleMedium)
+                    Text("1. Create the vault and save the three recovery shares offline.", style = MaterialTheme.typography.bodySmall)
+                    Text("2. Add logins, TOTP entries and notes.", style = MaterialTheme.typography.bodySmall)
+                    Text("3. Open an item and enable autofill for its exact origin when ready.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             Spacer(Modifier.height(CKDimens.Space4))
             Card(
                 colors = CardDefaults.cardColors(
@@ -1420,7 +1448,8 @@ private fun ItemDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(CKDimens.Space4),
+                .padding(CKDimens.Space4)
+                .verticalScroll(rememberScrollState()),
         ) {
             Text(
                 text = if (item.totpUri.isNotEmpty()) "TOTP" else "Login",
@@ -1451,6 +1480,10 @@ private fun ItemDetailScreen(
                             text = totpValue.ifEmpty { "------" },
                             style = MaterialTheme.typography.headlineMedium,
                             fontFamily = FontFamily.Monospace,
+                            modifier = Modifier.semantics {
+                                contentDescription =
+                                    "One-time code $totpValue, $totpRemaining seconds remaining"
+                            },
                         )
                         Text(
                             text = "Refreshes in ${totpRemaining}s",
@@ -1672,6 +1705,7 @@ private fun SettingsScreen(
     val biometricKey = remember { BiometricKeyManager() }
     var biometricEnabled by remember { mutableStateOf(false) }
     var biometricMessage by remember { mutableStateOf<String?>(null) }
+    var showDesignGallery by remember { mutableStateOf(false) }
     var backupPassword by remember { mutableStateOf("") }
     var backupMessage by remember { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
@@ -1756,6 +1790,11 @@ private fun SettingsScreen(
                     }
                 }
             }
+
+            OutlinedButton(
+                onClick = { showDesignGallery = true },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text("Design token gallery") }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
@@ -1961,6 +2000,39 @@ private fun SettingsScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             Text(
+                text = "Autofill Inspector",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                    val eligible = controller.items.filter {
+                        it.autofillAllowed && it.url.isNotBlank() && it.password.isNotEmpty()
+                    }
+                    Text("${eligible.size} item(s) explicitly allowed for autofill")
+                    eligible.forEach { item ->
+                        val origin = runCatching { java.net.URI(item.url).host }.getOrNull() ?: "invalid URL"
+                        Text(
+                            text = "${item.title} · $origin",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (eligible.isEmpty()) {
+                        Text(
+                            text = "No item is autofill-eligible. Open an item, choose Edit and opt in for its exact origin.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
                 text = "Encrypted backup",
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.semantics { heading() },
@@ -2019,5 +2091,34 @@ private fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+    if (showDesignGallery) {
+        AlertDialog(
+            onDismissRequest = { showDesignGallery = false },
+            title = { Text("Design tokens") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    listOf(
+                        "Primary" to CKColor.LightPrimary,
+                        "Accent strong" to CKColor.LightAccentStrong,
+                        "Danger" to CKColor.LightDangerText,
+                        "Surface" to CKColor.LightSurfaceMuted,
+                    ).forEach { (label, color) ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(CKDimens.TouchTarget)
+                                    .background(color, RoundedCornerShape(CKDimens.RadiusSm)),
+                            )
+                            Text(label, modifier = Modifier.padding(start = CKDimens.Space2))
+                        }
+                    }
+                    Text("Body 16sp · Small 14sp · Caption 12sp", style = MaterialTheme.typography.bodyMedium)
+                    Text("Spacing 4/8/12/16/24/32/40/48 dp", style = MaterialTheme.typography.bodySmall)
+                    Text("Focus ring 2px · touch target 48dp", style = MaterialTheme.typography.bodySmall)
+                }
+            },
+            confirmButton = { TextButton(onClick = { showDesignGallery = false }) { Text("Close") } },
+        )
     }
 }

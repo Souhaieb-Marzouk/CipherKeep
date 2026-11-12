@@ -23,6 +23,7 @@ unicode-normalization.workspace = true
 serde_json.workspace = true
 csv.workspace = true
 encoding_rs.workspace = true
+ed25519-dalek.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 zeroize.workspace = true

@@ -411,6 +411,20 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+element<HTMLButtonElement>("inspectAutofill").addEventListener("click", async () => {
+  const reply = await send({ type: "inspect-autofill" });
+  if (!reply.ok) {
+    element<HTMLParagraphElement>("inspection").textContent = reply.error;
+    return;
+  }
+  if (reply.kind !== "inspection") {
+    return;
+  }
+  const lock = reply.locked ? "locked (no credentials offered)" : "unlocked";
+  element<HTMLParagraphElement>("inspection").textContent =
+    `Origin: ${reply.origin}. Vault: ${lock}. Matching items: ${reply.matching}. Autofill-consented: ${reply.consented}.`;
+});
+
 element<HTMLButtonElement>("exportBackup").addEventListener("click", async () => {
   const password = element<HTMLInputElement>("backupPassword").value;
   if (password.length < 12) {

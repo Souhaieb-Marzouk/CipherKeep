@@ -42,6 +42,7 @@ export type Request =
   | { type: "import-backup"; password: string; data: string }
   | { type: "autofill-request"; id: string }
   | { type: "consume-autofill"; token: string }
+  | { type: "inspect-autofill" }
   | {
       type: "update-item";
       id: string;
@@ -99,6 +100,14 @@ export type Response =
   | { ok: true; kind: "search"; hits: SearchHit[] }
   | { ok: true; kind: "backup"; data: string }
   | { ok: true; kind: "autofill-token"; token: string }
+  | {
+      ok: true;
+      kind: "inspection";
+      origin: string;
+      locked: boolean;
+      matching: number;
+      consented: number;
+    }
   | { ok: true; kind: "credentials"; username: string; password: string }
   | { ok: false; error: string; code?: number };
 
@@ -132,6 +141,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "import-backup",
       "autofill-request",
       "consume-autofill",
+      "inspect-autofill",
       "update-item",
     ].includes(value)
   );
@@ -240,6 +250,8 @@ export function isRequest(value: unknown): value is Request {
         Array.isArray(request.tags) &&
         typeof request.favorite === "boolean"
       );
+    case "inspect-autofill":
+      return true;
     case "consume-autofill":
       return typeof request.token === "string" && request.token.length <= 128;
     case "autofill-request":

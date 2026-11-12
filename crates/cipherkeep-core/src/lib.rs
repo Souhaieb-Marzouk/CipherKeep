@@ -33,6 +33,7 @@ pub mod import;
 pub mod item;
 pub mod item_store;
 pub mod kdf;
+pub mod recipes;
 pub mod keyring;
 pub mod keys;
 pub mod lock;
@@ -83,6 +84,10 @@ pub use kdf::{
 pub use keyring::{Keyring, MAX_VAULTS};
 pub use keys::{derive_subkey, DeviceId, ItemId, ItemKey, MasterKey, VaultId, VaultKey, KEY_LEN};
 pub use lock::{LockPolicy, DEFAULT_TIMEOUT_SECS, WARN_BEFORE_SECS};
+pub use recipes::{
+    verify_signed_registry, Recipe, RecipeRegistry, MAX_ORIGIN_LEN, MAX_RECIPES,
+    MAX_SELECTOR_LEN,
+};
 pub use search::{measure_p95, SearchDocument, SearchHit, SearchIndex, MAX_SEARCH_RESULTS};
 pub use secret::{SecretBytes, SecretString};
 pub use session::{validate_master_password, CreatedVault, VaultBlob, VaultSession};

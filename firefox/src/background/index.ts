@@ -395,6 +395,24 @@ async function handle(request: Request): Promise<Response> {
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
       }
+      case "inspect-autofill": {
+        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.url) {
+          return { ok: false, error: "No active page." };
+        }
+        const origin = new URL(tab.url).hostname;
+        const locked = session === null || session.is_locked();
+        const items = locked ? [] : await listItems();
+        const matching = items.filter((item) => item.url.length > 0 && new URL(item.url).hostname.toLowerCase() === origin.toLowerCase());
+        return {
+          ok: true,
+          kind: "inspection",
+          origin,
+          locked,
+          matching: matching.length,
+          consented: matching.filter((item) => item.autofillAllowed).length,
+        };
+      }
       case "autofill-request": {
         const active = requireSession();
         const [tab] = await browser.tabs.query({ active: true, currentWindow: true });

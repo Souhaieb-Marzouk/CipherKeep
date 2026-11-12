@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>CipherKeep autofill compatibility</title><style>body{font:16px system-ui;margin:2rem}table{border-collapse:collapse;width:100%}th,td{border:1px solid #64748B;padding:.5rem;text-align:left}th{background:#F1F5F9}</style></head><body><main><h1>Autofill compatibility matrix</h1><p>Deterministic fixtures; no real credentials. CI fills the status column after Playwright runs.</p><table><thead><tr><th>Fixture</th><th>Pattern</th><th>Shadow DOM</th><th>Iframe</th><th>Expected</th><th>Status</th></tr></thead><tbody><tr><td>plain-login</td><td>plain</td><td>false</td><td>false</td><td>fill</td><td>pending CI</td></tr>
+<tr><td>shadow-login</td><td>shadow</td><td>true</td><td>false</td><td>fill</td><td>pending CI</td></tr>
+<tr><td>spa-login</td><td>spa</td><td>false</td><td>false</td><td>fill</td><td>pending CI</td></tr>
+<tr><td>hidden-field</td><td>hidden</td><td>false</td><td>false</td><td>refuse</td><td>pending CI</td></tr>
+<tr><td>lookalike-origin</td><td>plain</td><td>false</td><td>false</td><td>refuse</td><td>pending CI</td></tr>
+<tr><td>cross-origin-iframe</td><td>iframe</td><td>false</td><td>true</td><td>refuse</td><td>pending CI</td></tr></tbody></table></main></body></html>
