@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 
 use zeroize::Zeroizing;
 
+use crate::crdt::ActorId;
 use crate::envelope::Envelope;
 use crate::error::{CoreError, ErrorCode, Result};
 use crate::header::{VaultHeader, NONCE_LEN};
@@ -19,6 +20,7 @@ use crate::keyring::Keyring;
 use crate::keys::{random_array, ItemId, ItemKey, MasterKey, VaultId, KEY_LEN};
 use crate::secret::{SecretBytes, SecretString};
 use crate::shamir::{combine_2_of_3, split_2_of_3, RecoveryShare};
+use crate::sync::legacy::migrate_legacy_item;
 
 const BLOB_MAGIC: [u8; 4] = *b"CKS1";
 const BLOB_VERSION: u16 = 1;
@@ -377,6 +379,44 @@ impl VaultSession {
         let item_key = vault.unwrap_item_key(&wrapped, item_id, ITEM_SCHEMA_VERSION)?;
         let plaintext = item_key.open_field(&sealed, item_id, ITEM_PAYLOAD_FIELD, 1, false)?;
         Ok(plaintext.expose_secret().to_vec())
+    }
+
+    /// Migrate an existing encrypted item payload into canonical sync JSON.
+    ///
+    /// The item key is unwrapped internally; no caller-supplied key is needed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked, or a decryption/migration
+    /// error for corrupt blobs or invalid payloads.
+    pub fn migrate_item(
+        &self,
+        item_id: ItemId,
+        blob: &[u8],
+        actor: ActorId,
+        created_at: u64,
+        counter_start: u64,
+    ) -> Result<Vec<u8>> {
+        let unlocked = self
+            .state
+            .as_ref()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        let (wrapped, sealed) = decode_item_blob(blob)?;
+        let vault = unlocked
+            .keyring
+            .first_vault()
+            .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+        let item_key = vault.unwrap_item_key(&wrapped, item_id, ITEM_SCHEMA_VERSION)?;
+        let plaintext = item_key.open_field(&sealed, item_id, ITEM_PAYLOAD_FIELD, 1, false)?;
+        migrate_legacy_item(
+            plaintext.expose_secret(),
+            item_id,
+            &item_key,
+            actor,
+            created_at,
+            counter_start,
+        )?
+        .to_sync_json()
     }
 
     /// List stored item ids. Requires an unlocked session.

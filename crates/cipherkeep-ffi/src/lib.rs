@@ -19,10 +19,10 @@ use zeroize::{Zeroize, Zeroizing};
 use cipherkeep_core::{
     combine_2_of_3, derive_master_key, export_backup,
     generate_passphrase as core_generate_passphrase, generate_password as core_generate_password,
-    import_backup, parse_otpauth_uri, split_2_of_3, Envelope, ErrorCode, ItemId, ItemKey,
-    KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SearchDocument, SearchIndex,
-    SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
-    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    import_backup, migrate_legacy_item as core_migrate_legacy_item, parse_otpauth_uri,
+    split_2_of_3, ActorId, Envelope, ErrorCode, ItemId, ItemKey, KdfParams, PassphrasePolicy,
+    PasswordPolicy, RecoveryShare, SearchDocument, SearchIndex, SecretBytes, VaultBlob, VaultId,
+    VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 uniffi::setup_scaffolding!();
@@ -446,6 +446,45 @@ pub fn open_field(
     Ok(plaintext.expose_secret().to_vec())
 }
 
+/// Migrate a legacy plaintext JSON item into canonical encrypted sync JSON.
+///
+/// # Errors
+///
+/// Returns a redacted error for malformed ids/keys/JSON or migration failure.
+pub fn migrate_legacy_item(
+    json: Vec<u8>,
+    item_id: Vec<u8>,
+    item_key: Vec<u8>,
+    actor: Vec<u8>,
+    created_at: u64,
+    counter_start: u64,
+) -> Result<Vec<u8>, FfiError> {
+    let mut json = json;
+    let mut item_id = item_id;
+    let mut item_key = item_key;
+    let mut actor = actor;
+    let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+    let key = ItemKey::from_secret_bytes(SecretBytes::from_slice(&item_key))?;
+    let mut actor: [u8; 16] = actor
+        .as_slice()
+        .try_into()
+        .map_err(|_| FfiError::InvalidArgument)?;
+    let result = core_migrate_legacy_item(
+        &json,
+        id,
+        &key,
+        ActorId::from_bytes(actor),
+        created_at,
+        counter_start,
+    )?
+    .to_sync_json()?;
+    json.zeroize();
+    item_id.zeroize();
+    item_key.zeroize();
+    actor.zeroize();
+    Ok(result)
+}
+
 /// Wrap an item key under a vault key.
 ///
 /// # Errors
@@ -750,6 +789,34 @@ impl FfiVaultSession {
             state
                 .session
                 .decrypt_item(id, &ciphertext)
+                .map_err(FfiError::from)
+        })
+    }
+
+    /// Migrate an encrypted legacy item into canonical sync JSON.
+    pub fn migrate_item(
+        &self,
+        item_id: Vec<u8>,
+        ciphertext: Vec<u8>,
+        actor: Vec<u8>,
+        created_at: u64,
+        counter_start: u64,
+    ) -> Result<Vec<u8>, FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&item_id)?);
+        let actor: [u8; 16] = actor
+            .as_slice()
+            .try_into()
+            .map_err(|_| FfiError::InvalidArgument)?;
+        self.with_state(|state| {
+            state
+                .session
+                .migrate_item(
+                    id,
+                    &ciphertext,
+                    ActorId::from_bytes(actor),
+                    created_at,
+                    counter_start,
+                )
                 .map_err(FfiError::from)
         })
     }

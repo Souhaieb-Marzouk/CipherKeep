@@ -75,6 +75,20 @@ pub enum ItemType {
 }
 
 impl ItemType {
+    /// Decode a stable numeric type.
+    #[must_use]
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Login),
+            2 => Some(Self::Totp),
+            3 => Some(Self::Note),
+            4 => Some(Self::Card),
+            5 => Some(Self::Identity),
+            6 => Some(Self::SshKey),
+            _ => None,
+        }
+    }
+
     /// Stable rank used for deterministic type-conflict resolution.
     #[must_use]
     pub const fn rank(self) -> u8 {
@@ -153,6 +167,32 @@ pub enum FieldKind {
     SshPrivateKey = 15,
     /// Custom field.
     Custom = 16,
+}
+
+impl FieldKind {
+    /// Decode a stable numeric kind.
+    #[must_use]
+    pub const fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            1 => Some(Self::Text),
+            2 => Some(Self::Secret),
+            3 => Some(Self::Url),
+            4 => Some(Self::Totp),
+            5 => Some(Self::Note),
+            6 => Some(Self::CardNumber),
+            7 => Some(Self::CardExpiry),
+            8 => Some(Self::CardCvv),
+            9 => Some(Self::Cardholder),
+            10 => Some(Self::PersonName),
+            11 => Some(Self::Email),
+            12 => Some(Self::Phone),
+            13 => Some(Self::Address),
+            14 => Some(Self::SshPublicKey),
+            15 => Some(Self::SshPrivateKey),
+            16 => Some(Self::Custom),
+            _ => None,
+        }
+    }
 }
 
 /// The expected kind for a standard field id, or `Custom` for a custom id.
@@ -243,6 +283,24 @@ impl FieldRecord {
     #[must_use]
     pub fn value(&self) -> Option<&Envelope> {
         self.value.as_ref()
+    }
+
+    /// Reconstruct a field record from serialized sync data.
+    #[must_use]
+    pub const fn from_parts(
+        field_id: u16,
+        kind: FieldKind,
+        value: Option<Envelope>,
+        tombstone: bool,
+        clock: LamportClock,
+    ) -> Self {
+        Self {
+            field_id,
+            kind,
+            value,
+            tombstone,
+            clock,
+        }
     }
 
     fn tie_key(&self) -> (u8, bool, Vec<u8>) {
@@ -661,6 +719,131 @@ impl ItemRecord {
     /// Returns [`ErrorCode::InvalidArgument`] for different item ids,
     /// [`ErrorCode::UnsupportedVersion`] for different schemas, and
     /// [`ErrorCode::CorruptData`] if a merged record is invalid.
+    /// Canonical sync encoding. Contains only sealed envelopes and clocks.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Internal`] if JSON serialization fails.
+    pub fn to_sync_json(&self) -> Result<Vec<u8>> {
+        let fields: Vec<serde_json::Value> = self
+            .fields
+            .values()
+            .map(|record| {
+                serde_json::json!({
+                    "id": record.field_id,
+                    "kind": record.kind as u8,
+                    "counter": record.clock.counter(),
+                    "actor": hex(record.clock.actor().as_bytes()),
+                    "tombstone": record.tombstone,
+                    "value": record.value.as_ref().map(|envelope| hex(&envelope.encode())),
+                })
+            })
+            .collect();
+        let value = serde_json::json!({
+            "v": 1,
+            "id": hex(self.id.as_bytes()),
+            "type": self.item_type as u8,
+            "schema": self.schema,
+            "created": self.created_at,
+            "typeCounter": self.type_clock.counter(),
+            "typeActor": hex(self.type_clock.actor().as_bytes()),
+            "deleted": self.deleted,
+            "deletedCounter": self.deleted_clock.counter(),
+            "deletedActor": hex(self.deleted_clock.actor().as_bytes()),
+            "itemCounter": self.item_clock.counter(),
+            "itemActor": hex(self.item_clock.actor().as_bytes()),
+            "fields": fields,
+        });
+        serde_json::to_vec(&value).map_err(|_| CoreError::new(ErrorCode::Internal))
+    }
+
+    /// Decode and validate a canonical sync record.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed ids, clocks, envelopes and invalid records.
+    pub fn from_sync_json(bytes: &[u8]) -> Result<Self> {
+        let value: serde_json::Value =
+            serde_json::from_slice(bytes).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+        if value.get("v").and_then(serde_json::Value::as_u64) != Some(1) {
+            return Err(CoreError::new(ErrorCode::UnsupportedVersion));
+        }
+        let id = decode_id(value.get("id"))?;
+        let item_type = value
+            .get("type")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|raw| u8::try_from(raw).ok())
+            .and_then(ItemType::from_u8)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+        let schema = value
+            .get("schema")
+            .and_then(serde_json::Value::as_u64)
+            .and_then(|raw| u16::try_from(raw).ok())
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+        let created_at = value
+            .get("created")
+            .and_then(serde_json::Value::as_u64)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+        let type_clock = clock_from(&value, "typeCounter", "typeActor")?;
+        let deleted = value
+            .get("deleted")
+            .and_then(serde_json::Value::as_bool)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+        let deleted_clock = clock_from(&value, "deletedCounter", "deletedActor")?;
+        let item_clock = clock_from(&value, "itemCounter", "itemActor")?;
+        let mut fields = BTreeMap::new();
+        for entry in value
+            .get("fields")
+            .and_then(serde_json::Value::as_array)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?
+        {
+            let field_id = entry
+                .get("id")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|raw| u16::try_from(raw).ok())
+                .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+            let kind = entry
+                .get("kind")
+                .and_then(serde_json::Value::as_u64)
+                .and_then(|raw| u8::try_from(raw).ok())
+                .and_then(FieldKind::from_u8)
+                .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+            let clock = clock_from(entry, "counter", "actor")?;
+            let tombstone = entry
+                .get("tombstone")
+                .and_then(serde_json::Value::as_bool)
+                .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+            let envelope = match entry.get("value").and_then(serde_json::Value::as_str) {
+                Some(raw) => Some(Envelope::decode(&decode_hex(raw)?)?),
+                None => None,
+            };
+            fields.insert(
+                field_id,
+                FieldRecord::from_parts(field_id, kind, envelope, tombstone, clock),
+            );
+        }
+        let record = Self {
+            id: ItemId::from_bytes(id),
+            item_type,
+            schema,
+            created_at,
+            type_clock,
+            deleted,
+            deleted_clock,
+            fields,
+            item_clock,
+        };
+        record.validate()?;
+        Ok(record)
+    }
+
+    /// Merge another replica into this one.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::InvalidArgument`] for different item ids,
+    /// [`ErrorCode::UnsupportedVersion`] for different schemas, and
+    /// [`ErrorCode::CorruptData`] if a merged record is invalid.
     pub fn merge(&self, other: &Self) -> Result<MergeResult> {
         if self.id != other.id {
             return Err(CoreError::new(ErrorCode::InvalidArgument));
@@ -814,6 +997,53 @@ fn merge_field(
             }
         },
     }
+}
+
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn decode_hex(value: &str) -> Result<Vec<u8>> {
+    if value.len() % 2 != 0 {
+        return Err(CoreError::new(ErrorCode::CorruptData));
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            u8::from_str_radix(
+                std::str::from_utf8(pair).map_err(|_| CoreError::new(ErrorCode::CorruptData))?,
+                16,
+            )
+            .map_err(|_| CoreError::new(ErrorCode::CorruptData))
+        })
+        .collect()
+}
+
+fn decode_id(value: Option<&serde_json::Value>) -> Result<[u8; 16]> {
+    decode_hex(
+        value
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?,
+    )?
+    .try_into()
+    .map_err(|_| CoreError::new(ErrorCode::CorruptData))
+}
+
+fn clock_from(value: &serde_json::Value, counter: &str, actor: &str) -> Result<LamportClock> {
+    let counter = value
+        .get(counter)
+        .and_then(serde_json::Value::as_u64)
+        .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+    let actor: [u8; 16] = decode_hex(
+        value
+            .get(actor)
+            .and_then(serde_json::Value::as_str)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?,
+    )?
+    .try_into()
+    .map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+    Ok(LamportClock::new(counter, ActorId::from_bytes(actor)))
 }
 
 #[cfg(test)]
@@ -1092,6 +1322,23 @@ mod tests {
             let same = first.merge(&first).expect("merge").item;
             assert_eq!(same, first, "idempotence at {history}");
         }
+    }
+
+    #[test]
+    #[test]
+    fn sync_json_round_trips_encrypted_record() {
+        let mut record = ItemRecord::new(item_id(), ItemType::Login, 10, actor(2));
+        record
+            .put_field(field(FIELD_TITLE, FieldKind::Text, 1, 2, b"Example"))
+            .expect("field");
+        let encoded = record.to_sync_json().expect("encode");
+        let decoded = ItemRecord::from_sync_json(&encoded).expect("decode");
+        assert_eq!(decoded.id(), record.id());
+        assert_eq!(decoded.field_count(), 1);
+        assert_eq!(
+            decoded.field(FIELD_TITLE).expect("title").kind(),
+            FieldKind::Text
+        );
     }
 
     #[test]

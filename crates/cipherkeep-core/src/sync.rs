@@ -4,6 +4,7 @@
 //! blob versions, size buckets and already-sealed blobs. No item fields,
 //! titles, URLs or plaintext cross the adapter boundary.
 
+pub mod legacy;
 pub mod local;
 pub mod merge;
 pub mod scheduler;

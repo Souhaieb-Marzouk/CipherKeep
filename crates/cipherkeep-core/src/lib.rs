@@ -95,6 +95,7 @@ pub use shamir::{
     combine_2_of_3, split_2_of_3, RecoveryShare, RECOVERY_SECRET_LEN, SHARE_COUNT, THRESHOLD,
 };
 pub use sync::{
+    legacy::migrate_legacy_item,
     local::LocalFolderAdapter,
     merge::{ConflictChoice, MergeEngine, MergeOutcome},
     scheduler::{RetryPolicy, SyncScheduler},
