@@ -6,4 +6,6 @@ data class VaultItem(
     val title: String,
     val username: String,
     val password: String,
+    val type: String = "login",
+    val totpUri: String = "",
 )

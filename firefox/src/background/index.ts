@@ -120,12 +120,15 @@ async function listItems(): Promise<ItemView[]> {
         title?: unknown;
         username?: unknown;
         password?: unknown;
+        type?: unknown;
+        totpUri?: unknown;
       };
       items.push({
         id: record.id,
         title: typeof json.title === "string" ? json.title : "",
         username: typeof json.username === "string" ? json.username : "",
         password: typeof json.password === "string" ? json.password : "",
+        totpUri: typeof json.totpUri === "string" ? json.totpUri : "",
       });
     } catch {
       // A record from a different vault is skipped rather than exposed.
@@ -283,6 +286,39 @@ async function handle(request: Request): Promise<Response> {
           updatedAt: Date.now(),
         });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "save-totp-item": {
+        const active = requireSession();
+        await ensureItemStore();
+        // Reject an unusable URI before it reaches encrypted storage.
+        totp_code(request.uri, Math.floor(Date.now() / 1000));
+        const idBytes = crypto.getRandomValues(new Uint8Array(16));
+        const payload = new TextEncoder().encode(
+          JSON.stringify({
+            v: 1,
+            type: "totp",
+            title: request.title,
+            username: request.account,
+            totpUri: request.uri,
+          }),
+        );
+        const ciphertext = active.encrypt_item(idBytes, payload);
+        payload.fill(0);
+        await itemStore.put({
+          id: bytesToHex(idBytes),
+          ciphertext,
+          updatedAt: Date.now(),
+        });
+        return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "totp-code": {
+        const generated = totp_code(request.uri, Math.floor(Date.now() / 1000));
+        return {
+          ok: true,
+          kind: "totp",
+          code: generated.code,
+          secondsRemaining: generated.seconds_remaining,
+        };
       }
       case "delete-item":
         requireSession();

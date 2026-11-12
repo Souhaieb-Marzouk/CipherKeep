@@ -45,6 +45,31 @@ describe("request validation", () => {
     expect(isRequest({ type: "generate-passphrase", words: 6, separator: "--" })).toBe(false);
   });
 
+  it("validates TOTP requests before the background runs them", () => {
+    expect(
+      isRequest({
+        type: "save-totp-item",
+        title: "Example",
+        account: "alice",
+        uri: "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP",
+      }),
+    ).toBe(true);
+    expect(
+      isRequest({
+        type: "save-totp-item",
+        title: "Example",
+        account: "alice",
+        uri: "https://example.test/",
+      }),
+    ).toBe(false);
+    expect(
+      isRequest({
+        type: "totp-code",
+        uri: "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP",
+      }),
+    ).toBe(true);
+  });
+
   it("rejects unknown request types", () => {
     expect(isRequest({ type: "drop-all" })).toBe(false);
   });

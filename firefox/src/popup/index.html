@@ -162,6 +162,25 @@
             <button id="useGenerated" class="secondary">Use in password field</button>
           </div>
         </div>
+
+        <h2 style="font-size:16px;margin:18px 0 0">TOTP</h2>
+        <label for="totpTitle">Title</label>
+        <input id="totpTitle" type="text" />
+        <label for="totpAccount">Account</label>
+        <input id="totpAccount" type="text" />
+        <label for="totpUri">otpauth URI</label>
+        <input id="totpUri" type="password" autocomplete="off" />
+        <div class="row">
+          <button id="saveTotp">Save TOTP item</button>
+          <button id="showTotp" class="secondary">Show code</button>
+        </div>
+        <div id="totpBox" hidden>
+          <div id="totpValue" class="share"></div>
+          <p id="totpMeta" class="note"></p>
+          <div class="row">
+            <button id="copyTotp" class="secondary">Copy code</button>
+          </div>
+        </div>
         <p class="note">Items are encrypted by the background session, then stored as ciphertext in IndexedDB.</p>
       </section>
 

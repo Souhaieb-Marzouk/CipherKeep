@@ -25,6 +25,16 @@ class GeneratorBindingTest {
     }
 
     @Test
+    fun totpCodeCrossesTheBinding() {
+        val code = totpCode(
+            "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&digits=6&period=30",
+            59uL,
+        )
+        assertEquals(6, code.code.length)
+        assertEquals(1uL, code.secondsRemaining)
+    }
+
+    @Test
     fun passphraseUsesTheRequestedSeparator() {
         val generated = generatePassphrase(
             FfiPassphrasePolicy(words = 6u, separator = "-"),

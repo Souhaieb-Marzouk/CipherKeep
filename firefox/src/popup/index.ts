@@ -86,6 +86,7 @@ async function refresh(): Promise<void> {
     if (reply.locked) {
       status.classList.remove("unlocked");
       clearGenerated();
+      clearTotp();
     }
   } catch {
     status.textContent = "Background unavailable";
@@ -220,6 +221,91 @@ element<HTMLButtonElement>("useGenerated").addEventListener("click", () => {
   showMessage("Inserted into the password field; it is not saved until you click Save item.", true);
 });
 
+let totpTimer: number | null = null;
+let totpCurrentUri = "";
+
+function clearTotp(): void {
+  if (totpTimer !== null) {
+    window.clearInterval(totpTimer);
+    totpTimer = null;
+  }
+  totpCurrentUri = "";
+  element<HTMLDivElement>("totpValue").textContent = "";
+  element<HTMLParagraphElement>("totpMeta").textContent = "";
+  element<HTMLElement>("totpBox").hidden = true;
+}
+
+async function refreshTotp(): Promise<void> {
+  if (totpCurrentUri.length === 0) {
+    return;
+  }
+  const reply = await send({ type: "totp-code", uri: totpCurrentUri });
+  if (!reply.ok) {
+    clearTotp();
+    showMessage(reply.error);
+    return;
+  }
+  if (reply.kind !== "totp") {
+    return;
+  }
+  element<HTMLDivElement>("totpValue").textContent = reply.code;
+  element<HTMLParagraphElement>("totpMeta").textContent =
+    `Refreshes in ${reply.secondsRemaining}s`;
+  element<HTMLElement>("totpBox").hidden = false;
+}
+
+element<HTMLButtonElement>("showTotp").addEventListener("click", async () => {
+  const uri = element<HTMLInputElement>("totpUri").value.trim();
+  if (!uri.startsWith("otpauth://totp/")) {
+    showMessage("Enter a valid otpauth://totp/ URI.");
+    return;
+  }
+  clearTotp();
+  totpCurrentUri = uri;
+  await refreshTotp();
+  if (totpCurrentUri.length > 0) {
+    totpTimer = window.setInterval(() => { void refreshTotp(); }, 1_000);
+  }
+});
+
+element<HTMLButtonElement>("saveTotp").addEventListener("click", async () => {
+  const title = element<HTMLInputElement>("totpTitle").value.trim();
+  const account = element<HTMLInputElement>("totpAccount").value.trim();
+  const uri = element<HTMLInputElement>("totpUri").value.trim();
+  if (title.length === 0 || account.length === 0 || !uri.startsWith("otpauth://totp/")) {
+    showMessage("Title, account and a valid otpauth URI are required.");
+    return;
+  }
+  const reply = await send({ type: "save-totp-item", title, account, uri });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  element<HTMLInputElement>("totpTitle").value = "";
+  element<HTMLInputElement>("totpAccount").value = "";
+  element<HTMLInputElement>("totpUri").value = "";
+  if (reply.kind === "items") {
+    await loadItems();
+  }
+  showMessage("TOTP item saved.", true);
+});
+
+element<HTMLButtonElement>("copyTotp").addEventListener("click", async () => {
+  const value = element<HTMLDivElement>("totpValue").textContent ?? "";
+  if (value.length === 0) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(value);
+    showMessage("TOTP code copied. Clipboard is cleared after 30 seconds while this popup stays open.", true);
+    window.setTimeout(() => {
+      void navigator.clipboard.writeText("").catch(() => undefined);
+    }, 30_000);
+  } catch {
+    showMessage("Clipboard is unavailable; select the code manually.");
+  }
+});
+
 element<HTMLButtonElement>("saveItem").addEventListener("click", async () => {
   const title = element<HTMLInputElement>("itemTitle");
   const username = element<HTMLInputElement>("itemUsername");
@@ -254,6 +340,7 @@ async function lockVault(): Promise<void> {
   await send({ type: "lock" });
   clearShares();
   clearGenerated();
+  clearTotp();
   showMessage("Locked. The in-memory keyring was dropped.", true);
   await refresh();
 }

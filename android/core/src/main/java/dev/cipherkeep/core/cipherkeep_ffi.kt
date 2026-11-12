@@ -679,6 +679,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_totp_code(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_blob(
@@ -786,6 +788,8 @@ internal object UniffiLib {
     external fun uniffi_cipherkeep_ffi_fn_func_generate_passphrase(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_password(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_totp_code(`uri`: RustBuffer.ByValue,`unixSecs`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun ffi_cipherkeep_ffi_rustbuffer_alloc(`size`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
@@ -910,6 +914,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_password() and 0xFFFF) != 64626) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_totp_code() and 0xFFFF) != 63792) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_biometric_master_key() and 0xFFFF) != 2948) {
@@ -2252,6 +2259,53 @@ public object FfiConverterTypeFfiPasswordPolicy: FfiConverterRustBuffer<FfiPassw
 
 
 
+/**
+ * TOTP code and the seconds until the next step.
+ */
+data class FfiTotpCode (
+    /**
+     * Current code.
+     */
+    var `code`: kotlin.String
+    ,
+    /**
+     * Seconds until rollover.
+     */
+    var `secondsRemaining`: kotlin.ULong
+
+){
+
+
+
+
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFfiTotpCode: FfiConverterRustBuffer<FfiTotpCode> {
+    override fun read(buf: ByteBuffer): FfiTotpCode {
+        return FfiTotpCode(
+            FfiConverterString.read(buf),
+            FfiConverterULong.read(buf),
+        )
+    }
+
+    override fun allocationSize(value: FfiTotpCode) = (
+            FfiConverterString.allocationSize(value.`code`) +
+            FfiConverterULong.allocationSize(value.`secondsRemaining`)
+    )
+
+    override fun write(value: FfiTotpCode, buf: ByteBuffer) {
+            FfiConverterString.write(value.`code`, buf)
+            FfiConverterULong.write(value.`secondsRemaining`, buf)
+    }
+}
+
+
+
 
 
 /**
@@ -2586,6 +2640,26 @@ public object FfiConverterSequenceByteArray: FfiConverterRustBuffer<List<kotlin.
 
 
         FfiConverterTypeFfiPasswordPolicy.lower(`policy`),_status)
+}
+    )
+    }
+
+
+        /**
+         * Generate a TOTP code from an otpauth URI.
+         *
+         * # Errors
+         *
+         * Returns [`FfiError::InvalidArgument`] for an invalid URI or timestamp.
+         */
+    @Throws(FfiException::class) fun `totpCode`(`uri`: kotlin.String, `unixSecs`: kotlin.ULong): FfiTotpCode {
+            return FfiConverterTypeFfiTotpCode.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_totp_code(
+
+
+        FfiConverterString.lower(`uri`),
+        FfiConverterULong.lower(`unixSecs`),_status)
 }
     )
     }

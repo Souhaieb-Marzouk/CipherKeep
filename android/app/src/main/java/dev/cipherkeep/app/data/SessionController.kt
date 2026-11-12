@@ -12,6 +12,7 @@ import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.db.VaultRepository
 import org.json.JSONObject
+import dev.cipherkeep.core.totpCode
 import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -238,6 +239,8 @@ class SessionController(context: Context) {
                         title = json.optString("title"),
                         username = json.optString("username"),
                         password = json.optString("password"),
+                        type = json.optString("type", "login"),
+                        totpUri = json.optString("totpUri"),
                     )
                 }.getOrNull()
             }
@@ -256,6 +259,36 @@ class SessionController(context: Context) {
                     .put("title", title)
                     .put("username", username)
                     .put("password", password)
+                    .toString()
+                    .encodeToByteArray()
+                val ciphertext = active.encryptItem(id, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = 1,
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    suspend fun saveTotpItem(title: String, account: String, uri: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                // Validate before writing an unusable encrypted TOTP item.
+                totpCode(uri, (System.currentTimeMillis() / 1000).toULong())
+                val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val payload = JSONObject()
+                    .put("v", 1)
+                    .put("type", "totp")
+                    .put("title", title)
+                    .put("username", account)
+                    .put("totpUri", uri)
                     .toString()
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)

@@ -16,9 +16,9 @@ use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
     combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
-    generate_password as core_generate_password, split_2_of_3, Envelope, ItemId, ItemKey,
-    KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob, VaultId,
-    VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope, ItemId,
+    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob,
+    VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 #[derive(Serialize)]
@@ -109,6 +109,31 @@ pub fn generate_passphrase(words: u32, separator: &str) -> Result<JsValue, JsVal
         value: generated.expose_secret().to_string(),
         entropy_bits: generated.entropy_bits(),
         strength: generated.strength().as_str(),
+    })
+    .map_err(|_| JsValue::from_str("internal error"))
+}
+
+#[derive(Serialize)]
+struct WasmTotpCode {
+    code: String,
+    seconds_remaining: u64,
+}
+
+/// Generate a TOTP code from an otpauth URI.
+///
+/// # Errors
+///
+/// Returns a JS `{ code, message }` object for an invalid URI.
+#[wasm_bindgen]
+pub fn totp_code(uri: &str, unix_secs: u32) -> Result<JsValue, JsValue> {
+    let entry = parse_otpauth_uri(uri).map_err(js_error)?;
+    let code = entry
+        .totp()
+        .code_at(u64::from(unix_secs))
+        .map_err(js_error)?;
+    serde_wasm_bindgen::to_value(&WasmTotpCode {
+        code: code.expose_secret().to_string(),
+        seconds_remaining: entry.totp().seconds_remaining(u64::from(unix_secs)),
     })
     .map_err(|_| JsValue::from_str("internal error"))
 }
@@ -591,6 +616,16 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use wasm_bindgen_test::*;
+
+    #[wasm_bindgen_test]
+    fn wasm_totp_returns_an_object() {
+        let generated = totp_code(
+            "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&digits=6&period=30",
+            59,
+        )
+        .expect("totp");
+        assert!(generated.is_object());
+    }
 
     #[wasm_bindgen_test]
     fn wasm_generator_returns_an_object() {

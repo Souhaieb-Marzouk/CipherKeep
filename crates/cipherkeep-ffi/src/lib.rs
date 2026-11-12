@@ -18,9 +18,10 @@ use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
     combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
-    generate_password as core_generate_password, split_2_of_3, Envelope, ErrorCode, ItemId,
-    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob,
-    VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope,
+    ErrorCode, ItemId, ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare,
+    SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
+    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 uniffi::setup_scaffolding!();
@@ -186,6 +187,30 @@ pub fn generate_passphrase(policy: FfiPassphrasePolicy) -> Result<FfiGeneratedSe
         value: generated.expose_secret().to_string(),
         entropy_bits: generated.entropy_bits(),
         strength: generated.strength().as_str().to_string(),
+    })
+}
+
+/// TOTP code and the seconds until the next step.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiTotpCode {
+    /// Current code.
+    pub code: String,
+    /// Seconds until rollover.
+    pub seconds_remaining: u64,
+}
+
+/// Generate a TOTP code from an otpauth URI.
+///
+/// # Errors
+///
+/// Returns [`FfiError::InvalidArgument`] for an invalid URI or timestamp.
+#[uniffi::export]
+pub fn totp_code(uri: String, unix_secs: u64) -> Result<FfiTotpCode, FfiError> {
+    let entry = parse_otpauth_uri(&uri)?;
+    let code = entry.totp().code_at(unix_secs)?;
+    Ok(FfiTotpCode {
+        code: code.expose_secret().to_string(),
+        seconds_remaining: entry.totp().seconds_remaining(unix_secs),
     })
 }
 
@@ -725,6 +750,21 @@ fn now_secs() -> u64 {
 mod tests {
     use super::*;
     use cipherkeep_core::Aad;
+
+    #[test]
+    fn totp_crosses_the_ffi_boundary() {
+        let code = totp_code(
+            "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&digits=6&period=30".to_string(),
+            59,
+        )
+        .expect("totp");
+        assert_eq!(code.code.len(), 6);
+        assert!(code
+            .code
+            .chars()
+            .all(|character| character.is_ascii_digit()));
+        assert_eq!(code.seconds_remaining, 1);
+    }
 
     #[test]
     fn generator_crosses_the_ffi_boundary() {

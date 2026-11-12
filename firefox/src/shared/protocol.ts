@@ -20,13 +20,16 @@ export type Request =
       symbols: boolean;
       excludeAmbiguous: boolean;
     }
-  | { type: "generate-passphrase"; words: number; separator: string };
+  | { type: "generate-passphrase"; words: number; separator: string }
+  | { type: "save-totp-item"; title: string; account: string; uri: string }
+  | { type: "totp-code"; uri: string };
 
 export interface ItemView {
   id: string;
   title: string;
   username: string;
   password: string;
+  totpUri: string;
 }
 
 export type Response =
@@ -47,6 +50,7 @@ export type Response =
       entropyBits: number;
       strength: string;
     }
+  | { ok: true; kind: "totp"; code: string; secondsRemaining: number }
   | { ok: false; error: string; code?: number };
 
 function isText(value: unknown, max: number): value is string {
@@ -69,6 +73,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "delete-item",
       "generate-password",
       "generate-passphrase",
+      "save-totp-item",
+      "totp-code",
     ].includes(value)
   );
 }
@@ -126,6 +132,18 @@ export function isRequest(value: unknown): value is Request {
         request.words <= 12 &&
         typeof request.separator === "string" &&
         [...request.separator].length === 1
+      );
+    case "save-totp-item":
+      return (
+        isText(request.title, 512) &&
+        isText(request.account, 512) &&
+        isText(request.uri, 4_096) &&
+        request.uri.startsWith("otpauth://totp/")
+      );
+    case "totp-code":
+      return (
+        isText(request.uri, 4_096) &&
+        request.uri.startsWith("otpauth://totp/")
       );
   }
 }

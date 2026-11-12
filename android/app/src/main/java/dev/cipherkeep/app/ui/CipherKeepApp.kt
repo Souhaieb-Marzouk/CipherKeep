@@ -73,6 +73,7 @@ import dev.cipherkeep.core.FfiPassphrasePolicy
 import dev.cipherkeep.core.FfiPasswordPolicy
 import dev.cipherkeep.core.generatePassphrase
 import dev.cipherkeep.core.generatePassword
+import dev.cipherkeep.core.totpCode
 import dev.cipherkeep.app.update.UpdateChecker
 import dev.cipherkeep.app.update.UpdateOutcome
 import dev.cipherkeep.app.update.UpdatePreferences
@@ -88,6 +89,7 @@ import dev.cipherkeep.app.ui.theme.CKColor
 import dev.cipherkeep.app.ui.theme.CKDimens
 import dev.cipherkeep.app.ui.theme.CipherKeepTheme
 import dev.cipherkeep.app.ui.theme.ThemeMode
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 
@@ -692,8 +694,13 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
     var title by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var isTotp by remember { mutableStateOf(false) }
+    var totpUri by remember { mutableStateOf("") }
     DisposableEffect(Unit) {
-        val reset = { password = "" }
+        val reset = {
+            password = ""
+            totpUri = ""
+        }
         SecretInputRegistry.register(reset)
         onDispose { SecretInputRegistry.unregister(reset) }
     }
@@ -723,6 +730,10 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 .padding(CKDimens.Space4),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                TextButton(onClick = { isTotp = false }) { Text("Login") }
+                TextButton(onClick = { isTotp = true }) { Text("TOTP") }
+            }
             OutlinedTextField(
                 value = title,
                 onValueChange = { title = it },
@@ -735,22 +746,34 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 value = username,
                 onValueChange = { username = it },
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("Username") },
+                label = { Text(if (isTotp) "Account" else "Username") },
                 singleLine = true,
                 shape = MaterialTheme.shapes.small,
             )
-            OutlinedTextField(
-                value = password,
-                onValueChange = { password = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Password") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                shape = MaterialTheme.shapes.small,
-            )
-            TextButton(onClick = { showGenerator = true }) {
-                Text("Generate password")
+            if (isTotp) {
+                OutlinedTextField(
+                    value = totpUri,
+                    onValueChange = { totpUri = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("TOTP otpauth URI") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    shape = MaterialTheme.shapes.small,
+                )
+            } else {
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    shape = MaterialTheme.shapes.small,
+                )
+                TextButton(onClick = { showGenerator = true }) {
+                    Text("Generate password")
+                }
             }
             if (error != null) {
                 Text(
@@ -764,9 +787,14 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                     busy = true
                     error = null
                     scope.launch {
-                        val result = controller.saveItem(title.trim(), username.trim(), password)
+                        val result = if (isTotp) {
+                            controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
+                        } else {
+                            controller.saveItem(title.trim(), username.trim(), password)
+                        }
                         busy = false
                         password = ""
+                        totpUri = ""
                         if (result.isSuccess) {
                             onBack()
                         } else {
@@ -774,7 +802,8 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                         }
                     }
                 },
-                enabled = !busy && title.isNotBlank() && password.isNotEmpty(),
+                enabled = !busy && title.isNotBlank() &&
+                    (if (isTotp) totpUri.trim().startsWith("otpauth://totp/") else password.isNotEmpty()),
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
             ) {
@@ -1068,9 +1097,24 @@ private fun VaultScreen(
 private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
     var revealed by remember { mutableStateOf(false) }
     var clipboardTick by remember { mutableIntStateOf(0) }
+    var totpValue by remember(item.id) { mutableStateOf("") }
+    var totpRemaining by remember(item.id) { mutableIntStateOf(0) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val clipboard = remember { SensitiveClipboard(context, scope) }
+    LaunchedEffect(item.totpUri) {
+        if (item.totpUri.isNotEmpty()) {
+            while (true) {
+                runCatching {
+                    totpCode(item.totpUri, (System.currentTimeMillis() / 1000).toULong())
+                }.onSuccess {
+                    totpValue = it.code
+                    totpRemaining = it.secondsRemaining.toInt()
+                }
+                delay(1_000)
+            }
+        }
+    }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
@@ -1092,7 +1136,7 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
                 .padding(CKDimens.Space4),
         ) {
             Text(
-                text = "Login",
+                text = if (item.totpUri.isNotEmpty()) "TOTP" else "Login",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
             )
@@ -1104,6 +1148,50 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
                     .semantics { heading() },
             )
             Spacer(Modifier.height(CKDimens.Space4))
+            if (item.totpUri.isNotEmpty()) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+                ) {
+                    Column(modifier = Modifier.padding(CKDimens.Space4)) {
+                        DetailRow("Account", item.username)
+                        HorizontalDivider(
+                            modifier = Modifier.padding(vertical = CKDimens.Space3),
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                        Text(
+                            text = totpValue.ifEmpty { "------" },
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontFamily = FontFamily.Monospace,
+                        )
+                        Text(
+                            text = "Refreshes in ${totpRemaining}s",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            TextButton(onClick = {
+                                if (totpValue.isNotEmpty()) {
+                                    clipboard.copy("CipherKeep TOTP", totpValue) {
+                                        clipboardTick = it
+                                    }
+                                }
+                            }) { Text("Copy code") }
+                        }
+                        if (clipboardTick > 0) {
+                            Text(
+                                text = "Clipboard clears in ${clipboardTick}s",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
+            } else {
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -1147,9 +1235,10 @@ private fun ItemDetailScreen(item: VaultItem, onBack: () -> Unit) {
                     }
                 }
             }
+            }
             Spacer(Modifier.height(CKDimens.Space4))
             Text(
-                text = "Clipboard clears after 30 seconds. TOTP and edit arrive in P1.",
+                text = "Clipboard clears after 30 seconds. Codes are generated locally; edit arrives in P1.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

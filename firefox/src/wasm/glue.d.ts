@@ -26,6 +26,13 @@ declare function generate_password(
 
 declare function generate_passphrase(words: number, separator: string): WasmGeneratedSecret;
 
+interface WasmTotpCode {
+  code: string;
+  seconds_remaining: number;
+}
+
+declare function totp_code(uri: string, unixSecs: number): WasmTotpCode;
+
 declare class WasmVaultSession {
   static create(password: Uint8Array): WasmVaultSession;
   static open(blob: Uint8Array): WasmVaultSession;

@@ -529,9 +529,43 @@ let wasm_bindgen = (function(exports) {
         }
     }
     exports.generate_password = generate_password;
+
+    /**
+     * Generate a TOTP code from an otpauth URI.
+     *
+     * # Errors
+     *
+     * Returns a JS `{ code, message }` object for an invalid URI.
+     * @param {string} uri
+     * @param {number} unix_secs
+     * @returns {any}
+     */
+    function totp_code(uri, unix_secs) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val2 = +unix_secs;
+            const ptr0 = passStringToWasm0(uri, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.totp_code(retptr, ptr0, len0, val2);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeFromExternrefTable0(r1);
+            }
+            return takeFromExternrefTable0(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    exports.totp_code = totp_code;
     function __wbg_get_imports() {
         const import0 = {
             __proto__: null,
+            __wbg_Error_208446807d0d1e30: function(arg0, arg1) {
+                const ret = Error(getStringFromWasm0(arg0, arg1));
+                return ret;
+            },
             __wbg___wbindgen_is_function_741ff2bb612836f5: function(arg0) {
                 const ret = typeof(arg0) === 'function';
                 return ret;
@@ -641,6 +675,11 @@ let wasm_bindgen = (function(exports) {
             __wbindgen_generic_0000000000000003: function(arg0, arg1) {
                 // Cast intrinsic for `Ref(String) -> Externref`.
                 const ret = getStringFromWasm0(arg0, arg1);
+                return ret;
+            },
+            __wbindgen_generic_0000000000000004: function(arg0) {
+                // Cast intrinsic for `U64 -> Externref`.
+                const ret = BigInt.asUintN(64, arg0);
                 return ret;
             },
             __wbindgen_init_externref_table: function() {
