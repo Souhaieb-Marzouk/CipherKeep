@@ -10,6 +10,15 @@ updates:
     groups:
       rust-dependencies:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "argon2"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "chacha20poly1305"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "hkdf"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sha2"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: npm
     directory: "/firefox"
@@ -21,6 +30,11 @@ updates:
     groups:
       firefox-dependencies:
         patterns: ["*"]
+    ignore:
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: gradle
     directory: "/android"
@@ -29,6 +43,17 @@ updates:
     cooldown:
       default-days: 7
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "com.android.tools.build:gradle"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "gradle"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "org.jetbrains.kotlin:kotlin-gradle-plugin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "androidx.compose:compose-bom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.squareup.okhttp3:okhttp"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: "/"
