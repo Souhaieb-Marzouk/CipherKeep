@@ -781,7 +781,8 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(CKDimens.Space4),
+                .padding(CKDimens.Space4)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
@@ -1274,7 +1275,7 @@ private fun VaultScreen(
             item {
                 Spacer(Modifier.height(CKDimens.Space2))
                 Text(
-                    text = "Autofill and richer item types arrive in P1.",
+                    text = "Autofill is opt-in per item. Open Edit and allow the exact origin.",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -1530,7 +1531,7 @@ private fun ItemDetailScreen(
                     )
                     DetailRow(
                         label = "Password",
-                        value = if (revealed) item.password else "Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢Ã¢â‚¬Â¢",
+                        value = if (revealed) item.password else if (item.password.isEmpty()) "" else "\u2022".repeat(item.password.length.coerceAtMost(32)),
                     )
                     if (item.notes.isNotBlank()) {
                         DetailRow("Notes", item.notes)

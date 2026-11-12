@@ -657,13 +657,7 @@ impl FfiVaultSession {
     /// One-time recovery shares, newest first. Empty after a normal unlock.
     #[must_use]
     pub fn recovery_shares(&self) -> Vec<String> {
-        self.with_state_mut(|state| {
-            let mut shares = std::mem::take(&mut state.shares);
-            for share in &mut shares {
-                share.zeroize();
-            }
-            shares
-        })
+        self.with_state_mut(|state| std::mem::take(&mut state.shares))
     }
 
     /// Lock and drop the master key/keyring.
@@ -1041,7 +1035,10 @@ mod tests {
         let password = b"correct horse battery staple".to_vec();
         let session = FfiVaultSession::create(password.clone()).expect("create");
         assert!(!session.is_locked());
-        assert_eq!(session.recovery_shares().len(), 3);
+        let shares = session.recovery_shares();
+        assert_eq!(shares.len(), 3);
+        assert!(shares.iter().all(|share| !share.is_empty()));
+        assert_ne!(shares[0], shares[1]);
         let blob = session.blob();
         let unlocked = FfiVaultSession::unlock(blob, password).expect("unlock");
         assert!(!unlocked.is_locked());
