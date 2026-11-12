@@ -31,10 +31,12 @@ import dev.cipherkeep.app.ui.theme.CKDimens
 
 /** Persisted Android SAF folder used by the local-folder sync adapter. */
 @Composable
-fun SyncFolderSection(context: Context) {
+fun SyncFolderSection(context: Context, controller: dev.cipherkeep.app.data.SessionController) {
     val prefs = remember { context.getSharedPreferences("sync", Context.MODE_PRIVATE) }
     var folder by remember { mutableStateOf(prefs.getString("local_folder", null)) }
     var probe by remember { mutableStateOf<String?>(null) }
+    var folderSync by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
             runCatching {
@@ -76,6 +78,21 @@ fun SyncFolderSection(context: Context) {
             probe?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall)
             }
+            if (folder != null) {
+                OutlinedButton(
+                    onClick = {
+                        scope.launch {
+                            folderSync = runCatching {
+                                val namespace = dev.cipherkeep.app.data.AndroidSyncEngine(context, controller).namespace()
+                                val result = controller.syncLocalFolder(namespace)
+                                "Synced ${result.records} record(s); conflicts ${result.conflicts}."
+                            }.getOrElse { "Folder sync failed." }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Sync folder") }
+            }
+            folderSync?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
             Text(
                 text = "The adapter writes only the sealed manifest and opaque blobs. Android grants access to this folder only.",
                 style = MaterialTheme.typography.labelSmall,

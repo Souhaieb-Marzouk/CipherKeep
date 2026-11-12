@@ -1,6 +1,7 @@
 package dev.cipherkeep.app.data
 
 import android.content.Context
+import android.net.Uri
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -468,6 +469,52 @@ class SessionController(context: Context) {
             loadItems()
             SyncOutcome(records.length(), conflicts.length())
         }
+
+    suspend fun syncLocalFolder(namespace: String): SyncOutcome = withContext(Dispatchers.IO) {
+        val active = session ?: error("vault is locked")
+        val repo = repository ?: error("storage is unavailable")
+        val uri = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+            .getString("local_folder", null) ?: error("no sync folder")
+        val folder = AndroidSyncFolder(appContext, Uri.parse(uri))
+        val actor = ByteArray(16) { 1 }
+        val created = System.currentTimeMillis().toULong()
+        val entities = repo.list().filter { !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID) }
+        val local = entities.map { entity ->
+            active.exportSyncRecord(entity.itemId, entity.ciphertext, actor, created, 1uL).decodeToString()
+        }
+        val remote = mutableListOf<String>()
+        for (name in folder.listManifests()) {
+            val bytes = folder.read(name) ?: continue
+            val parsed = JSONObject(bytes.decodeToString())
+            val array = parsed.optJSONArray("records") ?: continue
+            for (index in 0 until array.length()) {
+                array.optString(index).takeIf { it.isNotEmpty() }?.let(remote::add)
+            }
+        }
+        val merged = JSONObject(mergeSyncRecordsV2(local, remote))
+        val records = merged.optJSONArray("records") ?: JSONArray()
+        for (index in 0 until records.length()) {
+            val raw = records.getString(index)
+            val idHex = JSONObject(raw).getString("item")
+            val legacy = active.applySyncRecord(raw.encodeToByteArray())
+            val id = ByteArray(16) { offset -> idHex.substring(offset * 2, offset * 2 + 2).toInt(16).toByte() }
+            val ciphertext = active.encryptItem(id, legacy)
+            legacy.fill(0)
+            val previous = repo.get(id)
+            repo.save(
+                itemId = id,
+                ciphertext = ciphertext,
+                lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                tombstone = false,
+                schemaVersion = 1,
+                updatedAt = System.currentTimeMillis(),
+            )
+        }
+        val payload = JSONObject().put("v", 1).put("records", records).toString().encodeToByteArray()
+        require(folder.write(namespace, "manifest-$namespace.json", payload)) { "folder write failed" }
+        loadItems()
+        SyncOutcome(records.length(), merged.optJSONArray("conflicts")?.length() ?: 0)
+    }
 
     suspend fun resolveConflict(item: String, field: Int, keepRight: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {

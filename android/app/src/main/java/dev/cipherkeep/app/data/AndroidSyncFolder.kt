@@ -43,6 +43,48 @@ class AndroidSyncFolder(private val context: Context, private val tree: Uri) {
         renamed != null
     }.getOrDefault(false)
 
+    fun listManifests(): List<String> = runCatching {
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(parent, DocumentsContract.getDocumentId(parent))
+        val names = mutableListOf<String>()
+        resolver.query(
+            children,
+            arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(0)
+                if (name != null && VALID_NAME.matches(name) && name.startsWith("manifest-")) {
+                    names.add(name)
+                }
+            }
+        }
+        names.sorted()
+    }.getOrDefault(emptyList())
+
+    fun read(name: String): ByteArray? = runCatching {
+        require(VALID_NAME.matches(name))
+        val parent = DocumentsContract.buildDocumentUriUsingTree(tree, DocumentsContract.getTreeDocumentId(tree))
+        val children = DocumentsContract.buildChildDocumentsUriUsingTree(parent, DocumentsContract.getDocumentId(parent))
+        resolver.query(
+            children,
+            arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+            null,
+            null,
+            null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                if (cursor.getString(1) == name) {
+                    val uri = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(0))
+                    return@use resolver.openInputStream(uri)?.use { it.readBytes() }
+                }
+            }
+            null
+        }
+    }.getOrNull()
+
     fun delete(vaultId: String, name: String): Boolean = runCatching {
         require(VALID_VAULT.matches(vaultId))
         require(VALID_NAME.matches(name))
