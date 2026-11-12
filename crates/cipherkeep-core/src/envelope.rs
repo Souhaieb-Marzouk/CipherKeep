@@ -67,6 +67,8 @@ pub enum Purpose {
     WebAuthn = 6,
     /// Sync blob.
     Sync = 7,
+    /// Encrypted portable export.
+    Export = 8,
 }
 
 impl Purpose {
@@ -168,6 +170,15 @@ impl Aad {
             purpose: Purpose::WebAuthn,
             context: credential_id.to_vec(),
         })
+    }
+
+    /// AAD for an encrypted portable export.
+    #[must_use]
+    pub fn export(header: &[u8]) -> Self {
+        Self {
+            purpose: Purpose::Export,
+            context: header.to_vec(),
+        }
     }
 
     /// AAD for a sync blob.
@@ -480,6 +491,7 @@ mod tests {
         assert_eq!(Purpose::Recovery.as_u8(), 5);
         assert_eq!(Purpose::WebAuthn.as_u8(), 6);
         assert_eq!(Purpose::Sync.as_u8(), 7);
+        assert_eq!(Purpose::Export.as_u8(), 8);
     }
 
     fn to_hex(bytes: &[u8]) -> String {

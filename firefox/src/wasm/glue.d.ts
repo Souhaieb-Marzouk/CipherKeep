@@ -33,6 +33,9 @@ interface WasmTotpCode {
 
 declare function totp_code(uri: string, unixSecs: number): WasmTotpCode;
 
+declare function export_portable(itemsJson: Uint8Array, password: string): Uint8Array;
+declare function import_portable(bytes: Uint8Array, password: string): Uint8Array;
+
 declare class WasmSearchIndex {
   constructor();
   insert(

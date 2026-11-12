@@ -675,9 +675,13 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_cipherkeep_ffi_checksum_func_export_portable(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_passphrase(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_import_portable(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_totp_code(
     ): Int
@@ -813,9 +817,13 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): Unit
+    external fun uniffi_cipherkeep_ffi_fn_func_export_portable(`itemsJson`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_passphrase(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_password(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_import_portable(`bytes`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_totp_code(`uri`: RustBuffer.ByValue,`unixSecs`: Long,uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
@@ -938,10 +946,16 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_export_portable() and 0xFFFF) != 46929) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_passphrase() and 0xFFFF) != 55064) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_password() and 0xFFFF) != 64626) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_portable() and 0xFFFF) != 4345) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_totp_code() and 0xFFFF) != 63792) {
@@ -3214,6 +3228,27 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
     }
 }
         /**
+         * Encrypt portable item JSON with a separate export password.
+         *
+         * # Errors
+         *
+         * Returns a redacted error for a weak password, oversized input or crypto
+         * failure.
+         */
+    @Throws(FfiException::class) fun `exportPortable`(`itemsJson`: kotlin.ByteArray, `password`: kotlin.String): kotlin.ByteArray {
+            return FfiConverterByteArray.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_export_portable(
+
+
+        FfiConverterByteArray.lower(`itemsJson`),
+        FfiConverterString.lower(`password`),_status)
+}
+    )
+    }
+
+
+        /**
          * Generate an EFF-style passphrase with the shared core generator.
          *
          * # Errors
@@ -3248,6 +3283,26 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
 
 
         FfiConverterTypeFfiPasswordPolicy.lower(`policy`),_status)
+}
+    )
+    }
+
+
+        /**
+         * Decrypt a portable export and return item JSON.
+         *
+         * # Errors
+         *
+         * Returns a redacted error for a wrong password, tamper or malformed header.
+         */
+    @Throws(FfiException::class) fun `importPortable`(`bytes`: kotlin.ByteArray, `password`: kotlin.String): kotlin.ByteArray {
+            return FfiConverterByteArray.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_import_portable(
+
+
+        FfiConverterByteArray.lower(`bytes`),
+        FfiConverterString.lower(`password`),_status)
 }
     )
     }

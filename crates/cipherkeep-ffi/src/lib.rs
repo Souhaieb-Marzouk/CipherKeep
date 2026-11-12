@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
-    combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
+    combine_2_of_3, derive_master_key, export_backup, import_backup, generate_passphrase as core_generate_passphrase,
     generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope,
     ErrorCode, ItemId, ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare,
     SearchDocument, SearchIndex, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession,
@@ -294,6 +294,29 @@ impl FfiSearchIndex {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+}
+
+/// Encrypt portable item JSON with a separate export password.
+///
+/// # Errors
+///
+/// Returns a redacted error for a weak password, oversized input or crypto
+/// failure.
+#[uniffi::export]
+pub fn export_portable(items_json: Vec<u8>, password: String) -> Result<Vec<u8>, FfiError> {
+    export_backup(&items_json, &password).map_err(FfiError::from)
+}
+
+/// Decrypt a portable export and return item JSON.
+///
+/// # Errors
+///
+/// Returns a redacted error for a wrong password, tamper or malformed header.
+#[uniffi::export]
+pub fn import_portable(bytes: Vec<u8>, password: String) -> Result<Vec<u8>, FfiError> {
+    import_backup(&bytes, &password)
+        .map(|plaintext| plaintext.expose_secret().to_vec())
+        .map_err(FfiError::from)
 }
 
 /// TOTP code and the seconds until the next step.

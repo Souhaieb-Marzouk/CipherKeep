@@ -12,6 +12,7 @@ const LOCK_ALARM = "cipherkeep-auto-lock";
 const itemStore = new CiphertextStore();
 const UNLOCK_FAILED = "unlockFailedAttempts";
 const UNLOCK_NEXT = "unlockNextAttemptAt";
+const FOLDER_META_ID = "f".repeat(32);
 let itemStoreReady: Promise<void> | null = null;
 
 function ensureWasm(): Promise<unknown> {
@@ -126,12 +127,43 @@ function rebuildSearch(items: ItemView[]): void {
   }
 }
 
+async function readFolderNames(active: WasmVaultSession): Promise<string[]> {
+  await ensureItemStore();
+  const records = await itemStore.list();
+  const meta = records.find((record) => record.id === FOLDER_META_ID);
+  if (!meta) {
+    return [];
+  }
+  const plaintext = active.decrypt_item(hexToBytes(meta.id), meta.ciphertext);
+  try {
+    const json = JSON.parse(new TextDecoder().decode(plaintext)) as { folders?: unknown };
+    return Array.isArray(json.folders)
+      ? json.folders.filter((name): name is string => typeof name === "string" && name.length > 0)
+      : [];
+  } finally {
+    plaintext.fill(0);
+  }
+}
+
+async function writeFolderNames(active: WasmVaultSession, names: string[]): Promise<void> {
+  await ensureItemStore();
+  const payload = new TextEncoder().encode(
+    JSON.stringify({ v: 1, type: "folder-list", folders: [...new Set(names)].sort() }),
+  );
+  const ciphertext = active.encrypt_item(hexToBytes(FOLDER_META_ID), payload);
+  payload.fill(0);
+  await itemStore.put({ id: FOLDER_META_ID, ciphertext, updatedAt: Date.now() });
+}
+
 async function listItems(): Promise<ItemView[]> {
   await ensureItemStore();
   const active = requireSession();
   const records = await itemStore.list();
   const items: ItemView[] = [];
   for (const record of records) {
+    if (record.id === FOLDER_META_ID) {
+      continue;
+    }
     try {
       const payload = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
       const json = JSON.parse(new TextDecoder().decode(payload)) as {
@@ -159,6 +191,7 @@ async function listItems(): Promise<ItemView[]> {
           ? json.tags.filter((tag): tag is string => typeof tag === "string")
           : [],
         favorite: json.favorite === true,
+        updatedAt: record.updatedAt,
       });
     } catch {
       // A record from a different vault is skipped rather than exposed.
@@ -323,14 +356,88 @@ async function handle(request: Request): Promise<Response> {
         });
         return { ok: true, kind: "items", items: await listItems() };
       }
+      case "export-backup": {
+        const items = await listItems();
+        const json = new TextEncoder().encode(JSON.stringify({ v: 1, items }));
+        const bytes = export_portable(json, request.password);
+        json.fill(0);
+        return { ok: true, kind: "backup", data: bytesToBase64(bytes) };
+      }
+      case "autofill-request": {
+        const active = requireSession();
+        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id || !tab.url) {
+          return { ok: false, error: "No active page." };
+        }
+        const tabHost = new URL(tab.url).hostname;
+        const items = await listItems();
+        const item = items.find((candidate) => candidate.id === request.id);
+        if (!item || item.url.length === 0) {
+          return { ok: false, error: "Item is not available for this page." };
+        }
+        const itemHost = new URL(item.url).hostname;
+        if (itemHost.toLowerCase() !== tabHost.toLowerCase()) {
+          return { ok: false, error: "Item origin does not match this page." };
+        }
+        if (active.is_locked()) {
+          return { ok: false, error: "Vault is locked." };
+        }
+        return {
+          ok: true,
+          kind: "credentials",
+          username: item.username,
+          password: item.password,
+        };
+      }
+      case "import-backup": {
+        const active = requireSession();
+        await ensureItemStore();
+        const plaintext = import_portable(base64ToBytes(request.data), request.password);
+        const json = JSON.parse(new TextDecoder().decode(plaintext)) as { items?: unknown };
+        plaintext.fill(0);
+        const items = Array.isArray(json.items) ? json.items : [];
+        let imported = 0;
+        for (const raw of items) {
+          if (typeof raw !== "object" || raw === null) {
+            continue;
+          }
+          const item = raw as Record<string, unknown>;
+          if (typeof item.title !== "string" || item.title.length === 0) {
+            continue;
+          }
+          const idBytes = crypto.getRandomValues(new Uint8Array(16));
+          const payload = new TextEncoder().encode(JSON.stringify({ v: 1, ...item }));
+          const ciphertext = active.encrypt_item(idBytes, payload);
+          payload.fill(0);
+          await itemStore.put({ id: bytesToHex(idBytes), ciphertext, updatedAt: Date.now() });
+          imported += 1;
+        }
+        return { ok: true, kind: "ok", imported };
+      }
+      case "create-folder": {
+        const active = requireSession();
+        const names = await readFolderNames(active);
+        names.push(request.name.trim());
+        await writeFolderNames(active, names);
+        return { ok: true, kind: "items", items: await listItems() };
+      }
       case "rename-folder":
       case "delete-folder": {
         const active = requireSession();
         await ensureItemStore();
         const oldName = request.type === "rename-folder" ? request.oldName : request.name;
         const newName = request.type === "rename-folder" ? request.newName : "";
+        const names = await readFolderNames(active);
+        const updatedNames = names.filter((name) => name !== oldName);
+        if (newName.length > 0) {
+          updatedNames.push(newName);
+        }
+        await writeFolderNames(active, updatedNames);
         const records = await itemStore.list();
         for (const record of records) {
+          if (record.id === FOLDER_META_ID) {
+            continue;
+          }
           try {
             const plaintext = active.decrypt_item(hexToBytes(record.id), record.ciphertext);
             const json = JSON.parse(new TextDecoder().decode(plaintext)) as {

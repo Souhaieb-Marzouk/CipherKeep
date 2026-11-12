@@ -16,7 +16,9 @@
   "permissions": [
     "storage",
     "alarms",
-    "clipboardWrite"
+    "clipboardWrite",
+    "activeTab",
+    "scripting"
   ],
   "background": {
     "scripts": [

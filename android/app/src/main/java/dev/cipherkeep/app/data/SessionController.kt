@@ -13,6 +13,8 @@ import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.db.VaultRepository
 import org.json.JSONArray
 import org.json.JSONObject
+import dev.cipherkeep.core.exportPortable
+import dev.cipherkeep.core.importPortable
 import dev.cipherkeep.core.totpCode
 import java.security.SecureRandom
 import kotlinx.coroutines.CoroutineScope
@@ -340,6 +342,68 @@ class SessionController(context: Context) {
                     updatedAt = System.currentTimeMillis(),
                 )
                 loadItems()
+            }
+        }
+
+    suspend fun exportBackup(password: String): Result<ByteArray> = withContext(Dispatchers.IO) {
+        runCatching {
+            val array = JSONArray()
+            items.forEach { item ->
+                array.put(
+                    JSONObject()
+                        .put("type", if (item.totpUri.isNotEmpty()) "totp" else "login")
+                        .put("title", item.title)
+                        .put("username", item.username)
+                        .put("password", item.password)
+                        .put("totpUri", item.totpUri)
+                        .put("url", item.url)
+                        .put("notes", item.notes)
+                        .put("folder", item.folder)
+                        .put("tags", JSONArray(item.tags))
+                        .put("favorite", item.favorite),
+                )
+            }
+            val payload = JSONObject().put("v", 1).put("items", array).toString().encodeToByteArray()
+            val exported = exportPortable(payload, password)
+            payload.fill(0)
+            exported
+        }
+    }
+
+    suspend fun importBackup(bytes: ByteArray, password: String): Result<Int> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val plaintext = importPortable(bytes, password)
+                val json = JSONObject(plaintext.decodeToString())
+                plaintext.fill(0)
+                val array = json.getJSONArray("items")
+                var imported = 0
+                for (index in 0 until array.length()) {
+                    val item = array.getJSONObject(index)
+                    val title = item.optString("title")
+                    if (title.isBlank()) {
+                        continue
+                    }
+                    val tags = item.optJSONArray("tags")?.let { values ->
+                        (0 until values.length()).joinToString(",") { values.optString(it) }
+                    }.orEmpty()
+                    if (item.optString("type") == "totp" && item.optString("totpUri").isNotEmpty()) {
+                        saveTotpItem(title, item.optString("username"), item.optString("totpUri")).getOrThrow()
+                    } else {
+                        saveItem(
+                            title,
+                            item.optString("username"),
+                            item.optString("password"),
+                            item.optString("url"),
+                            item.optString("notes"),
+                            item.optString("folder"),
+                            tags,
+                            item.optBoolean("favorite"),
+                        ).getOrThrow()
+                    }
+                    imported += 1
+                }
+                imported
             }
         }
 

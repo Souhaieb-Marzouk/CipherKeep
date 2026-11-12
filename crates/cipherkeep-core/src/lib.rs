@@ -26,8 +26,10 @@
 pub mod crdt;
 pub mod envelope;
 pub mod error;
+pub mod export;
 pub mod generator;
 pub mod header;
+pub mod import;
 pub mod item;
 pub mod item_store;
 pub mod kdf;
@@ -51,8 +53,17 @@ pub use generator::{
     PassphrasePolicy, PasswordPolicy, StrengthLabel, EFF_WORDLIST_LEN, MAX_PASSPHRASE_WORDS,
     MAX_PASSWORD_LEN, MIN_PASSPHRASE_WORDS, MIN_PASSWORD_LEN,
 };
+pub use export::{
+    export_backup, import_backup, EXPORT_HEADER_LEN, EXPORT_MAGIC, EXPORT_VERSION, MAX_EXPORT_BYTES,
+    MIN_EXPORT_PASSWORD_LEN,
+};
 pub use header::{
     VaultHeader, AAD_PREFIX_LEN, MAX_KEYRING_CIPHERTEXT_LEN, MIN_HEADER_LEN, NONCE_LEN,
+};
+pub use import::{
+    detect_format, import, import_with_format, DuplicatePolicy, ImportFormat, ImportKind,
+    ImportReport, ImportResult, ImportedItem, MAX_IMPORT_BYTES, MAX_IMPORT_COLUMNS,
+    MAX_IMPORT_FIELD, MAX_IMPORT_ITEMS,
 };
 pub use item::{
     expected_kind, FieldConflict, FieldKind, FieldRecord, ItemConflict, ItemRecord, ItemType,

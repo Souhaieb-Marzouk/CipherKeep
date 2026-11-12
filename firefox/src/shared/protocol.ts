@@ -34,8 +34,12 @@ export type Request =
   | { type: "save-totp-item"; title: string; account: string; uri: string }
   | { type: "totp-code"; uri: string }
   | { type: "search"; query: string }
+  | { type: "create-folder"; name: string }
   | { type: "rename-folder"; oldName: string; newName: string }
-  | { type: "delete-folder"; name: string };
+  | { type: "delete-folder"; name: string }
+  | { type: "export-backup"; password: string }
+  | { type: "import-backup"; password: string; data: string }
+  | { type: "autofill-request"; id: string };
 
 export interface SearchHit {
   id: string;
@@ -54,6 +58,7 @@ export interface ItemView {
   folder: string;
   tags: string[];
   favorite: boolean;
+  updatedAt: number;
 }
 
 export type Response =
@@ -64,7 +69,7 @@ export type Response =
       locked: boolean;
       retryAfter: number;
     }
-  | { ok: true; kind: "ok"; shares?: string[] }
+  | { ok: true; kind: "ok"; shares?: string[]; imported?: number }
   | { ok: true; kind: "update"; update: UpdateReport }
   | { ok: true; kind: "items"; items: ItemView[] }
   | {
@@ -76,6 +81,8 @@ export type Response =
     }
   | { ok: true; kind: "totp"; code: string; secondsRemaining: number }
   | { ok: true; kind: "search"; hits: SearchHit[] }
+  | { ok: true; kind: "backup"; data: string }
+  | { ok: true; kind: "credentials"; username: string; password: string }
   | { ok: false; error: string; code?: number };
 
 function isText(value: unknown, max: number): value is string {
@@ -101,8 +108,12 @@ function isRequestType(value: unknown): value is Request["type"] {
       "save-totp-item",
       "totp-code",
       "search",
+      "create-folder",
       "rename-folder",
       "delete-folder",
+      "export-backup",
+      "import-backup",
+      "autofill-request",
     ].includes(value)
   );
 }
@@ -188,9 +199,22 @@ export function isRequest(value: unknown): value is Request {
       );
     case "search":
       return typeof request.query === "string" && request.query.length <= 256;
+    case "create-folder":
+      return isText(request.name, 64);
     case "rename-folder":
       return isText(request.oldName, 64) && isText(request.newName, 64);
     case "delete-folder":
       return isText(request.name, 64);
+    case "export-backup":
+      return isText(request.password, 1_024) && request.password.length >= 12;
+    case "autofill-request":
+      return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
+    case "import-backup":
+      return (
+        isText(request.password, 1_024) &&
+        request.password.length >= 12 &&
+        typeof request.data === "string" &&
+        request.data.length <= 48_000_000
+      );
   }
 }

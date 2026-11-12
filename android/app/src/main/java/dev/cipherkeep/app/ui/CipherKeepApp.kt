@@ -1,6 +1,8 @@
 package dev.cipherkeep.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.width
@@ -75,6 +77,10 @@ import dev.cipherkeep.core.FfiSearchDocument
 import dev.cipherkeep.core.FfiSearchIndex
 import dev.cipherkeep.core.generatePassphrase
 import dev.cipherkeep.core.generatePassword
+import java.security.MessageDigest
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import dev.cipherkeep.core.totpCode
 import dev.cipherkeep.app.update.UpdateChecker
 import dev.cipherkeep.app.update.UpdateOutcome
@@ -101,7 +107,9 @@ fun CipherKeepApp() {
     var screen by rememberSaveable { mutableStateOf("vault") }
     var selectedIndex by rememberSaveable { mutableIntStateOf(-1) }
     val context = LocalContext.current
-    val controller = remember { SessionController(context) }
+    val controller = remember {
+        SessionController(context).also { dev.cipherkeep.app.autofill.AutofillRegistry.controller = it }
+    }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(controller, lifecycleOwner) {
@@ -118,6 +126,7 @@ fun CipherKeepApp() {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            dev.cipherkeep.app.autofill.AutofillRegistry.controller = null
             controller.close()
         }
     }
@@ -1546,6 +1555,50 @@ private fun SettingsScreen(
     val biometricKey = remember { BiometricKeyManager() }
     var biometricEnabled by remember { mutableStateOf(false) }
     var biometricMessage by remember { mutableStateOf<String?>(null) }
+    var backupPassword by remember { mutableStateOf("") }
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream"),
+    ) { uri ->
+        if (uri != null && backupPassword.isNotEmpty()) {
+            scope.launch {
+                controller.exportBackup(backupPassword)
+                    .onSuccess { bytes ->
+                        runCatching {
+                            context.contentResolver.openOutputStream(uri)?.use { it.write(bytes) }
+                        }.onSuccess {
+                            val checksum = MessageDigest.getInstance("SHA-256")
+                                .digest(bytes)
+                                .joinToString("") { "%02x".format(it) }
+                            backupMessage = "Encrypted backup written (${bytes.size} bytes).\nSHA-256: $checksum"
+                        }.onFailure {
+                            backupMessage = "Could not write the backup file."
+                        }
+                    }
+                    .onFailure { backupMessage = "Backup encryption failed. Use a 12+ character export password." }
+                backupPassword = ""
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null && backupPassword.isNotEmpty()) {
+            scope.launch {
+                val bytes = runCatching {
+                    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                }.getOrNull()
+                if (bytes == null) {
+                    backupMessage = "Could not read the selected file."
+                } else {
+                    controller.importBackup(bytes, backupPassword)
+                        .onSuccess { count -> backupMessage = "$count items restored." }
+                        .onFailure { backupMessage = "Restore failed. Check the password and file." }
+                }
+                backupPassword = ""
+            }
+        }
+    }
     LaunchedEffect(controller) {
         biometricEnabled = controller.biometricWrapped() != null
         dailyCheck = updatePreferences.dailyEnabled()
@@ -1787,6 +1840,54 @@ private fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = CKDimens.Space2),
             )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
+            Text(
+                text = "Encrypted backup",
+                style = MaterialTheme.typography.headlineSmall,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                text = "Use a separate password of at least 12 characters. The file is encrypted with Argon2id and XChaCha20-Poly1305.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = backupPassword,
+                onValueChange = { backupPassword = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Export/restore password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                Button(
+                    onClick = {
+                        backupMessage = null
+                        val date = SimpleDateFormat("yyyyMMdd", Locale.US).format(Date())
+                        exportLauncher.launch("cipherkeep-backup-$date.ckexp")
+                    },
+                    enabled = backupPassword.length >= 12,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Export") }
+                OutlinedButton(
+                    onClick = {
+                        backupMessage = null
+                        importLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                    },
+                    enabled = backupPassword.length >= 12,
+                    modifier = Modifier.weight(1f),
+                ) { Text("Restore") }
+            }
+            if (backupMessage != null) {
+                Text(
+                    text = backupMessage.orEmpty(),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 

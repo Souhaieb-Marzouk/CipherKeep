@@ -15,7 +15,7 @@ use wasm_bindgen::prelude::*;
 use zeroize::{Zeroize, Zeroizing};
 
 use cipherkeep_core::{
-    combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
+    combine_2_of_3, derive_master_key, export_backup, import_backup, generate_passphrase as core_generate_passphrase,
     generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope, ItemId,
     ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SearchDocument,
     SearchIndex, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
@@ -137,6 +137,28 @@ pub fn totp_code(uri: &str, unix_secs: u32) -> Result<JsValue, JsValue> {
         seconds_remaining: entry.totp().seconds_remaining(u64::from(unix_secs)),
     })
     .map_err(|_| JsValue::from_str("internal error"))
+}
+
+/// Encrypt portable item JSON with a separate export password.
+///
+/// # Errors
+///
+/// Returns a JS error object for a weak password or crypto failure.
+#[wasm_bindgen]
+pub fn export_portable(items_json: Vec<u8>, password: &str) -> Result<Vec<u8>, JsValue> {
+    export_backup(&items_json, password).map_err(js_error)
+}
+
+/// Decrypt a portable export and return item JSON.
+///
+/// # Errors
+///
+/// Returns a JS error object for a wrong password, tamper or malformed header.
+#[wasm_bindgen]
+pub fn import_portable(bytes: Vec<u8>, password: &str) -> Result<Vec<u8>, JsValue> {
+    import_backup(&bytes, password)
+        .map(|plaintext| plaintext.expose_secret().to_vec())
+        .map_err(js_error)
 }
 
 /// Return the shared core version.

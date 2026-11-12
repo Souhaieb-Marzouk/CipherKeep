@@ -135,12 +135,104 @@ element<HTMLButtonElement>("unlock").addEventListener("click", async () => {
   await refresh();
 });
 
+async function fillActiveTab(username: string, password: string): Promise<void> {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id) {
+    showMessage("No active page to fill.");
+    return;
+  }
+  const result = await browser.scripting.executeScript({
+    target: { tabId: tab.id },
+    func: (user: string, pass: string) => {
+      const roots: ParentNode[] = [document];
+      for (let index = 0; index < roots.length && index < 8; index += 1) {
+        const root = roots[index]!;
+        for (const element of Array.from(root.querySelectorAll("*"))) {
+          if (element.shadowRoot) {
+            roots.push(element.shadowRoot);
+          }
+        }
+      }
+      const visible = (element: HTMLInputElement): boolean =>
+        element.offsetParent !== null && !element.disabled && !element.readOnly;
+      let passwordField: HTMLInputElement | null = null;
+      let usernameField: HTMLInputElement | null = null;
+      for (const root of roots) {
+        for (const element of Array.from(root.querySelectorAll<HTMLInputElement>("input"))) {
+          if (!visible(element)) {
+            continue;
+          }
+          const type = element.type.toLowerCase();
+          const id = `${element.id} ${element.name} ${element.autocomplete}`.toLowerCase();
+          if (type === "password" && passwordField === null) {
+            passwordField = element;
+          } else if (
+            usernameField === null &&
+            (type === "email" ||
+              type === "text" ||
+              type === "tel" ||
+              id.includes("user") ||
+              id.includes("email") ||
+              id.includes("login"))
+          ) {
+            usernameField = element;
+          }
+        }
+      }
+      const set = (element: HTMLInputElement | null, value: string): void => {
+        if (element === null || value.length === 0) {
+          return;
+        }
+        element.focus();
+        element.value = value;
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        element.dispatchEvent(new Event("change", { bubbles: true }));
+      };
+      set(usernameField, user);
+      set(passwordField, pass);
+      return passwordField !== null;
+    },
+    args: [username, password],
+  });
+  const filled = result.some((entry) => entry.result === true);
+  showMessage(filled ? "Filled username/password. Review before submitting." : "No fillable password field found.", filled);
+}
+
 function renderItems(items: ItemView[]): void {
   const list = element<HTMLUListElement>("itemList");
   list.replaceChildren();
-  for (const item of items) {
+  const mode = element<HTMLSelectElement>("sortItems").value;
+  const sorted = [...items].sort((left, right) => {
+    if (mode === "recent") {
+      return right.updatedAt - left.updatedAt || left.title.localeCompare(right.title);
+    }
+    if (mode === "folder") {
+      return left.folder.localeCompare(right.folder) || left.title.localeCompare(right.title);
+    }
+    return left.title.localeCompare(right.title);
+  });
+  for (const item of sorted) {
     const row = document.createElement("li");
-    row.textContent = `${item.title} — ${item.username}`;
+    const type = item.totpUri.length > 0 ? "TOTP · " : "";
+    row.textContent = `${type}${item.title} — ${item.username}`;
+    if (item.url.length > 0 && item.password.length > 0) {
+      const fill = document.createElement("button");
+      fill.type = "button";
+      fill.className = "link";
+      fill.textContent = "Fill";
+      fill.addEventListener("click", async () => {
+        const reply = await send({ type: "autofill-request", id: item.id });
+        if (!reply.ok) {
+          showMessage(reply.error);
+          return;
+        }
+        if (reply.kind !== "credentials") {
+          return;
+        }
+        await fillActiveTab(reply.username, reply.password);
+      });
+      row.append(" ", fill);
+    }
     list.append(row);
   }
 }
@@ -176,6 +268,96 @@ async function runSearch(): Promise<void> {
 }
 
 element<HTMLInputElement>("favoriteFilter").addEventListener("change", () => {
+  void runSearch();
+});
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
+element<HTMLButtonElement>("exportBackup").addEventListener("click", async () => {
+  const password = element<HTMLInputElement>("backupPassword").value;
+  if (password.length < 12) {
+    showMessage("Use an export password of at least 12 characters.");
+    return;
+  }
+  const reply = await send({ type: "export-backup", password });
+  element<HTMLInputElement>("backupPassword").value = "";
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  if (reply.kind !== "backup") {
+    return;
+  }
+  const binary = atob(reply.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const url = URL.createObjectURL(new Blob([bytes], { type: "application/octet-stream" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `cipherkeep-backup-${new Date().toISOString().slice(0, 10)}.ckexp`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const checksum = Array.from(digest, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  showMessage(`Encrypted backup downloaded. SHA-256: ${checksum}`, true);
+});
+
+element<HTMLButtonElement>("importBackup").addEventListener("click", () => {
+  if (element<HTMLInputElement>("backupPassword").value.length < 12) {
+    showMessage("Enter the backup password first.");
+    return;
+  }
+  element<HTMLInputElement>("backupFile").click();
+});
+
+element<HTMLInputElement>("backupFile").addEventListener("change", async () => {
+  const input = element<HTMLInputElement>("backupFile");
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) {
+    return;
+  }
+  const password = element<HTMLInputElement>("backupPassword").value;
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const reply = await send({
+    type: "import-backup",
+    password,
+    data: bytesToBase64(bytes),
+  });
+  element<HTMLInputElement>("backupPassword").value = "";
+  if (!reply.ok || reply.kind !== "ok") {
+    showMessage(reply.ok ? "Unexpected restore response." : reply.error);
+    return;
+  }
+  await loadItems();
+  showMessage(`Restored ${reply.imported ?? 0} items.`, true);
+});
+
+element<HTMLButtonElement>("createFolder").addEventListener("click", async () => {
+  const name = element<HTMLInputElement>("folderCreate").value.trim();
+  if (name.length === 0) {
+    showMessage("Enter a folder name.");
+    return;
+  }
+  const reply = await send({ type: "create-folder", name });
+  if (!reply.ok) {
+    showMessage(reply.error);
+    return;
+  }
+  element<HTMLInputElement>("folderCreate").value = "";
+  await loadItems();
+  showMessage("Folder created.", true);
+});
+
+element<HTMLSelectElement>("sortItems").addEventListener("change", () => {
   void runSearch();
 });
 

@@ -138,6 +138,11 @@
           <button id="lockUnlocked" class="secondary">Lock vault</button>
         </div>
         <h2 style="font-size:16px;margin:18px 0 0">Folders</h2>
+        <label for="folderCreate">New folder</label>
+        <input id="folderCreate" type="text" />
+        <div class="row">
+          <button id="createFolder" class="secondary">Create folder</button>
+        </div>
         <label for="folderName">Folder</label>
         <input id="folderName" type="text" />
         <label for="folderNew">New name</label>
@@ -147,9 +152,24 @@
           <button id="deleteFolder" class="secondary">Delete</button>
         </div>
 
+        <h2 style="font-size:16px;margin:18px 0 0">Encrypted backup</h2>
+        <label for="backupPassword">Export/restore password</label>
+        <input id="backupPassword" type="password" autocomplete="new-password" />
+        <div class="row">
+          <button id="exportBackup" class="secondary">Export</button>
+          <button id="importBackup" class="secondary">Restore</button>
+        </div>
+        <input id="backupFile" type="file" accept=".ckexp,application/octet-stream" hidden />
+
         <label for="searchItems">Search</label>
         <input id="searchItems" type="search" placeholder="Title or username" />
         <label class="check"><input id="favoriteFilter" type="checkbox" /> Favorites only</label>
+        <label for="sortItems">Sort</label>
+        <select id="sortItems">
+          <option value="title">Title</option>
+          <option value="recent">Recently modified</option>
+          <option value="folder">Folder</option>
+        </select>
         <ul id="itemList" style="padding-left:18px; color:var(--muted); font-size:12px"></ul>
 
         <h2 style="font-size:16px;margin:18px 0 0">Generator</h2>
