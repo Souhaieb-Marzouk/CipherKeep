@@ -2052,6 +2052,10 @@ private fun SettingsScreen(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
+            SyncFolderSection(context)
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+
             Text(
                 text = "Encrypted backup",
                 style = MaterialTheme.typography.headlineSmall,

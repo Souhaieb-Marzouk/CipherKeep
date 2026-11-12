@@ -64,6 +64,26 @@
         <pre id="recipeStatus" style="white-space:pre-wrap; color:var(--muted); font:12px/1.5 ui-monospace, monospace; margin:0"></pre>
       </div>
 
+      <h2>Sync</h2>
+      <div class="card">
+        <p>HTTPS only. Tokens are stored in <code>browser.storage.local</code>, which is not an OS keychain; use a revocable, least-privilege token.</p>
+        <div class="row">
+          <select id="syncTransport">
+            <option value="webdav">WebDAV</option>
+            <option value="github">GitHub private repo</option>
+            <option value="relay">CipherKeep relay</option>
+          </select>
+          <input id="syncEndpoint" placeholder="https://dav.example/vault" autocomplete="off" />
+          <input id="syncUsername" placeholder="username (WebDAV)" autocomplete="username" />
+          <input id="syncOwner" placeholder="owner (GitHub)" autocomplete="off" />
+          <input id="syncRepo" placeholder="repo (GitHub)" autocomplete="off" />
+          <input id="syncBranch" placeholder="branch (GitHub)" autocomplete="off" />
+          <input id="syncToken" type="password" placeholder="token / app password" autocomplete="off" />
+        </div>
+        <div class="row"><button id="saveSync">Save sync settings</button></div>
+        <pre id="syncStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
+      </div>
+
       <h2>Updates</h2>
       <div class="card">
         <p>

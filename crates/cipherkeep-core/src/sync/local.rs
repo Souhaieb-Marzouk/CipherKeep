@@ -42,8 +42,10 @@ impl LocalFolderAdapter {
         Ok(directory)
     }
 
-    fn manifest_path(&self) -> Result<PathBuf> {
-        Ok(self.vault_dir()?.join("manifest.json"))
+    fn manifest_path(&self, device: [u8; 16]) -> Result<PathBuf> {
+        Ok(self
+            .vault_dir()?
+            .join(format!("manifest-{}.json", hex(&device))))
     }
 
     fn blob_path(&self, item: &[u8; 16], version: u64) -> Result<PathBuf> {
@@ -67,19 +69,26 @@ impl SyncAdapter for LocalFolderAdapter {
     }
 
     fn pull(&self, since: &SyncVersionVector) -> Result<Vec<SyncBatch>> {
-        let path = self.manifest_path()?;
-        if !path.exists() {
-            return Ok(Vec::new());
+        let directory = self.vault_dir()?;
+        let mut batches = Vec::new();
+        for entry in fs::read_dir(&directory).map_err(|_| CoreError::new(ErrorCode::Storage))? {
+            let entry = entry.map_err(|_| CoreError::new(ErrorCode::Storage))?;
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if !name.starts_with("manifest-") || !name.ends_with(".json") {
+                continue;
+            }
+            let bytes = read_bounded(&entry.path())?;
+            let batch = SyncBatch::decode(&bytes)?;
+            if batch.vault_id != self.vault {
+                return Err(CoreError::new(ErrorCode::CorruptData));
+            }
+            if since.require_newer(&batch.versions).is_ok() {
+                batches.push(batch);
+            }
         }
-        let bytes = read_bounded(&path)?;
-        let batch = SyncBatch::decode(&bytes)?;
-        if batch.vault_id != self.vault {
-            return Err(CoreError::new(ErrorCode::CorruptData));
-        }
-        if since.require_newer(&batch.versions).is_err() {
-            return Ok(Vec::new());
-        }
-        Ok(vec![batch])
+        batches.sort_by_key(|batch| batch.device_id);
+        Ok(batches)
     }
 
     fn push(&mut self, batch: &SyncBatch) -> Result<()> {
@@ -87,7 +96,7 @@ impl SyncAdapter for LocalFolderAdapter {
             return Err(CoreError::new(ErrorCode::InvalidArgument));
         }
         batch.validate()?;
-        let manifest = self.manifest_path()?;
+        let manifest = self.manifest_path(batch.device_id)?;
         if manifest.exists() {
             let existing = SyncBatch::decode(&read_bounded(&manifest)?)?;
             existing.versions.require_newer(&batch.versions)?;
@@ -215,8 +224,26 @@ mod tests {
                     .expect("name"),
             );
         }
-        assert!(files.contains("manifest.json"));
+        assert!(files
+            .iter()
+            .any(|name| name.starts_with("manifest-") && name.ends_with(".json")));
         assert!(files.iter().any(|name| name.ends_with(".blob")));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn two_devices_converge_through_one_folder() {
+        let root = temp_dir();
+        let mut first = LocalFolderAdapter::new(&root, [1u8; 16]).expect("first");
+        let mut second = LocalFolderAdapter::new(&root, [1u8; 16]).expect("second");
+        first.push(&batch([2u8; 16], 1)).expect("first push");
+        second.push(&batch([3u8; 16], 1)).expect("second push");
+        let pulled = first
+            .pull(&SyncVersionVector::default())
+            .expect("first pull");
+        assert_eq!(pulled.len(), 2);
+        assert!(pulled.iter().any(|batch| batch.device_id == [2u8; 16]));
+        assert!(pulled.iter().any(|batch| batch.device_id == [3u8; 16]));
         let _ = fs::remove_dir_all(root);
     }
 
@@ -238,7 +265,7 @@ mod tests {
             let adapter = LocalFolderAdapter::new(&root, [1u8; 16]).expect("adapter");
             let target = root.join("outside.json");
             fs::write(&target, b"{}").expect("target");
-            let manifest = adapter.manifest_path().expect("path");
+            let manifest = adapter.manifest_path([1u8; 16]).expect("path");
             let _ = fs::remove_file(&manifest);
             symlink(&target, &manifest).expect("symlink");
             assert!(adapter.pull(&SyncVersionVector::default()).is_err());

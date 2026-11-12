@@ -5,6 +5,8 @@
 //! titles, URLs or plaintext cross the adapter boundary.
 
 pub mod local;
+pub mod merge;
+pub mod scheduler;
 
 use std::collections::{BTreeMap, BTreeSet};
 
