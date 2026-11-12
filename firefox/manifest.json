@@ -42,6 +42,6 @@
     "96": "icons/icon-96.png"
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self' https://github.com https://api.github.com https://raw.githubusercontent.com;"
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; connect-src 'self' https://github.com https://api.github.com https://raw.githubusercontent.com https://cipherkeep-relay.marzouk-souhaieb.workers.dev;"
   }
 }

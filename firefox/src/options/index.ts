@@ -1,5 +1,5 @@
 import type { Response } from "../shared/protocol";
-import { EMPTY_SYNC_CONFIG, configForStorage, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
+import { EMPTY_SYNC_CONFIG, configForStorage, testSyncConnection, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -39,6 +39,18 @@ element<HTMLButtonElement>("saveSync").addEventListener("click", async () => {
   }
   await browser.storage.local.set({ syncConfig: config });
   status.textContent = "Saved. Sync execution is wired separately; no data was uploaded.";
+});
+
+element<HTMLButtonElement>("testSync").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("syncStatus");
+  const stored = await browser.storage.local.get("syncConfig");
+  const config: SyncConfig = { ...EMPTY_SYNC_CONFIG, ...(stored.syncConfig ?? {}) };
+  status.textContent = "Testing…";
+  try {
+    status.textContent = await testSyncConnection(config);
+  } catch (error) {
+    status.textContent = `Test failed: ${error instanceof Error ? error.message : "unknown error"}`;
+  }
 });
 
 void showSync();

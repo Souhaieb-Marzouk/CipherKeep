@@ -43,6 +43,8 @@ export function validateSyncConfig(config: SyncConfig): string[] {
   return errors;
 }
 
+import { GitHubTransport, RelayTransport, WebDavTransport } from "./sync-transport";
+
 export function configForStorage(config: SyncConfig): SyncConfig {
   return {
     ...config,
@@ -53,4 +55,22 @@ export function configForStorage(config: SyncConfig): SyncConfig {
     branch: config.branch.trim() || "main",
     token: config.token,
   };
+}
+
+/** Test authentication/reachability without uploading data. */
+export async function testSyncConnection(config: SyncConfig): Promise<string> {
+  const errors = validateSyncConfig(config);
+  if (errors.length > 0) throw new Error(errors.join("; "));
+  const vault = "a".repeat(32);
+  if (config.transport === "github") {
+    const transport = new GitHubTransport(config.owner, config.repo, config.branch, config.token);
+    await transport.pull(vault);
+    return "GitHub authenticated request succeeded (no manifest published).";
+  }
+  const transport =
+    config.transport === "relay"
+      ? new RelayTransport(config.endpoint, config.token)
+      : new WebDavTransport(config.endpoint, config.username, config.token);
+  await transport.pull(vault);
+  return `${config.transport} authenticated request succeeded (no manifest published).`;
 }
