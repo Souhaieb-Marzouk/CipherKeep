@@ -28,6 +28,7 @@ pub mod envelope;
 pub mod error;
 pub mod header;
 pub mod item;
+pub mod item_store;
 pub mod kdf;
 pub mod keyring;
 pub mod keys;
@@ -51,6 +52,10 @@ pub use item::{
     FIELD_CARD_EXPIRY, FIELD_CARD_NUMBER, FIELD_IDENTITY_ADDRESS, FIELD_IDENTITY_EMAIL,
     FIELD_IDENTITY_NAME, FIELD_IDENTITY_PHONE, FIELD_NOTES, FIELD_PASSWORD, FIELD_SSH_PRIVATE_KEY,
     FIELD_SSH_PUBLIC_KEY, FIELD_TITLE, FIELD_TOTP, FIELD_URL, FIELD_USERNAME, ITEM_SCHEMA_VERSION,
+};
+pub use item_store::{
+    migrate_record, validate_draft, ItemDraft, ItemStore, MemoryItemStore, ValidationIssue,
+    ValidationReason, MAX_FIELD_LEN, MAX_ITEM_FIELDS, MAX_NOTE_LEN, MAX_TITLE_LEN,
 };
 pub use kdf::{
     derive_master_key, derive_master_key_with_policy, KdfAlgorithm, KdfParams, KdfPolicy,

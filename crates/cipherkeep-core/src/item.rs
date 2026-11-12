@@ -462,6 +462,26 @@ impl ItemRecord {
         self.schema
     }
 
+    /// Migrate a record from a known older schema, preserving all fields.
+    ///
+    /// Schema 0 is the legacy pre-registry shape. Migration is additive: field
+    /// ids, including custom ids, are retained. Future schemas are refused.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::UnsupportedVersion`] for a future schema and a
+    /// validation error if the migrated record is inconsistent.
+    pub fn migrate_to_current(mut self, from_schema: u16) -> Result<Self> {
+        if from_schema > ITEM_SCHEMA_VERSION {
+            return Err(CoreError::new(ErrorCode::UnsupportedVersion));
+        }
+        if from_schema < ITEM_SCHEMA_VERSION {
+            self.schema = ITEM_SCHEMA_VERSION;
+        }
+        self.validate()?;
+        Ok(self)
+    }
+
     /// Creation timestamp supplied by the platform.
     #[must_use]
     pub const fn created_at(&self) -> u64 {
