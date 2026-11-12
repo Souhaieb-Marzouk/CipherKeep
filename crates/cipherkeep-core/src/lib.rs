@@ -26,6 +26,7 @@
 pub mod crdt;
 pub mod envelope;
 pub mod error;
+pub mod generator;
 pub mod header;
 pub mod item;
 pub mod item_store;
@@ -43,6 +44,11 @@ pub use envelope::{
     SUITE_XCHACHA20_POLY1305, TAG_LEN,
 };
 pub use error::{CoreError, ErrorCode, Result};
+pub use generator::{
+    generate_passphrase, generate_password, wordlist_is_valid, wordlist_len, GeneratedSecret,
+    PassphrasePolicy, PasswordPolicy, StrengthLabel, EFF_WORDLIST_LEN, MAX_PASSPHRASE_WORDS,
+    MAX_PASSWORD_LEN, MIN_PASSPHRASE_WORDS, MIN_PASSWORD_LEN,
+};
 pub use header::{
     VaultHeader, AAD_PREFIX_LEN, MAX_KEYRING_CIPHERTEXT_LEN, MIN_HEADER_LEN, NONCE_LEN,
 };
