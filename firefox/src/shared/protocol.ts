@@ -22,7 +22,14 @@ export type Request =
     }
   | { type: "generate-passphrase"; words: number; separator: string }
   | { type: "save-totp-item"; title: string; account: string; uri: string }
-  | { type: "totp-code"; uri: string };
+  | { type: "totp-code"; uri: string }
+  | { type: "search"; query: string };
+
+export interface SearchHit {
+  id: string;
+  score: number;
+  snippet: string;
+}
 
 export interface ItemView {
   id: string;
@@ -51,6 +58,7 @@ export type Response =
       strength: string;
     }
   | { ok: true; kind: "totp"; code: string; secondsRemaining: number }
+  | { ok: true; kind: "search"; hits: SearchHit[] }
   | { ok: false; error: string; code?: number };
 
 function isText(value: unknown, max: number): value is string {
@@ -75,6 +83,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "generate-passphrase",
       "save-totp-item",
       "totp-code",
+      "search",
     ].includes(value)
   );
 }
@@ -145,5 +154,7 @@ export function isRequest(value: unknown): value is Request {
         isText(request.uri, 4_096) &&
         request.uri.startsWith("otpauth://totp/")
       );
+    case "search":
+      return typeof request.query === "string" && request.query.length <= 256;
   }
 }

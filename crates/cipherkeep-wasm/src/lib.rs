@@ -17,8 +17,9 @@ use zeroize::{Zeroize, Zeroizing};
 use cipherkeep_core::{
     combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
     generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope, ItemId,
-    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SecretBytes, VaultBlob,
-    VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare, SearchDocument,
+    SearchIndex, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
+    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 #[derive(Serialize)]
@@ -341,6 +342,98 @@ fn id_from_slice(bytes: &[u8]) -> Result<[u8; 16], cipherkeep_core::CoreError> {
 }
 
 /// Vault session handle for the Firefox background page.
+#[derive(Serialize)]
+struct WasmSearchHit {
+    id: String,
+    score: u16,
+    snippet: String,
+}
+
+/// In-memory metadata search index for the extension.
+#[wasm_bindgen]
+pub struct WasmSearchIndex {
+    inner: SearchIndex,
+}
+
+#[wasm_bindgen]
+impl WasmSearchIndex {
+    /// Create an empty index.
+    #[wasm_bindgen(constructor)]
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            inner: SearchIndex::new(),
+        }
+    }
+
+    /// Insert or replace a metadata document.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS error object for an invalid id or empty title.
+    pub fn insert(
+        &mut self,
+        id: Vec<u8>,
+        title: String,
+        username: String,
+        url: String,
+        folder: String,
+        notes: String,
+    ) -> Result<(), JsValue> {
+        let item_id = ItemId::from_bytes(id_from_slice(&id).map_err(js_error)?);
+        self.inner
+            .insert(SearchDocument::new(
+                item_id, title, username, url, folder, notes,
+            ))
+            .map_err(js_error)
+    }
+
+    /// Remove a document.
+    pub fn remove(&mut self, id: Vec<u8>) -> bool {
+        id_from_slice(&id)
+            .map(ItemId::from_bytes)
+            .map(|item_id| self.inner.remove(item_id))
+            .unwrap_or(false)
+    }
+
+    /// Clear and zeroize the index.
+    pub fn clear(&mut self) {
+        self.inner.clear();
+    }
+
+    /// Search metadata and return redacted hits.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS error object if serialization fails.
+    pub fn search(&self, query: &str, limit: u32) -> Result<JsValue, JsValue> {
+        let hits: Vec<WasmSearchHit> = self
+            .inner
+            .search(query, usize::try_from(limit).unwrap_or(0))
+            .into_iter()
+            .map(|hit| WasmSearchHit {
+                id: hex(hit.id().as_bytes()),
+                score: hit.score(),
+                snippet: hit.snippet().to_string(),
+            })
+            .collect();
+        serde_wasm_bindgen::to_value(&hits).map_err(|_| JsValue::from_str("internal error"))
+    }
+
+    /// Number of indexed documents.
+    #[must_use]
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u32 {
+        u32::try_from(self.inner.len()).unwrap_or(u32::MAX)
+    }
+}
+
+impl Default for WasmSearchIndex {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 pub struct WasmVaultSession {
     inner: VaultSession,
@@ -616,6 +709,24 @@ mod tests {
 mod wasm_tests {
     use super::*;
     use wasm_bindgen_test::*;
+
+    #[wasm_bindgen_test]
+    fn wasm_search_returns_redacted_hits() {
+        let mut index = WasmSearchIndex::new();
+        index
+            .insert(
+                vec![1u8; 16],
+                "GitHub".to_string(),
+                "alice".to_string(),
+                "https://github.com".to_string(),
+                "Work".to_string(),
+                "deploy key".to_string(),
+            )
+            .expect("insert");
+        let hits = index.search("github", 10).expect("search");
+        assert!(hits.is_array());
+        index.clear();
+    }
 
     #[wasm_bindgen_test]
     fn wasm_totp_returns_an_object() {

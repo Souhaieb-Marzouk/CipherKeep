@@ -5,8 +5,134 @@ let wasm_bindgen = (function(exports) {
     }
 
     /**
-     * Vault session handle for the Firefox background page.
+     * In-memory metadata search index for the extension.
      */
+    class WasmSearchIndex {
+        __destroy_into_raw() {
+            const ptr = this.__wbg_ptr;
+            this.__wbg_ptr = 0;
+            WasmSearchIndexFinalization.unregister(this);
+            return ptr;
+        }
+        free() {
+            const ptr = this.__destroy_into_raw();
+            wasm.__wbg_wasmsearchindex_free(ptr, 0);
+        }
+        /**
+         * Clear and zeroize the index.
+         */
+        clear() {
+            wasm.wasmsearchindex_clear(this.__wbg_ptr);
+        }
+        /**
+         * Insert or replace a metadata document.
+         *
+         * # Errors
+         *
+         * Returns a JS error object for an invalid id or empty title.
+         * @param {Uint8Array | number[]} id
+         * @param {string} title
+         * @param {string} username
+         * @param {string} url
+         * @param {string} folder
+         * @param {string} notes
+         */
+        insert(id, title, username, url, folder, notes) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5;
+                try {
+                    ptr0 = passArray8ToWasm0(id, wasm.__wbindgen_export3);
+                    len0 = WASM_VECTOR_LEN;
+                    ptr1 = passStringToWasm0(title, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                    len1 = WASM_VECTOR_LEN;
+                    ptr2 = passStringToWasm0(username, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                    len2 = WASM_VECTOR_LEN;
+                    ptr3 = passStringToWasm0(url, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                    len3 = WASM_VECTOR_LEN;
+                    ptr4 = passStringToWasm0(folder, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                    len4 = WASM_VECTOR_LEN;
+                    ptr5 = passStringToWasm0(notes, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                    len5 = WASM_VECTOR_LEN;
+                } catch (e) {
+                    if (ptr5) { wasm.__wbindgen_export5(ptr5, len5 * 1, 1); }
+                    if (ptr4) { wasm.__wbindgen_export5(ptr4, len4 * 1, 1); }
+                    if (ptr3) { wasm.__wbindgen_export5(ptr3, len3 * 1, 1); }
+                    if (ptr2) { wasm.__wbindgen_export5(ptr2, len2 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export5(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export5(ptr0, len0 * 1, 1); }
+                    throw e;
+                }
+                wasm.wasmsearchindex_insert(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                if (r1) {
+                    throw takeFromExternrefTable0(r0);
+                }
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
+         * Number of indexed documents.
+         * @returns {number}
+         */
+        len() {
+            const ret = wasm.wasmsearchindex_len(this.__wbg_ptr);
+            return ret >>> 0;
+        }
+        /**
+         * Create an empty index.
+         */
+        constructor() {
+            const ret = wasm.wasmsearchindex_new();
+            this.__wbg_ptr = ret;
+            WasmSearchIndexFinalization.register(this, this.__wbg_ptr, this);
+            return this;
+        }
+        /**
+         * Remove a document.
+         * @param {Uint8Array | number[]} id
+         * @returns {boolean}
+         */
+        remove(id) {
+            const ptr0 = passArray8ToWasm0(id, wasm.__wbindgen_export3);
+            const len0 = WASM_VECTOR_LEN;
+            const ret = wasm.wasmsearchindex_remove(this.__wbg_ptr, ptr0, len0);
+            return ret !== 0;
+        }
+        /**
+         * Search metadata and return redacted hits.
+         *
+         * # Errors
+         *
+         * Returns a JS error object if serialization fails.
+         * @param {string} query
+         * @param {number} limit
+         * @returns {any}
+         */
+        search(query, limit) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                const val2 = +limit;
+                const ptr0 = passStringToWasm0(query, wasm.__wbindgen_export3, wasm.__wbindgen_export4);
+                const len0 = WASM_VECTOR_LEN;
+                wasm.wasmsearchindex_search(retptr, this.__wbg_ptr, ptr0, len0, val2);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                if (r2) {
+                    throw takeFromExternrefTable0(r1);
+                }
+                return takeFromExternrefTable0(r0);
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+    }
+    if (Symbol.dispose) WasmSearchIndex.prototype[Symbol.dispose] = WasmSearchIndex.prototype.free;
+    exports.WasmSearchIndex = WasmSearchIndex;
+
     class WasmVaultSession {
         static __wrap(ptr) {
             const obj = Object.create(WasmVaultSession.prototype);
@@ -605,6 +731,10 @@ let wasm_bindgen = (function(exports) {
                 const ret = arg0.msCrypto;
                 return ret;
             },
+            __wbg_new_37eb45aaf5eeb820: function() {
+                const ret = new Array();
+                return ret;
+            },
             __wbg_new_cd4348290afae586: function() {
                 const ret = new Object();
                 return ret;
@@ -635,6 +765,9 @@ let wasm_bindgen = (function(exports) {
                 const ret = module.require;
                 return ret;
             }, arguments); },
+            __wbg_set_d2d33b52458e984a: function(arg0, arg1, arg2) {
+                arg0[arg1 >>> 0] = arg2;
+            },
             __wbg_set_e4b9a833d288759a: function(arg0, arg1, arg2) {
                 arg0[arg1] = arg2;
             },
@@ -697,6 +830,9 @@ let wasm_bindgen = (function(exports) {
         };
     }
 
+    const WasmSearchIndexFinalization = (typeof FinalizationRegistry === 'undefined')
+        ? { register: () => {}, unregister: () => {} }
+        : new FinalizationRegistry(ptr => wasm.__wbg_wasmsearchindex_free(ptr, 1));
     const WasmVaultSessionFinalization = (typeof FinalizationRegistry === 'undefined')
         ? { register: () => {}, unregister: () => {} }
         : new FinalizationRegistry(ptr => wasm.__wbg_wasmvaultsession_free(ptr, 1));

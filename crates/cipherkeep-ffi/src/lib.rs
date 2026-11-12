@@ -20,8 +20,8 @@ use cipherkeep_core::{
     combine_2_of_3, derive_master_key, generate_passphrase as core_generate_passphrase,
     generate_password as core_generate_password, parse_otpauth_uri, split_2_of_3, Envelope,
     ErrorCode, ItemId, ItemKey, KdfParams, PassphrasePolicy, PasswordPolicy, RecoveryShare,
-    SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession, DEFAULT_ITERATIONS,
-    DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
+    SearchDocument, SearchIndex, SecretBytes, VaultBlob, VaultId, VaultKey, VaultSession,
+    DEFAULT_ITERATIONS, DEFAULT_MEMORY_KIB, DEFAULT_PARALLELISM,
 };
 
 uniffi::setup_scaffolding!();
@@ -188,6 +188,112 @@ pub fn generate_passphrase(policy: FfiPassphrasePolicy) -> Result<FfiGeneratedSe
         entropy_bits: generated.entropy_bits(),
         strength: generated.strength().as_str().to_string(),
     })
+}
+
+/// Metadata supplied to the search index. Never include secrets.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiSearchDocument {
+    /// Item id.
+    pub id: Vec<u8>,
+    /// Title.
+    pub title: String,
+    /// Username.
+    pub username: String,
+    /// URL.
+    pub url: String,
+    /// Folder name.
+    pub folder: String,
+    /// Notes.
+    pub notes: String,
+}
+
+/// A redacted search result.
+#[derive(Clone, Debug, uniffi::Record)]
+pub struct FfiSearchHit {
+    /// Item id.
+    pub id: Vec<u8>,
+    /// Relative score.
+    pub score: u16,
+    /// Redacted metadata snippet.
+    pub snippet: String,
+}
+
+/// In-memory metadata index. Clear it on lock.
+#[derive(uniffi::Object)]
+pub struct FfiSearchIndex {
+    inner: Mutex<SearchIndex>,
+}
+
+#[uniffi::export]
+impl FfiSearchIndex {
+    /// Create an empty index.
+    #[uniffi::constructor]
+    #[must_use]
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            inner: Mutex::new(SearchIndex::new()),
+        })
+    }
+
+    /// Insert or replace a metadata document.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted error for an invalid id or empty title.
+    pub fn insert(&self, document: FfiSearchDocument) -> Result<(), FfiError> {
+        let id = ItemId::from_bytes(id_from_slice(&document.id)?);
+        let document = SearchDocument::new(
+            id,
+            document.title,
+            document.username,
+            document.url,
+            document.folder,
+            document.notes,
+        );
+        self.lock().insert(document).map_err(FfiError::from)
+    }
+
+    /// Remove a document.
+    pub fn remove(&self, id: Vec<u8>) -> bool {
+        id_from_slice(&id)
+            .map(ItemId::from_bytes)
+            .map(|id| self.lock().remove(id))
+            .unwrap_or(false)
+    }
+
+    /// Clear and zeroize the index.
+    pub fn clear(&self) {
+        self.lock().clear();
+    }
+
+    /// Search metadata and return redacted hits.
+    #[must_use]
+    pub fn search(&self, query: String, limit: u32) -> Vec<FfiSearchHit> {
+        self.lock()
+            .search(&query, usize::try_from(limit).unwrap_or(0))
+            .into_iter()
+            .map(|hit| FfiSearchHit {
+                id: hit.id().as_bytes().to_vec(),
+                score: hit.score(),
+                snippet: hit.snippet().to_string(),
+            })
+            .collect()
+    }
+
+    /// Number of indexed documents.
+    #[must_use]
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> u32 {
+        u32::try_from(self.lock().len()).unwrap_or(u32::MAX)
+    }
+}
+
+impl FfiSearchIndex {
+    fn lock(&self) -> std::sync::MutexGuard<'_, SearchIndex> {
+        self.inner
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
 }
 
 /// TOTP code and the seconds until the next step.
@@ -750,6 +856,27 @@ fn now_secs() -> u64 {
 mod tests {
     use super::*;
     use cipherkeep_core::Aad;
+
+    #[test]
+    fn search_crosses_the_ffi_boundary() {
+        let index = FfiSearchIndex::new();
+        index
+            .insert(FfiSearchDocument {
+                id: vec![1u8; 16],
+                title: "GitHub".to_string(),
+                username: "alice".to_string(),
+                url: "https://github.com".to_string(),
+                folder: "Work".to_string(),
+                notes: "deploy key".to_string(),
+            })
+            .expect("insert");
+        let hits = index.search("github".to_string(), 10);
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].id, vec![1u8; 16]);
+        assert!(!hits[0].snippet.contains("deploy"));
+        index.clear();
+        assert!(index.search("github".to_string(), 10).is_empty());
+    }
 
     #[test]
     fn totp_crosses_the_ffi_boundary() {

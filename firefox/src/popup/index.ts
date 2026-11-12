@@ -1,4 +1,4 @@
-import type { Response } from "../shared/protocol";
+import type { ItemView, Response } from "../shared/protocol";
 
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
@@ -20,6 +20,8 @@ const panels = [
 
 let pendingShares: string[] = [];
 let shareIndex = 0;
+let allItems: ItemView[] = [];
+let searchTimer: number | null = null;
 
 function showPanel(id: string): void {
   for (const panel of panels) {
@@ -133,19 +135,46 @@ element<HTMLButtonElement>("unlock").addEventListener("click", async () => {
   await refresh();
 });
 
-async function loadItems(): Promise<void> {
-  const reply = await send({ type: "list-items" });
-  if (!reply.ok || reply.kind !== "items") {
-    return;
-  }
+function renderItems(items: ItemView[]): void {
   const list = element<HTMLUListElement>("itemList");
   list.replaceChildren();
-  for (const item of reply.items) {
+  for (const item of items) {
     const row = document.createElement("li");
     row.textContent = `${item.title} — ${item.username}`;
     list.append(row);
   }
 }
+
+async function loadItems(): Promise<void> {
+  const reply = await send({ type: "list-items" });
+  if (!reply.ok || reply.kind !== "items") {
+    return;
+  }
+  allItems = reply.items;
+  element<HTMLInputElement>("searchItems").value = "";
+  renderItems(allItems);
+}
+
+async function runSearch(): Promise<void> {
+  const query = element<HTMLInputElement>("searchItems").value.trim();
+  if (query.length === 0) {
+    renderItems(allItems);
+    return;
+  }
+  const reply = await send({ type: "search", query });
+  if (!reply.ok || reply.kind !== "search") {
+    return;
+  }
+  const ids = new Set(reply.hits.map((hit) => hit.id));
+  renderItems(allItems.filter((item) => ids.has(item.id)));
+}
+
+element<HTMLInputElement>("searchItems").addEventListener("input", () => {
+  if (searchTimer !== null) {
+    window.clearTimeout(searchTimer);
+  }
+  searchTimer = window.setTimeout(() => { void runSearch(); }, 100);
+});
 
 function clearGenerated(): void {
   element<HTMLDivElement>("generatedValue").textContent = "";
@@ -341,6 +370,9 @@ async function lockVault(): Promise<void> {
   clearShares();
   clearGenerated();
   clearTotp();
+  allItems = [];
+  element<HTMLInputElement>("searchItems").value = "";
+  renderItems([]);
   showMessage("Locked. The in-memory keyring was dropped.", true);
   await refresh();
 }

@@ -71,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import dev.cipherkeep.app.data.SensitiveClipboard
 import dev.cipherkeep.core.FfiPassphrasePolicy
 import dev.cipherkeep.core.FfiPasswordPolicy
+import dev.cipherkeep.core.FfiSearchDocument
+import dev.cipherkeep.core.FfiSearchIndex
 import dev.cipherkeep.core.generatePassphrase
 import dev.cipherkeep.core.generatePassword
 import dev.cipherkeep.core.totpCode
@@ -1001,6 +1003,34 @@ private fun VaultScreen(
     onSettings: () -> Unit,
     onLock: () -> Unit,
 ) {
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    val searchIndex = remember(items) {
+        FfiSearchIndex().also { index ->
+            items.forEach { item ->
+                index.insert(
+                    FfiSearchDocument(
+                        id = item.id,
+                        title = item.title,
+                        username = item.username,
+                        url = "",
+                        folder = "",
+                        notes = "",
+                    ),
+                )
+            }
+        }
+    }
+    DisposableEffect(searchIndex) {
+        onDispose { searchIndex.close() }
+    }
+    val visibleItems = remember(searchQuery, items, searchIndex) {
+        if (searchQuery.isBlank()) {
+            items
+        } else {
+            val ids = searchIndex.search(searchQuery, 50u).map { it.id }
+            items.filter { item -> ids.any { it.contentEquals(item.id) } }
+        }
+    }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
@@ -1037,15 +1067,24 @@ private fun VaultScreen(
                     modifier = Modifier.padding(top = CKDimens.Space1),
                 )
                 Spacer(Modifier.height(CKDimens.Space2))
-                if (items.isEmpty()) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Search title or username") },
+                    singleLine = true,
+                    shape = MaterialTheme.shapes.small,
+                )
+                Spacer(Modifier.height(CKDimens.Space2))
+                if (visibleItems.isEmpty()) {
                     Text(
-                        text = "No items yet. Use Add to create the first one.",
+                        text = if (items.isEmpty()) "No items yet. Use Add to create the first one." else "No matching items.",
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
             }
-            items(items) { item ->
+            items(visibleItems) { item ->
                 val index = items.indexOf(item)
                 Card(
                     modifier = Modifier

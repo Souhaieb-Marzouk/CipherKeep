@@ -1,4 +1,4 @@
-import { isRequest, type ItemView, type Request, type Response } from "../shared/protocol";
+import { isRequest, type ItemView, type Request, type Response, type SearchHit } from "../shared/protocol";
 import { CiphertextStore } from "../shared/ciphertext-store";
 import { backoffSeconds, remainingSeconds } from "../shared/backoff";
 import { checkForUpdates } from "./updates";
@@ -6,6 +6,7 @@ import { checkForUpdates } from "./updates";
 let session: WasmVaultSession | null = null;
 let vaultBlob: string | null = null;
 let shares: string[] = [];
+let searchIndex: WasmSearchIndex | null = null;
 let wasmReady: Promise<unknown> | null = null;
 const LOCK_ALARM = "cipherkeep-auto-lock";
 const itemStore = new CiphertextStore();
@@ -93,6 +94,8 @@ function armAutoLock(): void {
 async function lockSession(): Promise<void> {
   session?.lock();
   shares = [];
+  searchIndex?.clear();
+  searchIndex = null;
   await browser.alarms.clear(LOCK_ALARM);
   try {
     await browser.runtime.sendMessage({ type: "locked" });
@@ -106,6 +109,21 @@ function requireSession(): WasmVaultSession {
     throw Object.assign(new Error("vault is locked"), { code: 5 });
   }
   return session;
+}
+
+function rebuildSearch(items: ItemView[]): void {
+  searchIndex?.clear();
+  searchIndex = new WasmSearchIndex();
+  for (const item of items) {
+    searchIndex.insert(
+      hexToBytes(item.id),
+      item.title,
+      item.username,
+      "",
+      "",
+      "",
+    );
+  }
 }
 
 async function listItems(): Promise<ItemView[]> {
@@ -134,6 +152,7 @@ async function listItems(): Promise<ItemView[]> {
       // A record from a different vault is skipped rather than exposed.
     }
   }
+  rebuildSearch(items);
   return items;
 }
 
@@ -310,6 +329,22 @@ async function handle(request: Request): Promise<Response> {
           updatedAt: Date.now(),
         });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "search": {
+        if (searchIndex === null) {
+          await listItems();
+        }
+        const hits = (searchIndex?.search(request.query, 50) ?? []) as SearchHit[];
+        return {
+          ok: true,
+          kind: "search",
+          hits: hits.filter(
+            (hit) =>
+              typeof hit.id === "string" &&
+              typeof hit.snippet === "string" &&
+              typeof hit.score === "number",
+          ),
+        };
       }
       case "totp-code": {
         const generated = totp_code(request.uri, Math.floor(Date.now() / 1000));

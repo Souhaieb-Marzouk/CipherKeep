@@ -33,6 +33,22 @@ interface WasmTotpCode {
 
 declare function totp_code(uri: string, unixSecs: number): WasmTotpCode;
 
+declare class WasmSearchIndex {
+  constructor();
+  insert(
+    id: Uint8Array,
+    title: string,
+    username: string,
+    url: string,
+    folder: string,
+    notes: string,
+  ): void;
+  remove(id: Uint8Array): boolean;
+  clear(): void;
+  search(query: string, limit: number): Array<{ id: string; score: number; snippet: string }>;
+  len(): number;
+}
+
 declare class WasmVaultSession {
   static create(password: Uint8Array): WasmVaultSession;
   static open(blob: Uint8Array): WasmVaultSession;
