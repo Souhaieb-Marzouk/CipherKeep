@@ -36,6 +36,14 @@ function ensureItemStore(): Promise<void> {
   return itemStoreReady;
 }
 
+function hostOf(value: string): string | null {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return null;
+  }
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
@@ -436,10 +444,16 @@ async function handle(request: Request): Promise<Response> {
         if (!tab?.url) {
           return { ok: false, error: "No active page." };
         }
-        const origin = new URL(tab.url).hostname;
+        const origin = hostOf(tab.url);
+        if (origin === null) {
+          return { ok: false, error: "Page URL is invalid." };
+        }
         const locked = session === null || session.is_locked();
         const items = locked ? [] : await listItems();
-        const matching = items.filter((item) => item.url.length > 0 && new URL(item.url).hostname.toLowerCase() === origin.toLowerCase());
+        const matching = items.filter((item) => {
+          const itemHost = hostOf(item.url);
+          return itemHost !== null && itemHost.toLowerCase() === origin.toLowerCase();
+        });
         return {
           ok: true,
           kind: "inspection",
@@ -455,13 +469,19 @@ async function handle(request: Request): Promise<Response> {
         if (!tab?.id || !tab.url) {
           return { ok: false, error: "No active page." };
         }
-        const tabHost = new URL(tab.url).hostname;
+        const tabHost = hostOf(tab.url);
+        if (tabHost === null) {
+          return { ok: false, error: "Page URL is invalid." };
+        }
         const items = await listItems();
         const item = items.find((candidate) => candidate.id === request.id);
         if (!item || item.url.length === 0 || !item.autofillAllowed) {
           return { ok: false, error: "Autofill is not enabled for this item." };
         }
-        const itemHost = new URL(item.url).hostname;
+        const itemHost = hostOf(item.url);
+        if (itemHost === null) {
+          return { ok: false, error: "Item URL is invalid." };
+        }
         if (itemHost.toLowerCase() !== tabHost.toLowerCase()) {
           return { ok: false, error: "Item origin does not match this page." };
         }

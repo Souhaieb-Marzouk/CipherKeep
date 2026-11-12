@@ -99,6 +99,8 @@ import dev.cipherkeep.app.ui.theme.CKColor
 import dev.cipherkeep.app.ui.theme.CKDimens
 import dev.cipherkeep.app.ui.theme.CipherKeepTheme
 import dev.cipherkeep.app.ui.theme.ThemeMode
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -1618,7 +1620,10 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
         onDismissRequest = onDismiss,
         title = { Text("Edit item") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            Column(
+                modifier = Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+            ) {
                 OutlinedTextField(title, { title = it }, label = { Text("Title") }, singleLine = true)
                 OutlinedTextField(username, { username = it }, label = { Text("Username") }, singleLine = true)
                 OutlinedTextField(
@@ -2008,8 +2013,13 @@ private fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(modifier = Modifier.padding(CKDimens.Space4)) {
-                    val recipeRegistry = remember(context) {
-                        dev.cipherkeep.app.data.RecipeRegistry.load(context)
+                    var recipeRegistry by remember {
+                        mutableStateOf<dev.cipherkeep.app.data.RecipeRegistry?>(null)
+                    }
+                    LaunchedEffect(Unit) {
+                        recipeRegistry = withContext(Dispatchers.IO) {
+                            dev.cipherkeep.app.data.RecipeRegistry.load(context)
+                        }
                     }
                     Text(
                         text = recipeRegistry?.let { "Recipe registry v${it.version} · ${it.hash.take(16)}…" }

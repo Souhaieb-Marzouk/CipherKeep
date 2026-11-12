@@ -4,37 +4,44 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>CipherKeep settings</title>
+    <link rel="stylesheet" href="tokens.css" />
     <style>
       :root {
         color-scheme: dark;
-        --bg: #0b1120; --surface: #111827; --text: #f8fafc; --muted: #94a3b8;
-        --accent: #2dd4bf; --danger: #f87171; --line: #1e293b;
+        --bg: var(--ck-dark-background); --surface: var(--ck-dark-surface); --text: var(--ck-dark-text);
+        --muted: var(--ck-dark-text-muted); --accent: var(--ck-dark-accent);
+        --danger: var(--ck-dark-danger); --line: var(--ck-dark-surface-muted);
       }
       * { box-sizing: border-box; }
       body {
         margin: 0; background: var(--bg); color: var(--text);
-        font: 15px/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
+        font: 0.9375rem/1.5 system-ui, -apple-system, Segoe UI, sans-serif;
       }
       main { max-width: 720px; margin: 0 auto; padding: 32px 20px 60px; }
-      h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 4px; }
-      h2 { font-size: 18px; margin: 28px 0 10px; }
+      h1 { font-size: 1.75rem; letter-spacing: -0.02em; margin: 0 0 4px; }
+      h2 { font-size: 1.125rem; margin: 28px 0 10px; }
       p { color: var(--muted); }
       .card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
       .row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
       input {
         flex: 1; min-width: 240px; padding: 10px; border-radius: 8px;
-        border: 1px solid #334155; background: #0f172a; color: var(--text); font: inherit;
+        border: 1px solid var(--ck-dark-border-strong); background: var(--ck-dark-background); color: var(--text); font: inherit;
       }
       button {
-        padding: 10px 14px; border-radius: 8px; border: 0; background: #312e81;
+        padding: 10px 14px; border-radius: 8px; border: 0; background: var(--ck-dark-primary-container);
         color: var(--text); font: inherit; font-weight: 600; cursor: pointer;
       }
-      button.secondary { background: #1e293b; }
+      button.secondary { background: var(--ck-dark-surface-muted); }
       ul { padding-left: 18px; color: var(--muted); }
       code { color: var(--accent); }
       .notice { color: #fde68a; }
       .error { color: var(--danger); }
       .ok { color: var(--accent); }
+      :focus-visible { outline: 2px solid var(--ck-dark-focus); outline-offset: 2px; }
+      button, input { min-height: 48px; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      }
     </style>
   </head>
   <body>
