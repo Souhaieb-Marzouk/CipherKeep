@@ -15,7 +15,7 @@ androidxTestRunner = "1.6.2"
 androidxTestRules = "1.6.1"
 androidxTestJunit = "1.2.1"
 biometric = "1.1.0"
-okhttp = "4.12.0"
+okhttp = "4.12.1"
 work = "2.10.5"
 json = "20240303"
 
