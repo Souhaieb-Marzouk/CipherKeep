@@ -282,6 +282,11 @@ class SessionController(context: Context) {
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                require(title.isNotBlank())
+                require(
+                    url.isBlank() ||
+                        runCatching { java.net.URI(url).host }.getOrNull() != null,
+                ) { "invalid URL" }
                 val active = session ?: error("vault is locked")
                 val repo = repository ?: error("storage is unavailable")
                 val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
@@ -604,6 +609,10 @@ class SessionController(context: Context) {
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             require(title.isNotBlank())
+            require(
+                url.isBlank() ||
+                    runCatching { java.net.URI(url).host }.getOrNull() != null,
+            ) { "invalid URL" }
             val active = session ?: error("vault is locked")
             val repo = repository ?: error("storage is unavailable")
             val previous = repo.get(item.id) ?: error("item not found")
