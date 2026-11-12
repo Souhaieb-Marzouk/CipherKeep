@@ -247,7 +247,31 @@ class SessionController(context: Context) {
                     return@mapNotNull null
                 }
                 runCatching {
-                    val json = JSONObject(active.decryptItem(entity.itemId, entity.ciphertext).decodeToString())
+                    val plaintext = runCatching {
+                        entity.syncRecord?.let { active.applySyncRecord(it) }
+                    }.getOrNull()
+                        ?: active.decryptItem(entity.itemId, entity.ciphertext)
+                    val json = JSONObject(plaintext.decodeToString())
+                    val exported = runCatching {
+                        active.exportSyncRecord(
+                            entity.itemId,
+                            entity.ciphertext,
+                            ByteArray(16) { 1 },
+                            System.currentTimeMillis().toULong(),
+                            1uL,
+                        )
+                    }.getOrNull()
+                    if (exported != null && !exported.contentEquals(entity.syncRecord)) {
+                        repo.save(
+                            itemId = entity.itemId,
+                            ciphertext = entity.ciphertext,
+                            lamport = entity.lamport,
+                            tombstone = entity.tombstone,
+                            schemaVersion = entity.schemaVersion,
+                            updatedAt = entity.updatedAt,
+                            syncRecord = exported,
+                        )
+                    }
                     VaultItem(
                         id = entity.itemId,
                         title = json.optString("title"),

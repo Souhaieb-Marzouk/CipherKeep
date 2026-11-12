@@ -14,6 +14,7 @@ class VaultRepository(private val database: VaultDatabase) {
         tombstone: Boolean,
         schemaVersion: Int,
         updatedAt: Long,
+        syncRecord: ByteArray? = null,
     ) {
         require(itemId.size == 16) { "item id must be 16 bytes" }
         require(tombstone || ciphertext.isNotEmpty()) { "live item must have ciphertext" }
@@ -27,6 +28,7 @@ class VaultRepository(private val database: VaultDatabase) {
                     tombstone = tombstone,
                     schemaVersion = schemaVersion,
                     updatedAt = updatedAt,
+                    syncRecord = syncRecord,
                 ),
             )
         }

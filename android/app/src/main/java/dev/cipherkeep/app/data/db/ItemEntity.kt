@@ -25,4 +25,6 @@ data class ItemEntity(
     val schemaVersion: Int,
     @ColumnInfo(name = "updated_at")
     val updatedAt: Long,
+    @ColumnInfo(name = "sync_record")
+    val syncRecord: ByteArray? = null,
 )

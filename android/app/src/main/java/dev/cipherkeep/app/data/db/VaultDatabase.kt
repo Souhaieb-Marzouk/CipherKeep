@@ -25,13 +25,20 @@ abstract class VaultDatabase : RoomDatabase() {
     abstract fun itemDao(): ItemDao
 
     companion object {
-        const val VERSION = 2
+        const val VERSION = 3
         const val NAME = "vault.db"
 
         /** Adds the sticky-deletion flag introduced by schema v2. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE items ADD COLUMN tombstone INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /** Adds the canonical V2 sync record column. */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE items ADD COLUMN sync_record BLOB")
             }
         }
 
@@ -45,7 +52,7 @@ abstract class VaultDatabase : RoomDatabase() {
             val factory = SupportOpenHelperFactory(passphrase)
             return Room.databaseBuilder(context, VaultDatabase::class.java, NAME)
                 .openHelperFactory(factory)
-                .addMigrations(MIGRATION_1_2)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
                 .setJournalMode(JournalMode.WRITE_AHEAD_LOGGING)
                 .addCallback(
                     object : Callback() {
