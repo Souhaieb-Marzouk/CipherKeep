@@ -9,7 +9,6 @@
     "contrast:check": "node scripts/check-contrast.mjs",
     "compat:run": "node scripts/compat-run.mjs",
     "compat:dashboard": "node scripts/build-compat-dashboard.mjs",
-    "relay:test": "node scripts/relay-miniflare.mjs",
     "compat:all": "npm run compat:run && npm run compat:dashboard",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
@@ -24,7 +23,6 @@
     "@types/node": "^24.10.0",
     "esbuild": "^0.28.2",
     "fake-indexeddb": "^6.2.8",
-    "miniflare": "^4.20260730.0",
     "playwright": "^1.55.1",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0"

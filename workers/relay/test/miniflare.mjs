@@ -8,7 +8,7 @@ const root = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, "
 const out = await mkdtemp(join(tmpdir(), "ck-relay-"));
 const bundle = join(out, "worker.mjs");
 await build({
-  entryPoints: [join(root, "..", "workers", "relay", "src", "index.ts")],
+  entryPoints: [join(root, "src", "index.ts")],
   bundle: true,
   format: "esm",
   platform: "neutral",

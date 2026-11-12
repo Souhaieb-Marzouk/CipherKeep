@@ -1325,7 +1325,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn sync_json_round_trips_encrypted_record() {
         let mut record = ItemRecord::new(item_id(), ItemType::Login, 10, actor(2));
         record

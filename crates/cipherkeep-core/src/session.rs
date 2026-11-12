@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use zeroize::Zeroizing;
 
 use crate::crdt::ActorId;
-use crate::envelope::{Aad, Envelope};
+use crate::envelope::Envelope;
 use crate::error::{CoreError, ErrorCode, Result};
 use crate::header::{VaultHeader, NONCE_LEN};
 use crate::item::ITEM_SCHEMA_VERSION;

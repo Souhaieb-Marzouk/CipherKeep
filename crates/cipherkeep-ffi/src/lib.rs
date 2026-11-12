@@ -462,7 +462,6 @@ pub fn migrate_legacy_item(
     let mut json = json;
     let mut item_id = item_id;
     let mut item_key = item_key;
-    let mut actor = actor;
     let id = ItemId::from_bytes(id_from_slice(&item_id)?);
     let key = ItemKey::from_secret_bytes(SecretBytes::from_slice(&item_key))?;
     let mut actor: [u8; 16] = actor
