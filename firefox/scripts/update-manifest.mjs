@@ -15,7 +15,7 @@ const updateUrl = argument("update-url", "");
 if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
   throw new Error("--version must be semver, for example 0.1.0");
 }
-if (!updateUrl.startsWith("https://")) {
+if (updateUrl !== "" && !updateUrl.startsWith("https://")) {
   throw new Error("--update-url must be an HTTPS URL");
 }
 
@@ -24,7 +24,11 @@ if (manifest.browser_specific_settings?.gecko?.id !== "cipherkeep@cipherkeep.dev
   throw new Error("unexpected extension ID");
 }
 manifest.version = version;
-manifest.browser_specific_settings.gecko.update_url = updateUrl;
+if (updateUrl === "") {
+  delete manifest.browser_specific_settings.gecko.update_url;
+} else {
+  manifest.browser_specific_settings.gecko.update_url = updateUrl;
+}
 
 await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 console.log(`manifest version=${version}`);

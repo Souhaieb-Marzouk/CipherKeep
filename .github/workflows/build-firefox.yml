@@ -14,6 +14,11 @@ on:
         description: Semver version, for example 0.1.0
         required: true
         type: string
+    secrets:
+      AMO_API_KEY:
+        required: true
+      AMO_API_SECRET:
+        required: true
 
 permissions:
   contents: read
@@ -34,7 +39,6 @@ jobs:
         working-directory: firefox
     env:
       VERSION: ${{ inputs.version }}
-      UPDATE_URL: https://github.com/Souhaieb-Marzouk/CipherKeep/releases/latest/download/firefox-updates.json
       AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
       AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
       WEB_EXT_VERSION: 10.8.0
@@ -54,7 +58,7 @@ jobs:
 
       - name: Set version and update URL
         shell: bash
-        run: node scripts/update-manifest.mjs --version "$VERSION" --update-url "$UPDATE_URL"
+        run: node scripts/update-manifest.mjs --version "$VERSION"
 
       - name: Typecheck, test, build and lint
         shell: bash

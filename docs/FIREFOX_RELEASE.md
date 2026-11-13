@@ -6,7 +6,7 @@
 addon id:       cipherkeep@cipherkeep.dev
 channel:        unlisted
 min Firefox:    142.0
-update URL:     https://github.com/Souhaieb-Marzouk/CipherKeep/releases/latest/download/firefox-updates.json
+updates:        AMO unlisted channel (no gecko.update_url)
 ```
 
 The AMO signature is the trust anchor. A self-hosted XPI that is not signed by
@@ -38,7 +38,7 @@ version: 0.1.0
 The workflow:
 
 1. sets `manifest.version`
-2. sets `gecko.update_url`
+2. leaves `gecko.update_url` unset because AMO rejects it for hosted add-ons
 3. runs typecheck, tests, build and lint
 4. runs `web-ext lint`
 5. signs with:
@@ -89,14 +89,13 @@ firefox-updates.json
 SHA256SUMS
 ```
 
-`firefox-updates.json` must be attached as `firefox-updates.json` because the
-manifest points at:
+AMO-managed unlisted add-ons update through AMO, not through a
+`gecko.update_url`. The generated `updates.json` / `firefox-updates.json` files
+are retained for self-hosted or manually distributed builds and for artifact
+verification; they are not used by the AMO-signed XPI.
 
-```text
-releases/latest/download/firefox-updates.json
-```
-
-Keep the old `updates.json` available until clients have moved.
+Do not add `update_url` back to the manifest for an AMO build: `web-ext lint`
+rejects it.
 
 ## Install the signed XPI
 
@@ -121,7 +120,7 @@ Temporary add-ons are not signed and do not test updates.
 
 1. Install `0.1.0`.
 2. Build and sign `0.1.1`.
-3. Publish the new XPI and `firefox-updates.json`.
+3. Publish the new XPI through AMO.
 4. Restart Firefox.
 5. Check `about:addons` for the update.
 

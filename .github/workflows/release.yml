@@ -64,6 +64,12 @@ jobs:
     uses: ./.github/workflows/build-android.yml
     with:
       version: ${{ needs.validate.outputs.version }}
+    secrets:
+      CIPHERKEEP_KEYSTORE_BASE64: ${{ secrets.CIPHERKEEP_KEYSTORE_BASE64 }}
+      CIPHERKEEP_KEYSTORE_PASSWORD: ${{ secrets.CIPHERKEEP_KEYSTORE_PASSWORD }}
+      CIPHERKEEP_KEY_ALIAS: ${{ secrets.CIPHERKEEP_KEY_ALIAS }}
+      CIPHERKEEP_KEY_PASSWORD: ${{ secrets.CIPHERKEEP_KEY_PASSWORD }}
+      CIPHERKEEP_CERT_SHA256: ${{ secrets.CIPHERKEEP_CERT_SHA256 }}
 
   firefox:
     name: signed Firefox build
@@ -71,6 +77,9 @@ jobs:
     uses: ./.github/workflows/build-firefox.yml
     with:
       version: ${{ needs.validate.outputs.version }}
+    secrets:
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
 
   integrity:
     name: checksums, Minisign and draft

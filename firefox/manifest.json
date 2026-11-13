@@ -7,9 +7,10 @@
     "gecko": {
       "id": "cipherkeep@cipherkeep.dev",
       "strict_min_version": "142.0",
-      "update_url": "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/latest/download/firefox-updates.json",
       "data_collection_permissions": {
-        "required": ["none"]
+        "required": [
+          "none"
+        ]
       }
     }
   },
