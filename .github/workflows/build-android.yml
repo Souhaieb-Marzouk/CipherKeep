@@ -8,6 +8,12 @@ on:
         required: true
         default: 0.1.0
         type: string
+  workflow_call:
+    inputs:
+      version:
+        description: Semver version, for example 0.1.0
+        required: true
+        type: string
 
 permissions:
   contents: read

@@ -16,6 +16,9 @@ export async function checkWorkflows(dir = WORKFLOW_DIR) {
       }
       const ref = match[1];
       const comment = match[2] ?? "";
+      if (ref.startsWith("./")) {
+        return;
+      }
       if (!PIN.test(ref)) {
         errors.push(`${file}:${index + 1}: action is not pinned to a 40-char commit SHA: ${ref}`);
       }
