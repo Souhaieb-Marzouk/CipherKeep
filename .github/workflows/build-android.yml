@@ -1,0 +1,123 @@
+name: build-android
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver version, for example 0.1.0
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signed-release:
+    name: signed non-debuggable release
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: android
+    env:
+      CIPHERKEEP_VERSION_NAME: ${{ inputs.version }}
+      CIPHERKEEP_KEYSTORE: ${{ runner.temp }}/release.keystore
+      CIPHERKEEP_KEYSTORE_PASSWORD: ${{ secrets.CIPHERKEEP_KEYSTORE_PASSWORD }}
+      CIPHERKEEP_KEY_ALIAS: ${{ secrets.CIPHERKEEP_KEY_ALIAS }}
+      CIPHERKEEP_KEY_PASSWORD: ${{ secrets.CIPHERKEEP_KEY_PASSWORD }}
+      EXPECTED_CERT_SHA256: ${{ secrets.CIPHERKEEP_CERT_SHA256 }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Decode the protected keystore
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.CIPHERKEEP_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "${KEYSTORE_BASE64:-}" || { echo "missing keystore secret" >&2; exit 1; }
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$CIPHERKEEP_KEYSTORE"
+          test -s "$CIPHERKEEP_KEYSTORE"
+          chmod 600 "$CIPHERKEEP_KEYSTORE"
+
+      - name: Build release APK and AAB
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+
+      - name: Verify APK signature, certificate, and debuggability
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+          test -n "$apk"
+          build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+          aapt="$build_tools/aapt2"
+          apksigner="$build_tools/apksigner"
+
+          "$aapt" dump badging "$apk" > badging.txt
+          if grep -q 'application-debuggable' badging.txt; then
+            echo "release APK is debuggable" >&2
+            exit 1
+          fi
+
+          "$apksigner" verify --verbose --print-certs "$apk" | tee apksigner.txt
+          fingerprint=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+          test -n "$fingerprint"
+          echo "APK_SHA256=$fingerprint" >> "$GITHUB_STEP_SUMMARY"
+          echo "$fingerprint" > certificate-sha256.txt
+
+          if [ -n "${EXPECTED_CERT_SHA256:-}" ]; then
+            expected=$(printf '%s' "$EXPECTED_CERT_SHA256" | tr '[:lower:]' '[:upper:]')
+            actual=$(printf '%s' "$fingerprint" | tr '[:lower:]' '[:upper:]')
+            if [ "$actual" != "$expected" ]; then
+              echo "signing certificate does not match the published fingerprint" >&2
+              exit 1
+            fi
+          else
+            echo "CIPHERKEEP_CERT_SHA256 is not set; recording the certificate only." >&2
+          fi
+
+          aab=$(find app/build/outputs/bundle/release -name '*.aab' -print -quit)
+          test -n "$aab"
+          jarsigner -verify -strict "$aab" > jarsigner.txt 2>&1
+          cat jarsigner.txt
+
+          sha256sum "$apk" "$aab" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cipherkeep-android-${{ inputs.version }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            android/app/build/outputs/apk/release/*.apk
+            android/app/build/outputs/bundle/release/*.aab
+            android/SHA256SUMS
+            android/certificate-sha256.txt
+            android/apksigner.txt
+
+      - name: Remove the decoded keystore
+        if: always()
+        shell: bash
+        run: rm -f "$CIPHERKEEP_KEYSTORE"

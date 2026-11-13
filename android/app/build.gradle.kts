@@ -7,6 +7,21 @@ plugins {
     alias(libs.plugins.kotlin.kapt)
 }
 
+fun semverCode(value: String): Int {
+    val core = value.substringBefore('-').substringBefore('+')
+    val parts = core.split(".")
+    require(parts.size == 3) { "versionName must be semver: $value" }
+    val major = parts[0].toInt()
+    val minor = parts[1].toInt()
+    val patch = parts[2].toInt()
+    require(major in 0..2100 && minor in 0..99 && patch in 0..99) {
+        "versionName out of range: $value"
+    }
+    return major * 10_000 + minor * 100 + patch
+}
+
+val appVersionName = System.getenv("CIPHERKEEP_VERSION_NAME") ?: "0.1.0"
+val appVersionCode = semverCode(appVersionName)
 val releaseStore = System.getenv("CIPHERKEEP_KEYSTORE")
 val releaseStorePassword = System.getenv("CIPHERKEEP_KEYSTORE_PASSWORD")
 val releaseKeyAlias = System.getenv("CIPHERKEEP_KEY_ALIAS")
@@ -21,8 +36,8 @@ android {
         applicationId = "dev.cipherkeep.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-shell"
+        versionCode = appVersionCode
+        versionName = appVersionName
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -40,6 +55,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
