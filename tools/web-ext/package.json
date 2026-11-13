@@ -1,8 +1,11 @@
-﻿{
+{
   "name": "cipherkeep-release-tools",
   "private": true,
   "version": "0.0.0",
   "devDependencies": {
     "web-ext": "10.8.0"
+  },
+  "overrides": {
+    "deepmerge": "4.1.1"
   }
 }
