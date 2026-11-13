@@ -1,0 +1,115 @@
+name: build-firefox
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver version, for example 0.1.0
+        required: true
+        default: 0.1.0
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-firefox-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  signed-xpi:
+    name: AMO unlisted signed XPI
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: firefox
+    env:
+      VERSION: ${{ inputs.version }}
+      UPDATE_URL: https://github.com/Souhaieb-Marzouk/CipherKeep/releases/latest/download/firefox-updates.json
+      AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
+      AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+      WEB_EXT_VERSION: 10.8.0
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: firefox/package-lock.json
+
+      - run: npm ci
+
+      - name: Set version and update URL
+        shell: bash
+        run: node scripts/update-manifest.mjs --version "$VERSION" --update-url "$UPDATE_URL"
+
+      - name: Typecheck, test, build and lint
+        shell: bash
+        run: npm run check
+
+      - name: Install pinned web-ext in the runner only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --prefix "$RUNNER_TEMP/web-ext" --no-audit --no-fund "web-ext@$WEB_EXT_VERSION"
+          echo "$RUNNER_TEMP/web-ext/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Web-ext lint
+        shell: bash
+        run: web-ext lint --source-dir dist
+
+      - name: Sign unlisted XPI through AMO
+        shell: bash
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_API_KEY }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+        run: |
+          set -euo pipefail
+          test -n "${WEB_EXT_API_KEY:-}" || { echo "missing AMO API key" >&2; exit 1; }
+          test -n "${WEB_EXT_API_SECRET:-}" || { echo "missing AMO API secret" >&2; exit 1; }
+          web-ext sign \
+            --channel unlisted \
+            --source-dir dist \
+            --artifacts-dir web-ext-artifacts \
+            --timeout 300000
+
+      - name: Normalize signed artifact and generate updates.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          signed=$(find web-ext-artifacts -name '*.xpi' -print -quit)
+          test -n "$signed"
+          cp "$signed" "cipherkeep-${VERSION}.xpi"
+          node scripts/updates-json.mjs \
+            --xpi "cipherkeep-${VERSION}.xpi" \
+            --version "$VERSION" \
+            --url "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/download/v${VERSION}/cipherkeep-${VERSION}.xpi" \
+            --out updates.json
+          cp updates.json firefox-updates.json
+          cp updates.json ../updates.json
+          node scripts/verify-updates.mjs \
+            --updates updates.json \
+            --xpi "cipherkeep-${VERSION}.xpi" \
+            --version "$VERSION"
+          sha256sum "cipherkeep-${VERSION}.xpi" updates.json > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Upload signed XPI and update manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cipherkeep-firefox-${{ inputs.version }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            firefox/cipherkeep-${{ inputs.version }}.xpi
+            firefox/updates.json
+            firefox/firefox-updates.json
+            firefox/SHA256SUMS
+            updates.json

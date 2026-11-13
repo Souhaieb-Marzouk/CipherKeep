@@ -16,6 +16,9 @@
     "lint": "node scripts/lint-extension.mjs",
     "scan:csp": "node scripts/check-csp.mjs",
     "build:xpi": "node scripts/pack-xpi.mjs",
+    "release:manifest": "node scripts/update-manifest.mjs",
+    "release:updates": "node scripts/updates-json.mjs",
+    "release:verify": "node scripts/verify-updates.mjs",
     "check": "npm run typecheck && npm run tokens:check && npm run contrast:check && npm run build && npm test && npm run test:wasm-session && npm run scan:csp && npm run lint"
   },
   "devDependencies": {
