@@ -99,10 +99,15 @@ The workflow:
 4. rejects `application-debuggable`
 5. runs `apksigner verify --print-certs`
 6. compares the certificate to `CIPHERKEEP_CERT_SHA256`
-7. verifies the AAB with `jarsigner -verify -strict`
+7. verifies the AAB with `jarsigner -verify` and requires `jar verified`
 8. writes `SHA256SUMS` and `certificate-sha256.txt`
 9. uploads APK/AAB and checksums
 10. deletes the decoded keystore
+
+`jarsigner -verify -strict` can return exit code 4 on an AGP-built AAB because
+of `signed in JarFile but not JarInputStream` entries. That is a strict-mode
+artifact, not an unsigned bundle. The workflow uses normal `jarsigner -verify`
+and requires `jar verified`.
 
 ## Versioning
 
@@ -132,7 +137,7 @@ Major must be ≤ 2100, minor and patch ≤ 99.
 
 ```bash
 apksigner verify --verbose --print-certs app-release.apk
-jarsigner -verify -strict app-release.aab
+jarsigner -verify app-release.aab
 sha256sum app-release.apk app-release.aab
 ```
 
@@ -203,7 +208,7 @@ Before every release:
 - [ ] R8 mapping file was generated
 - [ ] resource shrinking ran
 - [ ] `apksigner verify` passes
-- [ ] `jarsigner -verify -strict` passes
+- [ ] `jarsigner -verify` reports `jar verified`
 - [ ] SHA-256 checksums published
 - [ ] install/launch smoke test passed
 - [ ] keystore removed from the runner

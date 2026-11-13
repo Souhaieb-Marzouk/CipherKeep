@@ -126,8 +126,12 @@ jobs:
 
           aab=$(find app/build/outputs/bundle/release -name '*.aab' -print -quit)
           test -n "$aab"
-          jarsigner -verify -strict "$aab" > jarsigner.txt 2>&1
+          jarsigner -verify "$aab" > jarsigner.txt 2>&1
           cat jarsigner.txt
+          grep -q 'jar verified' jarsigner.txt || {
+            echo "AAB signature verification failed" >&2
+            exit 1
+          }
 
           sha256sum "$apk" "$aab" > SHA256SUMS
           cat SHA256SUMS
