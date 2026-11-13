@@ -109,6 +109,17 @@
         </div>
         <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <div id="aliasList" class="row"></div>
+        <h2 style="margin-top:28px">Family sharing</h2>
+        <p>Owner-approved members receive a wrapped vault key. Revoking rotates the vault key and rekeys future writes. Ciphertext a removed member already had remains readable.</p>
+        <div class="row"><button id="familyIdentity" class="secondary">Create owner identity</button><button id="familyRotate" class="secondary">Rotate vault key</button></div>
+        <pre id="familyStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
+        <div class="row"><input id="familyMemberId" placeholder="member id" /><input id="familyPublic" placeholder="64-hex X25519 public key" /><select id="familyRole"><option value="editor">editor</option><option value="viewer">viewer</option></select><button id="familyInvite">Invite</button></div>
+        <div id="familyMembers" class="row"></div>
+        <h3 style="margin-top:18px">Join a family vault</h3>
+        <p>This replaces the local vault with the owner's vault key. Use a fresh install or backup.</p>
+        <div class="row"><input id="joinVaultId" placeholder="vault id (32 hex)" /><input id="joinMemberId" placeholder="member id" /><input id="joinPublic" placeholder="member public key" /></div>
+        <div class="row"><input id="joinNonce" placeholder="envelope nonce" /><input id="joinCiphertext" placeholder="envelope ciphertext" /></div>
+        <div class="row"><input id="joinSecret" type="password" placeholder="member secret" /><input id="joinPassword" type="password" placeholder="new local master password" /><button id="joinFamily">Join family vault</button></div>
         <h2 style="margin-top:28px">Password health</h2>
         <p>Computed locally. No score or password leaves the device.</p>
         <div class="row"><button id="healthScan" class="secondary">Analyze vault</button></div>

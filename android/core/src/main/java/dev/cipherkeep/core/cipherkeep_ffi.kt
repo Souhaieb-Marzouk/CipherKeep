@@ -677,6 +677,12 @@ internal object IntegrityCheckingUniffiLib {
     internal fun ensureInitialized() = Unit
     external fun uniffi_cipherkeep_ffi_checksum_func_export_portable(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_family_identity(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_family_unwrap(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_family_wrap(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_passphrase(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
@@ -719,6 +725,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_failed_attempts(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_family_vault_key(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_get_item(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_is_locked(
@@ -735,6 +743,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_retry_after(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_rotate_family_key(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_save_item(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_unlock_again(
@@ -744,6 +754,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffisearchindex_new(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create_shared(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_open(
     ): Int
@@ -795,6 +807,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create(`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create_shared(`password`: RustBuffer.ByValue,`vaultId`: RustBuffer.ByValue,`vaultKey`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Long
     external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_open(`blob`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
     external fun uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_recover(`blob`: RustBuffer.ByValue,`first`: RustBuffer.ByValue,`second`: RustBuffer.ByValue,`newPassword`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -819,6 +833,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_failed_attempts(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Int
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_family_vault_key(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_get_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_is_locked(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -835,6 +851,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_retry_after(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): Long
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_rotate_family_key(`ptr`: Long,`itemsJson`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_save_item(`ptr`: Long,`itemId`: RustBuffer.ByValue,`plaintext`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -842,6 +860,12 @@ internal object UniffiLib {
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_vault_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_export_portable(`itemsJson`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_family_identity(`id`: RustBuffer.ByValue,`role`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_family_unwrap(`vaultId`: RustBuffer.ByValue,`memberId`: RustBuffer.ByValue,`ephemeralPublic`: RustBuffer.ByValue,`nonce`: RustBuffer.ByValue,`ciphertext`: RustBuffer.ByValue,`role`: RustBuffer.ByValue,`secret`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_family_wrap(`vaultId`: RustBuffer.ByValue,`vaultKey`: RustBuffer.ByValue,`memberId`: RustBuffer.ByValue,`memberPublic`: RustBuffer.ByValue,`role`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_passphrase(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -981,6 +1005,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_export_portable() and 0xFFFF) != 46929) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_family_identity() and 0xFFFF) != 46059) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_family_unwrap() and 0xFFFF) != 19427) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_family_wrap() and 0xFFFF) != 5606) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_passphrase() and 0xFFFF) != 55064) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1044,6 +1077,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_failed_attempts() and 0xFFFF) != 49546) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_family_vault_key() and 0xFFFF) != 31712) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_get_item() and 0xFFFF) != 53019) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1068,6 +1104,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_retry_after() and 0xFFFF) != 7337) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_rotate_family_key() and 0xFFFF) != 1009) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_save_item() and 0xFFFF) != 51135) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1081,6 +1120,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create() and 0xFFFF) != 1658) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create_shared() and 0xFFFF) != 17248) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_open() and 0xFFFF) != 38893) {
@@ -1984,6 +2026,11 @@ public interface FfiVaultSessionInterface {
     fun `failedAttempts`(): kotlin.UInt
     
     /**
+     * Export the active vault key for owner-initiated family wrapping.
+     */
+    fun `familyVaultKey`(): kotlin.String
+    
+    /**
      * Decrypt an item payload.
      *
      * # Errors
@@ -2035,6 +2082,11 @@ public interface FfiVaultSessionInterface {
      * Seconds until another unlock is allowed.
      */
     fun `retryAfter`(): kotlin.ULong
+    
+    /**
+     * Rotate the vault key and return the new blob plus rekeyed item blobs.
+     */
+    fun `rotateFamilyKey`(`itemsJson`: kotlin.String): kotlin.String
     
     /**
      * Encrypt and store an opaque item payload.
@@ -2335,6 +2387,23 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
 
     
     /**
+     * Export the active vault key for owner-initiated family wrapping.
+     */
+    @Throws(FfiException::class)override fun `familyVaultKey`(): kotlin.String {
+            return FfiConverterString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_family_vault_key(
+        it,
+        _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Decrypt an item payload.
      *
      * # Errors
@@ -2485,6 +2554,24 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
 
     
     /**
+     * Rotate the vault key and return the new blob plus rekeyed item blobs.
+     */
+    @Throws(FfiException::class)override fun `rotateFamilyKey`(`itemsJson`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_rotate_family_key(
+        it,
+        
+        FfiConverterString.lower(`itemsJson`),_status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
      * Encrypt and store an opaque item payload.
      *
      * # Errors
@@ -2567,6 +2654,24 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     
         
         FfiConverterByteArray.lower(`password`),_status)
+}
+    )
+    }
+    
+
+        
+    /**
+     * Join an existing family vault by adopting its vault key.
+     */
+    @Throws(FfiException::class) fun `createShared`(`password`: kotlin.ByteArray, `vaultId`: kotlin.String, `vaultKey`: kotlin.String): FfiVaultSession {
+            return FfiConverterTypeFfiVaultSession.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_constructor_ffivaultsession_create_shared(
+    
+        
+        FfiConverterByteArray.lower(`password`),
+        FfiConverterString.lower(`vaultId`),
+        FfiConverterString.lower(`vaultKey`),_status)
 }
     )
     }
@@ -3398,6 +3503,62 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
         
         FfiConverterByteArray.lower(`itemsJson`),
         FfiConverterString.lower(`password`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Generate a family member identity keypair as JSON.
+         */
+    @Throws(FfiException::class) fun `familyIdentity`(`id`: kotlin.String, `role`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_family_identity(
+    
+        
+        FfiConverterString.lower(`id`),
+        FfiConverterString.lower(`role`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Unwrap a member's vault key as JSON.
+         */
+    @Throws(FfiException::class) fun `familyUnwrap`(`vaultId`: kotlin.String, `memberId`: kotlin.String, `ephemeralPublic`: kotlin.String, `nonce`: kotlin.String, `ciphertext`: kotlin.String, `role`: kotlin.String, `secret`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_family_unwrap(
+    
+        
+        FfiConverterString.lower(`vaultId`),
+        FfiConverterString.lower(`memberId`),
+        FfiConverterString.lower(`ephemeralPublic`),
+        FfiConverterString.lower(`nonce`),
+        FfiConverterString.lower(`ciphertext`),
+        FfiConverterString.lower(`role`),
+        FfiConverterString.lower(`secret`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Wrap a vault key to a member public key as JSON.
+         */
+    @Throws(FfiException::class) fun `familyWrap`(`vaultId`: kotlin.String, `vaultKey`: kotlin.String, `memberId`: kotlin.String, `memberPublic`: kotlin.String, `role`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_family_wrap(
+    
+        
+        FfiConverterString.lower(`vaultId`),
+        FfiConverterString.lower(`vaultKey`),
+        FfiConverterString.lower(`memberId`),
+        FfiConverterString.lower(`memberPublic`),
+        FfiConverterString.lower(`role`),_status)
 }
     )
     }

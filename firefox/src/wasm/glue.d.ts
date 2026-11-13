@@ -54,6 +54,7 @@ declare class WasmSearchIndex {
 
 declare class WasmVaultSession {
   static create(password: Uint8Array): WasmVaultSession;
+  static create_shared(password: Uint8Array, vaultId: Uint8Array, vaultKey: Uint8Array): WasmVaultSession;
   static open(blob: Uint8Array): WasmVaultSession;
   static unlock(blob: Uint8Array, password: Uint8Array): WasmVaultSession;
   static recover(
@@ -67,6 +68,8 @@ declare class WasmVaultSession {
   vault_id(): Uint8Array;
   migrate_item(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
   export_sync_record(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
+  family_vault_key(): Uint8Array;
+  rotate_family_key(itemsJson: string): string;
   apply_sync_record(syncJson: Uint8Array): Uint8Array;
   decrypt_item(itemId: Uint8Array, ciphertext: Uint8Array): Uint8Array;
   save_item(itemId: Uint8Array, plaintext: Uint8Array): void;
@@ -91,3 +94,8 @@ declare function resolve_sync_conflict(local: string, remote: string, fieldId: n
 declare function phishing_check(url: string): string;
 
 declare function health_report(itemsJson: string, now: bigint, staleSecs: bigint): string;
+
+
+declare function family_identity(id: string, role: string): string;
+declare function family_wrap(vaultId: string, vaultKey: string, memberId: string, memberPublic: string, role: string): string;
+declare function family_unwrap(vaultId: string, memberId: string, ephemeralPublic: string, nonce: string, ciphertext: string, role: string, secret: string): string;

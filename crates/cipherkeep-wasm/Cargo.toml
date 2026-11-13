@@ -21,6 +21,7 @@ serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
 wasm-bindgen.workspace = true
 zeroize.workspace = true
+x25519-dalek = { version = "2", features = ["static_secrets"] }
 
 [dev-dependencies]
 wasm-bindgen-test = "0.3"

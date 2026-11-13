@@ -219,6 +219,42 @@ let wasm_bindgen = (function(exports) {
             }
         }
         /**
+         * Join an existing family vault by adopting its vault key.
+         * @param {Uint8Array | number[]} password
+         * @param {Uint8Array | number[]} vault_id
+         * @param {Uint8Array | number[]} vault_key
+         * @returns {WasmVaultSession}
+         */
+        static create_shared(password, vault_id, vault_key) {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                let ptr0, len0, ptr1, len1, ptr2, len2;
+                try {
+                    ptr0 = passArray8ToWasm0(password, wasm.__wbindgen_export);
+                    len0 = WASM_VECTOR_LEN;
+                    ptr1 = passArray8ToWasm0(vault_id, wasm.__wbindgen_export);
+                    len1 = WASM_VECTOR_LEN;
+                    ptr2 = passArray8ToWasm0(vault_key, wasm.__wbindgen_export);
+                    len2 = WASM_VECTOR_LEN;
+                } catch (e) {
+                    if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
+                    if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                    if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                    throw e;
+                }
+                wasm.wasmvaultsession_create_shared(retptr, ptr0, len0, ptr1, len1, ptr2, len2);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                if (r2) {
+                    throw takeFromExternrefTable0(r1);
+                }
+                return WasmVaultSession.__wrap(r0);
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
+        }
+        /**
          * @param {Uint8Array | number[]} item_id
          * @param {Uint8Array | number[]} ciphertext
          * @returns {Uint8Array}
@@ -366,6 +402,28 @@ let wasm_bindgen = (function(exports) {
         failed_attempts() {
             const ret = wasm.wasmvaultsession_failed_attempts(this.__wbg_ptr);
             return ret >>> 0;
+        }
+        /**
+         * Active vault key for owner-initiated wrapping.
+         * @returns {Uint8Array}
+         */
+        family_vault_key() {
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                wasm.wasmvaultsession_family_vault_key(retptr, this.__wbg_ptr);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                if (r3) {
+                    throw takeFromExternrefTable0(r2);
+                }
+                var v1 = getArrayU8FromWasm0(r0, r1).slice();
+                wasm.__wbindgen_export3(r0, r1 * 1, 1);
+                return v1;
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+            }
         }
         /**
          * Decrypt an item payload.
@@ -602,6 +660,37 @@ let wasm_bindgen = (function(exports) {
             return ret >>> 0;
         }
         /**
+         * Rotate the vault key and return the new blob plus rekeyed item blobs.
+         * @param {string} items_json
+         * @returns {string}
+         */
+        rotate_family_key(items_json) {
+            let deferred3_0;
+            let deferred3_1;
+            try {
+                const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+                const ptr0 = passStringToWasm0(items_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                const len0 = WASM_VECTOR_LEN;
+                wasm.wasmvaultsession_rotate_family_key(retptr, this.__wbg_ptr, ptr0, len0);
+                var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+                var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+                var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+                var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+                var ptr2 = r0;
+                var len2 = r1;
+                if (r3) {
+                    ptr2 = 0; len2 = 0;
+                    throw takeFromExternrefTable0(r2);
+                }
+                deferred3_0 = ptr2;
+                deferred3_1 = len2;
+                return getStringFromWasm0(ptr2, len2);
+            } finally {
+                wasm.__wbindgen_add_to_stack_pointer(16);
+                wasm.__wbindgen_export3(deferred3_0, deferred3_1, 1);
+            }
+        }
+        /**
          * Encrypt and store an opaque item payload.
          *
          * # Errors
@@ -766,6 +855,167 @@ let wasm_bindgen = (function(exports) {
         }
     }
     exports.export_portable = export_portable;
+
+    /**
+     * Generate a family member identity as JSON.
+     * @param {string} id
+     * @param {string} role
+     * @returns {string}
+     */
+    function family_identity(id, role) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passStringToWasm0(id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(role, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            wasm.family_identity(retptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr3 = r0;
+            var len3 = r1;
+            if (r3) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred4_0, deferred4_1, 1);
+        }
+    }
+    exports.family_identity = family_identity;
+
+    /**
+     * Unwrap a member vault key as JSON.
+     * @param {string} vault_id
+     * @param {string} member_id
+     * @param {string} ephemeral_public
+     * @param {string} nonce
+     * @param {string} ciphertext
+     * @param {string} role
+     * @param {string} secret
+     * @returns {string}
+     */
+    function family_unwrap(vault_id, member_id, ephemeral_public, nonce, ciphertext, role, secret) {
+        let deferred9_0;
+        let deferred9_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6;
+            try {
+                ptr0 = passStringToWasm0(vault_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(member_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len1 = WASM_VECTOR_LEN;
+                ptr2 = passStringToWasm0(ephemeral_public, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len2 = WASM_VECTOR_LEN;
+                ptr3 = passStringToWasm0(nonce, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len3 = WASM_VECTOR_LEN;
+                ptr4 = passStringToWasm0(ciphertext, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len4 = WASM_VECTOR_LEN;
+                ptr5 = passStringToWasm0(role, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len5 = WASM_VECTOR_LEN;
+                ptr6 = passStringToWasm0(secret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len6 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr6) { wasm.__wbindgen_export3(ptr6, len6 * 1, 1); }
+                if (ptr5) { wasm.__wbindgen_export3(ptr5, len5 * 1, 1); }
+                if (ptr4) { wasm.__wbindgen_export3(ptr4, len4 * 1, 1); }
+                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
+                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
+                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            wasm.family_unwrap(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4, ptr5, len5, ptr6, len6);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr8 = r0;
+            var len8 = r1;
+            if (r3) {
+                ptr8 = 0; len8 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred9_0 = ptr8;
+            deferred9_1 = len8;
+            return getStringFromWasm0(ptr8, len8);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred9_0, deferred9_1, 1);
+        }
+    }
+    exports.family_unwrap = family_unwrap;
+
+    /**
+     * Wrap a vault key to a member as JSON.
+     * @param {string} vault_id
+     * @param {string} vault_key
+     * @param {string} member_id
+     * @param {string} member_public
+     * @param {string} role
+     * @returns {string}
+     */
+    function family_wrap(vault_id, vault_key, member_id, member_public, role) {
+        let deferred7_0;
+        let deferred7_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            let ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4;
+            try {
+                ptr0 = passStringToWasm0(vault_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(vault_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len1 = WASM_VECTOR_LEN;
+                ptr2 = passStringToWasm0(member_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len2 = WASM_VECTOR_LEN;
+                ptr3 = passStringToWasm0(member_public, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len3 = WASM_VECTOR_LEN;
+                ptr4 = passStringToWasm0(role, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len4 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr4) { wasm.__wbindgen_export3(ptr4, len4 * 1, 1); }
+                if (ptr3) { wasm.__wbindgen_export3(ptr3, len3 * 1, 1); }
+                if (ptr2) { wasm.__wbindgen_export3(ptr2, len2 * 1, 1); }
+                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            wasm.family_wrap(retptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, ptr4, len4);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr6 = r0;
+            var len6 = r1;
+            if (r3) {
+                ptr6 = 0; len6 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred7_0 = ptr6;
+            deferred7_1 = len6;
+            return getStringFromWasm0(ptr6, len6);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred7_0, deferred7_1, 1);
+        }
+    }
+    exports.family_wrap = family_wrap;
 
     /**
      * Generate an EFF-style passphrase with the shared core generator.

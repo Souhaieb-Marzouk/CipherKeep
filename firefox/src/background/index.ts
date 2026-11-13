@@ -618,6 +618,57 @@ async function handle(request: Request): Promise<Response> {
         armAutoLock();
         return { ok: true, kind: "ok" };
       }
+      case "join-family": {
+        const password = new TextEncoder().encode(request.password);
+        let joined: WasmVaultSession;
+        try {
+          joined = WasmVaultSession.create_shared(
+            password,
+            hexToBytes(request.vaultId),
+            hexToBytes(request.vaultKey),
+          );
+        } finally {
+          password.fill(0);
+        }
+        session?.lock();
+        session = joined;
+        shares = joined.recovery_shares();
+        vaultBlob = bytesToBase64(joined.blob());
+        await browser.storage.local.set({ vaultBlob });
+        await ensureItemStore();
+        for (const record of await itemStore.list()) {
+          await itemStore.delete(record.id);
+        }
+        searchIndex = null;
+        armAutoLock();
+        return { ok: true, kind: "ok" };
+      }
+      case "family-vault-key":
+        return { ok: true, kind: "ok", value: bytesToHex(requireSession().family_vault_key()) };
+      case "rotate-family-key": {
+        const active = requireSession();
+        await ensureItemStore();
+        const records = await itemStore.list();
+        const request = records.map((record) => ({
+          id: record.id,
+          blob: bytesToHex(record.ciphertext),
+        }));
+        const rotated = JSON.parse(active.rotate_family_key(JSON.stringify(request))) as {
+          blob: string;
+          items: Array<{ id: string; blob: string }>;
+        };
+        for (const item of rotated.items) {
+          await itemStore.put({
+            id: item.id,
+            ciphertext: hexToBytes(item.blob),
+            updatedAt: Date.now(),
+          });
+        }
+        const blob = hexToBytes(rotated.blob);
+        vaultBlob = bytesToBase64(blob);
+        await browser.storage.local.set({ vaultBlob });
+        return { ok: true, kind: "ok" };
+      }
       case "clear-phishing-overrides":
         await browser.storage.local.remove("phishingOverrides");
         return { ok: true, kind: "ok" };

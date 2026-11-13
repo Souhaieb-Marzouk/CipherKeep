@@ -588,6 +588,33 @@ struct SessionState {
 
 #[uniffi::export]
 impl FfiVaultSession {
+    /// Join an existing family vault by adopting its vault key.
+    #[uniffi::constructor]
+    pub fn create_shared(
+        password: Vec<u8>,
+        vault_id: String,
+        vault_key: String,
+    ) -> Result<Arc<Self>, FfiError> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.fill(0);
+        let key = VaultKey::from_parts(
+            cipherkeep_core::VaultId::from_bytes(hex16(&vault_id)?),
+            SecretBytes::from_slice(&hex32(&vault_key)?),
+        )?;
+        let created = VaultSession::create_with_vault_key(&secret, key)?;
+        Ok(Arc::new(Self {
+            state: Mutex::new(SessionState {
+                session: created.session,
+                shares: created
+                    .shares
+                    .iter()
+                    .map(|share| share.expose_secret().to_string())
+                    .collect(),
+            }),
+        }))
+    }
+
     /// Create a new vault and return the session with its recovery shares.
     ///
     /// # Errors
@@ -838,6 +865,42 @@ impl FfiVaultSession {
                 .vault_id()
                 .map(|id| id.as_bytes().to_vec())
                 .map_err(FfiError::from)
+        })
+    }
+
+    /// Export the active vault key for owner-initiated family wrapping.
+    pub fn family_vault_key(&self) -> Result<String, FfiError> {
+        self.with_state(|state| Ok(hex(&state.session.share_vault_key()?)))
+    }
+
+    /// Rotate the vault key and return the new blob plus rekeyed item blobs.
+    pub fn rotate_family_key(&self, items_json: String) -> Result<String, FfiError> {
+        let values: Vec<serde_json::Value> =
+            serde_json::from_str(&items_json).map_err(|_| FfiError::CorruptData)?;
+        let mut items = Vec::with_capacity(values.len());
+        for value in values {
+            let id = value
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let blob = value
+                .get("blob")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            items.push((
+                cipherkeep_core::ItemId::from_bytes(hex16(id)?),
+                hex_bytes(blob)?,
+            ));
+        }
+        self.with_state_mut(|state| {
+            let rotated = state.session.rotate_vault_key_with(&items)?;
+            serde_json::to_string(&serde_json::json!({
+                "blob": hex(&rotated.blob),
+                "items": rotated.items.iter().map(|(id, blob)| {
+                    serde_json::json!({ "id": hex(id.as_bytes()), "blob": hex(blob) })
+                }).collect::<Vec<_>>(),
+            }))
+            .map_err(|_| FfiError::Internal)
         })
     }
 
@@ -1366,4 +1429,128 @@ pub fn health_report(items_json: String, now: u64, stale_secs: u64) -> Result<St
         })).collect::<Vec<_>>(),
     }))
     .map_err(|_| FfiError::Internal)
+}
+
+fn hex_bytes(value: &str) -> Result<Vec<u8>, FfiError> {
+    (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16))
+        .collect::<std::result::Result<Vec<u8>, _>>()
+        .map_err(|_| FfiError::InvalidArgument)
+}
+
+fn hex32(value: &str) -> Result<[u8; 32], FfiError> {
+    let bytes = (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16))
+        .collect::<std::result::Result<Vec<u8>, _>>()
+        .map_err(|_| FfiError::InvalidArgument)?;
+    bytes.try_into().map_err(|_| FfiError::InvalidArgument)
+}
+
+fn hex16(value: &str) -> Result<[u8; 16], FfiError> {
+    let bytes = (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16))
+        .collect::<std::result::Result<Vec<u8>, _>>()
+        .map_err(|_| FfiError::InvalidArgument)?;
+    bytes.try_into().map_err(|_| FfiError::InvalidArgument)
+}
+
+fn hex(value: &[u8]) -> String {
+    value.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Generate a family member identity keypair as JSON.
+#[uniffi::export]
+pub fn family_identity(id: String, role: String) -> Result<String, FfiError> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(FfiError::InvalidArgument),
+    };
+    let (secret, member) = cipherkeep_core::sharing::generate_identity(&id, role)?;
+    serde_json::to_string(&serde_json::json!({
+        "secret": hex(&secret),
+        "public": hex(&member.public_key),
+        "memberId": member.id,
+        "fingerprint": member.fingerprint(),
+        "role": format!("{role:?}").to_lowercase(),
+    }))
+    .map_err(|_| FfiError::Internal)
+}
+
+/// Wrap a vault key to a member public key as JSON.
+#[uniffi::export]
+pub fn family_wrap(
+    vault_id: String,
+    vault_key: String,
+    member_id: String,
+    member_public: String,
+    role: String,
+) -> Result<String, FfiError> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(FfiError::InvalidArgument),
+    };
+    let member = cipherkeep_core::sharing::Member {
+        id: member_id,
+        public_key: hex32(&member_public)?,
+        role,
+    };
+    let wrapped = cipherkeep_core::sharing::wrap_secret(
+        cipherkeep_core::VaultId::from_bytes(hex16(&vault_id)?),
+        &hex32(&vault_key)?,
+        &member,
+    )?;
+    serde_json::to_string(&serde_json::json!({
+        "memberId": wrapped.member_id,
+        "ephemeralPublic": hex(&wrapped.ephemeral_public),
+        "nonce": hex(&wrapped.nonce),
+        "ciphertext": hex(&wrapped.ciphertext),
+        "role": format!("{role:?}").to_lowercase(),
+    }))
+    .map_err(|_| FfiError::Internal)
+}
+
+/// Unwrap a member's vault key as JSON.
+#[uniffi::export]
+pub fn family_unwrap(
+    vault_id: String,
+    member_id: String,
+    ephemeral_public: String,
+    nonce: String,
+    ciphertext: String,
+    role: String,
+    secret: String,
+) -> Result<String, FfiError> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(FfiError::InvalidArgument),
+    };
+    let wrapped = cipherkeep_core::sharing::WrappedKey {
+        member_id,
+        ephemeral_public: hex32(&ephemeral_public)?,
+        nonce: {
+            let bytes = (0..nonce.len() / 2)
+                .map(|index| u8::from_str_radix(&nonce[index * 2..index * 2 + 2], 16))
+                .collect::<std::result::Result<Vec<u8>, _>>()
+                .map_err(|_| FfiError::InvalidArgument)?;
+            bytes.try_into().map_err(|_| FfiError::InvalidArgument)?
+        },
+        ciphertext: (0..ciphertext.len() / 2)
+            .map(|index| u8::from_str_radix(&ciphertext[index * 2..index * 2 + 2], 16))
+            .collect::<std::result::Result<Vec<u8>, _>>()
+            .map_err(|_| FfiError::InvalidArgument)?,
+    };
+    let key = cipherkeep_core::sharing::unwrap_secret(
+        cipherkeep_core::VaultId::from_bytes(hex16(&vault_id)?),
+        &wrapped,
+        role,
+        &x25519_dalek::StaticSecret::from(hex32(&secret)?),
+    )?;
+    serde_json::to_string(&serde_json::json!({ "vaultKey": hex(&key) }))
+        .map_err(|_| FfiError::Internal)
 }

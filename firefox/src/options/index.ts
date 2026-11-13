@@ -378,6 +378,116 @@ element<HTMLButtonElement>("healthScan").addEventListener("click", async () => {
     status.textContent = "Health analysis failed.";
   }
 });
+
+interface FamilyMember { id: string; public: string; role: string; wrapped?: string }
+
+async function loadFamily(): Promise<void> {
+  const stored = await browser.storage.local.get(["familyIdentity", "familyMembers"]);
+  const identity = stored.familyIdentity as { fingerprint?: string; secret?: string } | undefined;
+  element<HTMLPreElement>("familyStatus").textContent = identity === undefined
+    ? "No owner identity. Create one and verify fingerprints out of band."
+    : `Owner fingerprint: ${identity.fingerprint ?? ""}`;
+  const members = Array.isArray(stored.familyMembers) ? stored.familyMembers as FamilyMember[] : [];
+  const list = element<HTMLDivElement>("familyMembers");
+  list.replaceChildren();
+  for (const member of members) {
+    const roleButton = document.createElement("button");
+    roleButton.className = "secondary";
+    roleButton.textContent = member.role === "editor" ? `Make viewer ${member.id}` : `Make editor ${member.id}`;
+    roleButton.addEventListener("click", async () => {
+      const key = await browser.runtime.sendMessage({ type: "family-vault-key" });
+      const vault = await browser.runtime.sendMessage({ type: "sync-vault-id" });
+      if (!key.ok || key.kind !== "ok" || typeof key.value !== "string") return;
+      if (!vault.ok || vault.kind !== "vault-id") return;
+      const nextRole = member.role === "editor" ? "viewer" : "editor";
+      member.role = nextRole;
+      member.wrapped = family_wrap(vault.vaultId, key.value, member.id, member.public, nextRole);
+      await browser.storage.local.set({ familyMembers: members });
+      element<HTMLPreElement>("familyStatus").textContent = "Role changed and wrapped key updated.";
+      await loadFamily();
+    });
+    const revoke = document.createElement("button");
+    revoke.className = "secondary";
+    revoke.textContent = `Revoke ${member.id}`;
+    revoke.addEventListener("click", async () => {
+      if (!window.confirm("Rotate the vault key and rewrap remaining members? A removed member keeps access to ciphertext they already had.")) return;
+      const rotated = await browser.runtime.sendMessage({ type: "rotate-family-key" });
+      if (!rotated.ok) { element<HTMLPreElement>("familyStatus").textContent = rotated.error; return; }
+      const key = await browser.runtime.sendMessage({ type: "family-vault-key" });
+      const vault = await browser.runtime.sendMessage({ type: "sync-vault-id" });
+      if (!key.ok || key.kind !== "ok" || typeof key.value !== "string") return;
+      if (!vault.ok || vault.kind !== "vault-id") return;
+      const remaining = members.filter((entry) => entry.id !== member.id);
+      for (const entry of remaining) {
+        entry.wrapped = family_wrap(vault.vaultId, key.value, entry.id, entry.public, entry.role);
+      }
+      await browser.storage.local.set({ familyMembers: remaining });
+      await loadFamily();
+    });
+    list.append(roleButton, revoke);
+  }
+}
+
+element<HTMLButtonElement>("familyIdentity").addEventListener("click", async () => {
+  const identity = JSON.parse(family_identity("owner", "owner")) as { fingerprint: string; secret: string; public: string };
+  await browser.storage.local.set({ familyIdentity: identity });
+  element<HTMLPreElement>("familyStatus").textContent = `Owner fingerprint: ${identity.fingerprint}`;
+});
+
+element<HTMLButtonElement>("familyInvite").addEventListener("click", async () => {
+  const stored = await browser.storage.local.get(["familyMembers"]);
+  const key = await browser.runtime.sendMessage({ type: "family-vault-key" });
+  if (!key.ok || key.kind !== "ok" || typeof key.value !== "string") return;
+  const id = element<HTMLInputElement>("familyMemberId").value.trim();
+  const publicKey = element<HTMLInputElement>("familyPublic").value.trim().toLowerCase();
+  const role = element<HTMLSelectElement>("familyRole").value;
+  if (id.length === 0 || !/^[0-9a-f]{64}$/.test(publicKey)) {
+    element<HTMLPreElement>("familyStatus").textContent = "Member id and 64-hex public key are required.";
+    return;
+  }
+  const vault = await browser.runtime.sendMessage({ type: "sync-vault-id" });
+  if (!vault.ok || vault.kind !== "vault-id") return;
+  const wrapped = family_wrap(vault.vaultId, key.value, id, publicKey, role);
+  const members = Array.isArray(stored.familyMembers) ? stored.familyMembers as FamilyMember[] : [];
+  members.push({ id, public: publicKey, role, wrapped });
+  await browser.storage.local.set({ familyMembers: members });
+  element<HTMLPreElement>("familyStatus").textContent = "Member invited; verify the fingerprint out of band.";
+  await loadFamily();
+});
+
+element<HTMLButtonElement>("familyRotate").addEventListener("click", async () => {
+  if (!window.confirm("Rotate the vault key now? Existing wrapped member keys become stale.")) return;
+  const reply = await browser.runtime.sendMessage({ type: "rotate-family-key" });
+  element<HTMLPreElement>("familyStatus").textContent = reply.ok ? "Vault key rotated." : reply.error;
+});
+
+
+element<HTMLButtonElement>("joinFamily").addEventListener("click", async () => {
+  try {
+    const unwrapped = JSON.parse(family_unwrap(
+      element<HTMLInputElement>("joinVaultId").value.trim(),
+      element<HTMLInputElement>("joinMemberId").value.trim(),
+      element<HTMLInputElement>("joinPublic").value.trim(),
+      element<HTMLInputElement>("joinNonce").value.trim(),
+      element<HTMLInputElement>("joinCiphertext").value.trim(),
+      "editor",
+      element<HTMLInputElement>("joinSecret").value.trim(),
+    )) as { vaultKey?: string };
+    if (typeof unwrapped.vaultKey !== "string") throw new Error("no key");
+    const reply: Response = await browser.runtime.sendMessage({
+      type: "join-family",
+      password: element<HTMLInputElement>("joinPassword").value,
+      vaultId: element<HTMLInputElement>("joinVaultId").value.trim(),
+      vaultKey: unwrapped.vaultKey,
+    });
+    element<HTMLPreElement>("familyStatus").textContent = reply.ok
+      ? "Joined family vault. Configure sync to pull items."
+      : reply.error;
+  } catch {
+    element<HTMLPreElement>("familyStatus").textContent = "Join failed; check the envelope and secret.";
+  }
+});
+void loadFamily();
 void loadHibp();
 void loadTravel();
 void showEmergencyStatus();

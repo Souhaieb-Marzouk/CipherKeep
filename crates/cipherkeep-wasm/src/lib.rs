@@ -528,6 +528,38 @@ impl WasmVaultSession {
         })
     }
 
+    /// Join an existing family vault by adopting its vault key.
+    #[wasm_bindgen]
+    pub fn create_shared(
+        password: Vec<u8>,
+        vault_id: Vec<u8>,
+        vault_key: Vec<u8>,
+    ) -> Result<WasmVaultSession, JsValue> {
+        let mut password = password;
+        let secret = SecretBytes::from_slice(&password);
+        password.zeroize();
+        let id: [u8; 16] = vault_id
+            .as_slice()
+            .try_into()
+            .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+        let key: [u8; 32] = vault_key
+            .as_slice()
+            .try_into()
+            .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+        let vault = VaultKey::from_parts(VaultId::from_bytes(id), SecretBytes::from_slice(&key))
+            .map_err(js_error)?;
+        let created = VaultSession::create_with_vault_key(&secret, vault).map_err(js_error)?;
+        let shares = created
+            .shares
+            .iter()
+            .map(|share| share.expose_secret().to_string())
+            .collect();
+        Ok(Self {
+            inner: created.session,
+            shares,
+        })
+    }
+
     /// Open a persisted vault in the locked state.
     ///
     /// Keeps local failed-attempt/backoff state across unlock calls.
@@ -632,6 +664,49 @@ impl WasmVaultSession {
             .vault_id()
             .map(|id| id.as_bytes().to_vec())
             .map_err(js_error)
+    }
+
+    /// Active vault key for owner-initiated wrapping.
+    pub fn family_vault_key(&self) -> Result<Vec<u8>, JsValue> {
+        self.inner.share_vault_key().map_err(js_error)
+    }
+
+    /// Rotate the vault key and return the new blob plus rekeyed item blobs.
+    pub fn rotate_family_key(&mut self, items_json: String) -> Result<String, JsValue> {
+        let values: Vec<serde_json::Value> = serde_json::from_str(&items_json)
+            .map_err(|_| js_error(CoreError::new(ErrorCode::CorruptData)))?;
+        let mut items = Vec::with_capacity(values.len());
+        for value in values {
+            let id = value
+                .get("id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let blob = value
+                .get("blob")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default();
+            let id_bytes = (0..id.len() / 2)
+                .map(|index| u8::from_str_radix(&id[index * 2..index * 2 + 2], 16))
+                .collect::<std::result::Result<Vec<u8>, _>>()
+                .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+            let id = ItemId::from_bytes(id_from_slice(&id_bytes).map_err(js_error)?);
+            let blob = (0..blob.len() / 2)
+                .map(|index| u8::from_str_radix(&blob[index * 2..index * 2 + 2], 16))
+                .collect::<std::result::Result<Vec<u8>, _>>()
+                .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+            items.push((id, blob));
+        }
+        let rotated = self.inner.rotate_vault_key_with(&items).map_err(js_error)?;
+        serde_json::to_string(&serde_json::json!({
+            "blob": rotated.blob.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+            "items": rotated.items.iter().map(|(id, blob)| {
+                serde_json::json!({
+                    "id": id.as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                    "blob": blob.iter().map(|byte| format!("{byte:02x}")).collect::<String>(),
+                })
+            }).collect::<Vec<_>>(),
+        }))
+        .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
     }
 
     pub fn decrypt_item(&self, item_id: Vec<u8>, ciphertext: Vec<u8>) -> Result<Vec<u8>, JsValue> {
@@ -1158,4 +1233,130 @@ pub fn health_report(items_json: String, now: u64, stale_secs: u64) -> Result<St
         })).collect::<Vec<_>>(),
     }))
     .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
+}
+
+fn family_hex32(value: &str) -> Result<[u8; 32], JsValue> {
+    let bytes = (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16))
+        .collect::<std::result::Result<Vec<u8>, _>>()
+        .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+    bytes
+        .try_into()
+        .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))
+}
+
+fn family_hex16(value: &str) -> Result<[u8; 16], JsValue> {
+    let bytes = (0..value.len() / 2)
+        .map(|index| u8::from_str_radix(&value[index * 2..index * 2 + 2], 16))
+        .collect::<std::result::Result<Vec<u8>, _>>()
+        .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+    bytes
+        .try_into()
+        .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))
+}
+
+fn family_hex(value: &[u8]) -> String {
+    value.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+/// Generate a family member identity as JSON.
+#[wasm_bindgen]
+pub fn family_identity(id: String, role: String) -> Result<String, JsValue> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(js_error(CoreError::new(ErrorCode::InvalidArgument))),
+    };
+    let (secret, member) =
+        cipherkeep_core::sharing::generate_identity(&id, role).map_err(js_error)?;
+    serde_json::to_string(&serde_json::json!({
+        "secret": family_hex(&secret),
+        "public": family_hex(&member.public_key),
+        "memberId": member.id,
+        "fingerprint": member.fingerprint(),
+        "role": format!("{role:?}").to_lowercase(),
+    }))
+    .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
+}
+
+/// Wrap a vault key to a member as JSON.
+#[wasm_bindgen]
+pub fn family_wrap(
+    vault_id: String,
+    vault_key: String,
+    member_id: String,
+    member_public: String,
+    role: String,
+) -> Result<String, JsValue> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(js_error(CoreError::new(ErrorCode::InvalidArgument))),
+    };
+    let member = cipherkeep_core::sharing::Member {
+        id: member_id,
+        public_key: family_hex32(&member_public)?,
+        role,
+    };
+    let wrapped = cipherkeep_core::sharing::wrap_secret(
+        cipherkeep_core::VaultId::from_bytes(family_hex16(&vault_id)?),
+        &family_hex32(&vault_key)?,
+        &member,
+    )
+    .map_err(js_error)?;
+    serde_json::to_string(&serde_json::json!({
+        "memberId": wrapped.member_id,
+        "ephemeralPublic": family_hex(&wrapped.ephemeral_public),
+        "nonce": family_hex(&wrapped.nonce),
+        "ciphertext": family_hex(&wrapped.ciphertext),
+        "role": format!("{role:?}").to_lowercase(),
+    }))
+    .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
+}
+
+/// Unwrap a member vault key as JSON.
+#[wasm_bindgen]
+pub fn family_unwrap(
+    vault_id: String,
+    member_id: String,
+    ephemeral_public: String,
+    nonce: String,
+    ciphertext: String,
+    role: String,
+    secret: String,
+) -> Result<String, JsValue> {
+    let role = match role.as_str() {
+        "owner" => cipherkeep_core::sharing::Role::Owner,
+        "editor" => cipherkeep_core::sharing::Role::Editor,
+        "viewer" => cipherkeep_core::sharing::Role::Viewer,
+        _ => return Err(js_error(CoreError::new(ErrorCode::InvalidArgument))),
+    };
+    let wrapped = cipherkeep_core::sharing::WrappedKey {
+        member_id,
+        ephemeral_public: family_hex32(&ephemeral_public)?,
+        nonce: {
+            let bytes = (0..nonce.len() / 2)
+                .map(|index| u8::from_str_radix(&nonce[index * 2..index * 2 + 2], 16))
+                .collect::<std::result::Result<Vec<u8>, _>>()
+                .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?;
+            bytes
+                .try_into()
+                .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?
+        },
+        ciphertext: (0..ciphertext.len() / 2)
+            .map(|index| u8::from_str_radix(&ciphertext[index * 2..index * 2 + 2], 16))
+            .collect::<std::result::Result<Vec<u8>, _>>()
+            .map_err(|_| js_error(CoreError::new(ErrorCode::InvalidArgument)))?,
+    };
+    let key = cipherkeep_core::sharing::unwrap_secret(
+        cipherkeep_core::VaultId::from_bytes(family_hex16(&vault_id)?),
+        &wrapped,
+        role,
+        &x25519_dalek::StaticSecret::from(family_hex32(&secret)?),
+    )
+    .map_err(js_error)?;
+    serde_json::to_string(&serde_json::json!({ "vaultKey": family_hex(&key) }))
+        .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
 }

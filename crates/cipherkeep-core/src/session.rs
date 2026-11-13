@@ -17,7 +17,7 @@ use crate::header::{VaultHeader, NONCE_LEN};
 use crate::item::ITEM_SCHEMA_VERSION;
 use crate::kdf::{derive_master_key, KdfParams};
 use crate::keyring::Keyring;
-use crate::keys::{random_array, ItemId, ItemKey, MasterKey, VaultId, KEY_LEN};
+use crate::keys::{random_array, ItemId, ItemKey, MasterKey, VaultId, VaultKey, KEY_LEN};
 use crate::secret::{SecretBytes, SecretString};
 use crate::shamir::{combine_2_of_3, split_2_of_3, RecoveryShare};
 use crate::sync::legacy::migrate_legacy_item;
@@ -28,6 +28,14 @@ const BLOB_HEADER_LEN: usize = 4 + 2 + 16 + 4;
 const MAX_BLOB_LEN: usize = 16 * 1024 * 1024;
 const MIN_PASSWORD_LEN: usize = 12;
 const FREE_ATTEMPTS: u32 = 5;
+
+/// Result of a vault-key rotation.
+pub struct RotatedVault {
+    /// New vault blob (header + resealed keyring).
+    pub blob: Vec<u8>,
+    /// Every item's rekeyed ciphertext, in item-id order.
+    pub items: Vec<(ItemId, Vec<u8>)>,
+}
 const BASE_DELAY_SECS: u64 = 30;
 const MAX_DELAY_SECS: u64 = 3_600;
 
@@ -231,6 +239,38 @@ impl VaultSession {
         Ok(CreatedVault { session, shares })
     }
 
+    /// Create a local vault that adopts an existing vault key, for a family
+    /// member joining an owner's vault.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same password/KDF errors as [`Self::create`].
+    pub fn create_with_vault_key(
+        password: &SecretBytes,
+        vault_key: VaultKey,
+    ) -> Result<CreatedVault> {
+        validate_master_password(password)?;
+        let params = KdfParams::generate()?;
+        let master = MasterKey::from_secret_bytes(derive_master_key(password, &params)?)?;
+        let vault_id = vault_key.id();
+        let keyring = Keyring::from_vaults(vec![vault_key])?;
+        let keyring_nonce = random_array::<NONCE_LEN>()?;
+        let prefix = VaultHeader::aad_prefix_for(&params);
+        let sealed = keyring.seal(&master, &prefix, &keyring_nonce)?;
+        let header = VaultHeader::new(params, keyring_nonce, sealed.encode())?;
+        let (recovery_envelope, shares) = make_recovery(&keyring, vault_id)?;
+        let session = Self {
+            header,
+            recovery_envelope,
+            vault_id,
+            state: Some(Unlocked { master, keyring }),
+            items: BTreeMap::new(),
+            failed_attempts: 0,
+            next_attempt_at: 0,
+        };
+        Ok(CreatedVault { session, shares })
+    }
+
     /// Open portable metadata in the locked state without a password.
     ///
     /// This is the handle a UI keeps across failed unlock attempts so the local
@@ -354,6 +394,102 @@ impl VaultSession {
         blob.extend_from_slice(&wrapped);
         blob.extend_from_slice(&sealed);
         Ok(blob)
+    }
+
+    /// Export the active vault key for an owner-initiated wrap.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked.
+    pub fn share_vault_key(&self) -> Result<Vec<u8>> {
+        let unlocked = self
+            .state
+            .as_ref()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        let vault = unlocked
+            .keyring
+            .first_vault()
+            .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+        Ok(vault.secret().expose_secret().to_vec())
+    }
+
+    /// Rotate the vault key and re-wrap every stored item key.
+    ///
+    /// The item payload ciphertext is unchanged; only the wrapped item keys and
+    /// the keyring are replaced. The returned bytes are the new vault blob.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked or a redacted error if any item
+    /// cannot be unwrapped/rewrapped or the new keyring cannot be sealed.
+    pub fn rotate_vault_key(&mut self) -> Result<RotatedVault> {
+        let items: Vec<(ItemId, Vec<u8>)> = self
+            .items
+            .iter()
+            .map(|(id, blob)| (*id, blob.clone()))
+            .collect();
+        self.rotate_vault_key_with(&items)
+    }
+
+    /// Rotate using platform-supplied item ciphertexts, which may not live in
+    /// the in-memory map.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked or a redacted error if any item
+    /// cannot be unwrapped/rewrapped.
+    pub fn rotate_vault_key_with(&mut self, items: &[(ItemId, Vec<u8>)]) -> Result<RotatedVault> {
+        let unlocked = self
+            .state
+            .take()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        let prepared = (|| {
+            let vault_id = unlocked
+                .keyring
+                .first_vault_id()
+                .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+            let old_vault = unlocked
+                .keyring
+                .first_vault()
+                .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
+            let new_secret = random_array::<KEY_LEN>()?;
+            let new_vault = VaultKey::from_parts(vault_id, SecretBytes::from_slice(&new_secret))?;
+            let mut rekeyed = BTreeMap::new();
+            for (item_id, blob) in items {
+                let (wrapped, sealed) = decode_item_blob(blob)?;
+                let item_key =
+                    old_vault.unwrap_item_key(&wrapped, *item_id, ITEM_SCHEMA_VERSION)?;
+                let new_wrapped =
+                    new_vault.wrap_item_key(&item_key, *item_id, ITEM_SCHEMA_VERSION)?;
+                rekeyed.insert(*item_id, encode_item_blob(&new_wrapped, &sealed)?);
+            }
+            let new_keyring = Keyring::from_vaults(vec![new_vault])?;
+            let nonce = random_array::<NONCE_LEN>()?;
+            let sealed = new_keyring.seal(&unlocked.master, &self.header.aad_prefix(), &nonce)?;
+            let header = VaultHeader::new(*self.header.kdf_params(), nonce, sealed.encode())?;
+            Ok((rekeyed, header, new_keyring))
+        })();
+        match prepared {
+            Ok((items, header, keyring)) => {
+                self.items = items;
+                self.header = header;
+                let blob = self.blob().encode();
+                self.state = Some(Unlocked {
+                    master: unlocked.master,
+                    keyring,
+                });
+                let items = self
+                    .items
+                    .iter()
+                    .map(|(id, blob)| (*id, blob.clone()))
+                    .collect();
+                Ok(RotatedVault { blob, items })
+            }
+            Err(error) => {
+                self.state = Some(unlocked);
+                Err(error)
+            }
+        }
     }
 
     /// Decrypt an item payload.
@@ -869,6 +1005,19 @@ fn decode_hex(value: &str) -> Result<Vec<u8>> {
             .map_err(|_| CoreError::new(ErrorCode::CorruptData))
         })
         .collect()
+}
+
+fn encode_item_blob(wrapped: &crate::Envelope, sealed: &crate::Envelope) -> Result<Vec<u8>> {
+    let wrapped = wrapped.encode();
+    let sealed = sealed.encode();
+    let wrapped_len =
+        u16::try_from(wrapped.len()).map_err(|_| CoreError::new(ErrorCode::LimitExceeded))?;
+    let mut blob = Vec::with_capacity(3 + wrapped.len() + sealed.len());
+    blob.push(ITEM_BLOB_VERSION);
+    blob.extend_from_slice(&wrapped_len.to_be_bytes());
+    blob.extend_from_slice(&wrapped);
+    blob.extend_from_slice(&sealed);
+    Ok(blob)
 }
 
 fn decode_item_blob(blob: &[u8]) -> Result<(crate::Envelope, crate::Envelope)> {

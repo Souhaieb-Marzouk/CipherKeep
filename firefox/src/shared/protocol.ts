@@ -75,6 +75,9 @@ export type Request =
   | { type: "cancel-emergency" }
   | { type: "enter-travel" }
   | { type: "allow-phishing-origin"; origin: string }
+  | { type: "family-vault-key" }
+  | { type: "rotate-family-key" }
+  | { type: "join-family"; password: string; vaultId: string; vaultKey: string }
   | { type: "clear-phishing-overrides" }
   | {
       type: "update-item";
@@ -119,7 +122,7 @@ export type Response =
       locked: boolean;
       retryAfter: number;
     }
-  | { ok: true; kind: "ok"; shares?: string[]; imported?: number }
+  | { ok: true; kind: "ok"; shares?: string[]; imported?: number; value?: string }
   | { ok: true; kind: "update"; update: UpdateReport }
   | { ok: true; kind: "items"; items: ItemView[] }
   | {
@@ -230,6 +233,9 @@ function isRequestType(value: unknown): value is Request["type"] {
       "cancel-emergency",
       "enter-travel",
       "allow-phishing-origin",
+      "family-vault-key",
+      "rotate-family-key",
+      "join-family",
       "clear-phishing-overrides",
       "update-item",
     ].includes(value)
@@ -365,6 +371,18 @@ export function isRequest(value: unknown): value is Request {
         typeof request.inactivityDays === "number" &&
         typeof request.graceMinutes === "number"
       );
+    case "join-family":
+      return (
+        typeof request.password === "string" &&
+        request.password.length >= 12 &&
+        typeof request.vaultId === "string" &&
+        /^[0-9a-f]{32}$/i.test(request.vaultId) &&
+        typeof request.vaultKey === "string" &&
+        /^[0-9a-f]{64}$/i.test(request.vaultKey)
+      );
+    case "family-vault-key":
+    case "rotate-family-key":
+      return true;
     case "enter-travel":
       return true;
     case "clear-phishing-overrides":

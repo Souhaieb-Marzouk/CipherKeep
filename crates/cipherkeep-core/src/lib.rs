@@ -46,6 +46,7 @@ pub mod search;
 pub mod secret;
 pub mod session;
 pub mod shamir;
+pub mod sharing;
 pub mod sync;
 pub mod totp;
 pub mod travel;

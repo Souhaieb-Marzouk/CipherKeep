@@ -1,7 +1,7 @@
 //! Session lifecycle tests.
 
 use cipherkeep_core::{
-    validate_master_password, ItemId, RecoveryShare, SecretBytes, VaultBlob, VaultSession,
+    validate_master_password, ItemId, RecoveryShare, SecretBytes, VaultBlob, VaultKey, VaultSession,
 };
 
 const PASSWORD: &[u8] = b"correct horse battery staple";
@@ -189,4 +189,43 @@ fn blob_debug_does_not_expose_material() {
     assert!(debug.contains("VaultBlob"));
     assert!(!debug.contains("correct horse"));
     assert!(!debug.contains("CKS1"));
+}
+
+#[test]
+fn rotating_vault_key_rewraps_items_and_new_blob_opens() {
+    let created = VaultSession::create(&password(PASSWORD)).expect("create");
+    let mut session = created.session;
+    let item_id = ItemId::from_bytes([7u8; 16]);
+    let ciphertext = session
+        .encrypt_item(item_id, b"item payload")
+        .expect("encrypt");
+    let rotated = session
+        .rotate_vault_key_with(&[(item_id, ciphertext.clone())])
+        .expect("rotate");
+    let new_ciphertext = rotated.items[0].1.clone();
+    let plaintext = session
+        .decrypt_item(item_id, &new_ciphertext)
+        .expect("decrypt after rotate");
+    assert_eq!(plaintext, b"item payload");
+
+    let blob = VaultBlob::decode(&rotated.blob).expect("blob");
+    let unlocked = VaultSession::unlock(&blob, &password(PASSWORD), 0).expect("unlock");
+    let decrypted = unlocked
+        .decrypt_item(item_id, &new_ciphertext)
+        .expect("decrypt reopened");
+    assert_eq!(decrypted, b"item payload");
+}
+
+#[test]
+fn member_join_adopts_existing_vault_key() {
+    let key = VaultKey::generate().expect("key");
+    let expected_id = key.id();
+    let created =
+        VaultSession::create_with_vault_key(&password(PASSWORD), key).expect("create shared");
+    let blob = created.session.blob();
+    let unlocked = VaultSession::unlock(&blob, &password(PASSWORD), 0).expect("unlock");
+    assert_eq!(
+        unlocked.vault_id().expect("id").as_bytes(),
+        expected_id.as_bytes()
+    );
 }

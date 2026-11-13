@@ -101,6 +101,31 @@ class SessionController(context: Context) {
         }
     }
 
+    suspend fun joinFamilyVault(
+        password: String,
+        vaultId: String,
+        vaultKeyHex: String,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val bytes = password.encodeToByteArray()
+            try {
+                val joined = FfiVaultSession.createShared(bytes, vaultId, vaultKeyHex)
+                val encoded = joined.blob()
+                blobs.save(encoded)
+                session?.close()
+                session = joined
+                blob = encoded
+                travel.clear()
+                if (!openStorage()) error("storage unavailable")
+                loadItems()
+                state = VaultUiState.Unlocked
+                recordActivity()
+            } finally {
+                bytes.fill(0)
+            }
+        }
+    }
+
     suspend fun create(password: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val bytes = password.encodeToByteArray()
@@ -665,6 +690,49 @@ class SessionController(context: Context) {
         loadItems()
         SyncOutcome(records.length(), merged.optJSONArray("conflicts")?.length() ?: 0)
     }
+
+    fun familyVaultKeyHex(): String {
+        val active = session ?: error("vault is locked")
+        return active.familyVaultKey()
+    }
+
+    suspend fun rotateFamilyKey(): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val entities = repo.list()
+            val request = JSONArray()
+            entities.forEach { entity ->
+                request.put(
+                    JSONObject()
+                        .put("id", entity.itemId.joinToString("") { "%02x".format(it) })
+                        .put("blob", entity.ciphertext.joinToString("") { "%02x".format(it) }),
+                )
+            }
+            val rotated = JSONObject(active.rotateFamilyKey(request.toString()))
+            blobs.save(hexBytes(rotated.getString("blob")))
+            val items = rotated.getJSONArray("items")
+            for (index in 0 until items.length()) {
+                val item = items.getJSONObject(index)
+                val id = hexBytes(item.getString("id"))
+                val entity = entities.firstOrNull { it.itemId.contentEquals(id) } ?: continue
+                repo.save(
+                    itemId = entity.itemId,
+                    ciphertext = hexBytes(item.getString("blob")),
+                    lamport = maxOf(entity.lamport + 1, 2),
+                    tombstone = entity.tombstone,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            }
+            loadItems()
+        }
+    }
+
+    private fun hexBytes(value: String): ByteArray =
+        ByteArray(value.length / 2) { index ->
+            value.substring(index * 2, index * 2 + 2).toInt(16).toByte()
+        }
 
     suspend fun resolveConflict(item: String, field: Int, keepRight: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
