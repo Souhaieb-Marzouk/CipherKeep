@@ -174,7 +174,8 @@ jobs:
     with:
       base64-subjects: ${{ needs.integrity.outputs.subjects }}
       upload-assets: true
-      tag-name: ${{ needs.validate.outputs.tag }}
+      upload-tag-name: ${{ needs.validate.outputs.tag }}
+      draft-release: "true"
 
   draft:
     name: assemble draft release
