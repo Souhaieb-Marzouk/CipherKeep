@@ -32,6 +32,21 @@ If the key has a password, add `MINISIGN_PASSWORD` as a separate secret.
 The workflow decodes the key into `$RUNNER_TEMP`, signs, verifies with the
 published public key, and deletes the temporary key.
 
+## APK certificate fingerprint
+
+The production signing certificate is not published yet because no signed public
+beta exists. Before the first beta, record its SHA-256 here and in
+`CIPHERKEEP_CERT_SHA256`.
+
+Until then, verify any provided APK with:
+
+```bash
+apksigner verify --print-certs app-release.apk
+```
+
+A release whose certificate does not match the published fingerprint must be
+rejected. Do not trust a fingerprint from an unsigned or debug APK.
+
 ## Files in a release
 
 ```text

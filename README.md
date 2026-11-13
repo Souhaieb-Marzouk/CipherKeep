@@ -45,16 +45,22 @@ The project is built for two places where people need their credentials most:
 - **Encrypted local storage** — vault data is stored encrypted on the device.
 - **Firefox popup** — create, unlock, lock, and manage items from the extension popup.
 - **Update checks** — check GitHub Releases manually for a newer version; optional daily checks can be enabled. Nothing is installed silently.
+- **Android autofill** — fill saved logins after unlocking, with phishing warnings.
+- **Email aliases** — optional SimpleLogin/Addy.io alias creation.
+- **Emergency access** — optional cron-delivered 2-of-3 recovery shares.
+- **Travel Mode** — a local decoy vault for border or coercion situations.
+- **Phishing, HIBP and password-health checks** — local analysis, opt-in HIBP prefix checks and a local health dashboard.
+- **Family sharing** — X25519-wrapped vault keys with owner/editor/viewer roles.
+- **WebAuthn PRF unlock** — experimental hardware-key unlock with password fallback.
+- **Android passkey provider** — experimental; build-verified, not hardware-verified.
 
 ### Planned
 
-- Browser autofill for Firefox.
-- Android autofill support.
-- Secure import and export.
+- Firefox browser autofill.
 - Richer item types, including secure notes.
-- Optional encrypted multi-device sync.
-- Signed Android and Firefox releases.
 - Independent security review before a stable release.
+- Accessibility review with screen-reader users.
+- First signed public beta.
 
 Features and availability may change during development.
 
@@ -93,13 +99,21 @@ CipherKeep is not yet available as a public download. The first-use flow will be
 - **Local-first:** no CipherKeep account or hosted vault.
 - **No tracking:** no analytics, advertising, telemetry, or crash-reporting SDKs.
 - **No subscription:** all features are intended to remain free.
-- **Minimal network access:** the app contacts GitHub only when you request an update check, or when the optional daily check is enabled.
+- **Minimal network access:** no network call is made unless you enable or trigger an optional feature. Update checks, sync, emergency access, aliases, HIBP and family sharing are documented in [docs/PRIVACY.md](docs/PRIVACY.md).
 - **Encrypted at rest:** vault data is encrypted before it is written to local storage.
 - **Open source:** the code is available for review under AGPL-3.0.
 
 CipherKeep cannot protect you from a compromised operating system, a keylogger, or a malicious browser extension. As with any password manager, use a strong, unique master password and keep your recovery shares safe.
 
 For security reports, please read [SECURITY.md](SECURITY.md). Do not disclose vulnerabilities in a public issue.
+
+Verification and signing:
+
+- [docs/VERIFY.md](docs/VERIFY.md)
+- [docs/SIGNING.md](docs/SIGNING.md)
+- [docs/REPRODUCIBLE.md](docs/REPRODUCIBLE.md)
+- [docs/PRIVACY.md](docs/PRIVACY.md)
+- [docs/ACCESSIBILITY.md](docs/ACCESSIBILITY.md)
 
 ---
 
