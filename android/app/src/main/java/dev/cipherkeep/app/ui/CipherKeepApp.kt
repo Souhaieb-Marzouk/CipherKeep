@@ -2070,6 +2070,7 @@ private fun SettingsScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             SyncFolderSection(context, controller)
+            AliasSection(context, controller)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

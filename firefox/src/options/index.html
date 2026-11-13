@@ -85,6 +85,23 @@
         <pre id="syncStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <pre id="syncConflicts" style="white-space:pre-wrap;color:var(--danger);font:12px/1.5 ui-monospace,monospace;margin:8px 0 0"></pre>
         <div id="syncConflictActions" class="row"></div>
+        <h2 style="margin-top:28px">Email aliases</h2>
+        <p>Optional. Create aliases through a provider you control. CipherKeep never proxies mail.</p>
+        <div class="row">
+          <select id="aliasProvider">
+            <option value="cloudflare">Cloudflare Email Worker</option>
+            <option value="simplelogin">SimpleLogin (self-hosted)</option>
+          </select>
+          <input id="aliasBaseUrl" placeholder="https://alias.example.com" autocomplete="off" />
+          <input id="aliasToken" type="password" placeholder="provider token" autocomplete="off" />
+        </div>
+        <div class="row"><button id="saveAliasConfig">Save alias provider</button></div>
+        <div class="row">
+          <input id="aliasLabel" placeholder="Site name" maxlength="128" />
+          <button id="createAlias">Create alias</button>
+        </div>
+        <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
+        <div id="aliasList" class="row"></div>
       </div>
 
       <h2>Updates</h2>

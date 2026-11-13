@@ -6,7 +6,8 @@ use crate::crdt::{ActorId, LamportClock};
 use crate::envelope::{Aad, Envelope};
 use crate::error::{CoreError, ErrorCode, Result};
 use crate::item::{
-    FieldKind, FieldRecord, ItemRecord, ItemType, CUSTOM_FIELD_ID_BASE, FIELD_NOTES,
+    FieldKind, FieldRecord, ItemRecord, ItemType, CUSTOM_FIELD_ID_BASE, FIELD_ALIAS_ADDRESS,
+    FIELD_ALIAS_ENABLED, FIELD_ALIAS_PROVIDER, FIELD_ALIAS_PROVIDER_ID, FIELD_NOTES,
     FIELD_PASSWORD, FIELD_TITLE, FIELD_TOTP, FIELD_URL, FIELD_USERNAME,
 };
 use crate::keys::{ItemId, ItemKey};
@@ -35,18 +36,18 @@ pub fn migrate_legacy_item(
     if title.is_empty() {
         return Err(CoreError::new(ErrorCode::InvalidArgument));
     }
-    let item_type = if value
-        .get("type")
-        .and_then(Value::as_str)
-        .is_some_and(|kind| kind == "totp")
-        || value
-            .get("totpUri")
-            .and_then(Value::as_str)
-            .is_some_and(|uri| !uri.is_empty())
-    {
-        ItemType::Totp
-    } else {
-        ItemType::Login
+    let item_type = match value.get("type").and_then(Value::as_str) {
+        Some("alias") => ItemType::Alias,
+        Some("totp")
+            if value
+                .get("totpUri")
+                .and_then(Value::as_str)
+                .is_some_and(|uri| !uri.is_empty()) =>
+        {
+            ItemType::Totp
+        }
+        Some("totp") => ItemType::Totp,
+        _ => ItemType::Login,
     };
     let mut record = ItemRecord::new(id, item_type, created_at, actor);
     let mut counter = counter_start.max(1);
@@ -75,6 +76,24 @@ pub fn migrate_legacy_item(
             &string(&value, "password"),
         )?;
         add(FIELD_URL, FieldKind::Url, &string(&value, "url"))?;
+    }
+    if item_type == ItemType::Alias {
+        add(
+            FIELD_ALIAS_ADDRESS,
+            FieldKind::Email,
+            &string(&value, "username"),
+        )?;
+        add(
+            FIELD_ALIAS_PROVIDER,
+            FieldKind::Text,
+            &string(&value, "provider"),
+        )?;
+        add(
+            FIELD_ALIAS_PROVIDER_ID,
+            FieldKind::Text,
+            &string(&value, "providerId"),
+        )?;
+        add(FIELD_ALIAS_ENABLED, FieldKind::Text, "true")?;
     }
     add(FIELD_TOTP, FieldKind::Totp, &string(&value, "totpUri"))?;
     add(LEGACY_FOLDER, FieldKind::Custom, &string(&value, "folder"))?;

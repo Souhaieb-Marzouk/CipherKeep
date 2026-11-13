@@ -10,9 +10,9 @@ use std::collections::BTreeMap;
 use crate::crdt::ActorId;
 use crate::error::{CoreError, ErrorCode, Result};
 use crate::item::{
-    expected_kind, FieldKind, ItemRecord, ItemType, FIELD_CARDHOLDER, FIELD_CARD_CVV,
-    FIELD_CARD_EXPIRY, FIELD_CARD_NUMBER, FIELD_IDENTITY_NAME, FIELD_NOTES, FIELD_PASSWORD,
-    FIELD_SSH_PRIVATE_KEY, FIELD_TITLE, FIELD_TOTP,
+    expected_kind, FieldKind, ItemRecord, ItemType, FIELD_ALIAS_ADDRESS, FIELD_CARDHOLDER,
+    FIELD_CARD_CVV, FIELD_CARD_EXPIRY, FIELD_CARD_NUMBER, FIELD_IDENTITY_NAME, FIELD_NOTES,
+    FIELD_PASSWORD, FIELD_SSH_PRIVATE_KEY, FIELD_TITLE, FIELD_TOTP,
 };
 use crate::keys::{ItemId, ItemKey};
 use crate::secret::SecretBytes;
@@ -228,6 +228,7 @@ fn required_fields(item_type: ItemType) -> &'static [u16] {
         ],
         ItemType::Identity => &[FIELD_TITLE, FIELD_IDENTITY_NAME],
         ItemType::SshKey => &[FIELD_TITLE, FIELD_SSH_PRIVATE_KEY],
+        ItemType::Alias => &[FIELD_TITLE, FIELD_ALIAS_ADDRESS],
     }
 }
 
@@ -561,7 +562,7 @@ mod tests {
     }
 
     #[test]
-    fn all_six_types_validate_with_required_fields() {
+    fn all_types_validate_with_required_fields() {
         let mut login = valid_login();
         login.set(crate::item::FIELD_USERNAME, b"user").unwrap();
         login.validate().unwrap();
@@ -594,6 +595,13 @@ mod tests {
         ssh.set(FIELD_SSH_PRIVATE_KEY, b"-----BEGIN PRIVATE KEY-----\nabc")
             .unwrap();
         ssh.validate().unwrap();
+
+        let mut alias = draft(ItemType::Alias);
+        alias.set(FIELD_TITLE, b"Alias").unwrap();
+        alias
+            .set(FIELD_ALIAS_ADDRESS, b"site-abc@alias.test")
+            .unwrap();
+        alias.validate().unwrap();
     }
 
     #[test]

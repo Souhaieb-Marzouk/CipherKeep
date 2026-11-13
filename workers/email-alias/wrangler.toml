@@ -1,0 +1,12 @@
+name = "cipherkeep-email-alias"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+[[kv_namespaces]]
+binding = "ALIASES"
+id = "replace-with-kv-namespace-id"
+
+# Set with `wrangler secret put ALIAS_TOKEN` (32+ random bytes).
+[vars]
+DOMAIN = "alias.example.com"
+FORWARD_TO = "inbox@example.com"

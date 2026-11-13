@@ -52,6 +52,14 @@ pub const FIELD_IDENTITY_ADDRESS: u16 = 33;
 pub const FIELD_SSH_PUBLIC_KEY: u16 = 40;
 /// SSH private key.
 pub const FIELD_SSH_PRIVATE_KEY: u16 = 41;
+/// Email alias address.
+pub const FIELD_ALIAS_ADDRESS: u16 = 50;
+/// Alias provider identifier.
+pub const FIELD_ALIAS_PROVIDER: u16 = 51;
+/// Provider-side alias identifier.
+pub const FIELD_ALIAS_PROVIDER_ID: u16 = 52;
+/// Alias enabled flag.
+pub const FIELD_ALIAS_ENABLED: u16 = 53;
 
 /// First field id reserved for custom fields.
 pub const CUSTOM_FIELD_ID_BASE: u16 = 0x8000;
@@ -72,6 +80,8 @@ pub enum ItemType {
     Identity = 5,
     /// SSH key pair.
     SshKey = 6,
+    /// Email alias created through a user-controlled provider.
+    Alias = 7,
 }
 
 impl ItemType {
@@ -85,6 +95,7 @@ impl ItemType {
             4 => Some(Self::Card),
             5 => Some(Self::Identity),
             6 => Some(Self::SshKey),
+            7 => Some(Self::Alias),
             _ => None,
         }
     }
@@ -127,6 +138,12 @@ impl ItemType {
                     || field_id == FIELD_IDENTITY_ADDRESS
             }
             Self::SshKey => field_id == FIELD_SSH_PUBLIC_KEY || field_id == FIELD_SSH_PRIVATE_KEY,
+            Self::Alias => {
+                field_id == FIELD_ALIAS_ADDRESS
+                    || field_id == FIELD_ALIAS_PROVIDER
+                    || field_id == FIELD_ALIAS_PROVIDER_ID
+                    || field_id == FIELD_ALIAS_ENABLED
+            }
         }
     }
 }
@@ -215,6 +232,10 @@ pub const fn expected_kind(field_id: u16) -> Option<FieldKind> {
         FIELD_IDENTITY_ADDRESS => Some(FieldKind::Address),
         FIELD_SSH_PUBLIC_KEY => Some(FieldKind::SshPublicKey),
         FIELD_SSH_PRIVATE_KEY => Some(FieldKind::SshPrivateKey),
+        FIELD_ALIAS_ADDRESS => Some(FieldKind::Email),
+        FIELD_ALIAS_PROVIDER | FIELD_ALIAS_PROVIDER_ID | FIELD_ALIAS_ENABLED => {
+            Some(FieldKind::Text)
+        }
         _ if field_id >= CUSTOM_FIELD_ID_BASE => Some(FieldKind::Custom),
         _ => None,
     }

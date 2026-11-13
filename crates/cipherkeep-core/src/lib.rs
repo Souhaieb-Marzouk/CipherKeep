@@ -23,6 +23,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod alias;
 pub mod crdt;
 pub mod envelope;
 pub mod error;

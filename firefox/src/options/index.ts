@@ -1,4 +1,4 @@
-import type { Response } from "../shared/protocol";
+import type { AliasView, Response } from "../shared/protocol";
 import { EMPTY_SYNC_CONFIG, configForStorage, testSyncConnection, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
 
 function element<T extends HTMLElement>(id: string): T {
@@ -136,6 +136,110 @@ element<HTMLInputElement>("importBundle").addEventListener("change", async () =>
   }
 });
 
+
+function showAliases(aliases: AliasView[]): void {
+  const list = element<HTMLDivElement>("aliasList");
+  list.replaceChildren();
+  for (const alias of aliases) {
+    const copy = document.createElement("button");
+    copy.className = "secondary";
+    copy.textContent = `Copy ${alias.label} (${alias.address})`;
+    copy.addEventListener("click", async () => {
+      await navigator.clipboard.writeText(alias.address);
+      element<HTMLPreElement>("aliasStatus").textContent = "Alias copied.";
+    });
+    const disable = document.createElement("button");
+    disable.className = "secondary";
+    disable.textContent = `Disable ${alias.label}`;
+    disable.disabled = !alias.enabled;
+    disable.addEventListener("click", async () => {
+      const reply: Response = await browser.runtime.sendMessage({ type: "disable-alias", address: alias.address });
+      if (reply.ok && reply.kind === "aliases") {
+        showAliases(reply.aliases);
+        element<HTMLPreElement>("aliasStatus").textContent = "Alias disabled.";
+      } else if (!reply.ok) {
+        element<HTMLPreElement>("aliasStatus").textContent = reply.error;
+      }
+    });
+    const remove = document.createElement("button");
+    remove.className = "secondary";
+    remove.textContent = `Delete ${alias.label}`;
+    remove.addEventListener("click", async () => {
+      const reply: Response = await browser.runtime.sendMessage({
+        type: "delete-alias",
+        address: alias.address,
+        id: alias.id,
+      });
+      if (reply.ok && reply.kind === "aliases") {
+        showAliases(reply.aliases);
+        element<HTMLPreElement>("aliasStatus").textContent = "Alias deleted.";
+      } else if (!reply.ok) {
+        element<HTMLPreElement>("aliasStatus").textContent = reply.error;
+      }
+    });
+    list.append(copy, disable, remove);
+  }
+  if (aliases.length === 0) {
+    list.textContent = "No aliases stored in this vault.";
+  }
+}
+
+async function loadAliases(): Promise<void> {
+  const reply: Response = await browser.runtime.sendMessage({ type: "list-aliases" });
+  if (reply.ok && reply.kind === "aliases") showAliases(reply.aliases);
+}
+
+async function loadAliasConfig(): Promise<void> {
+  const stored = await browser.storage.local.get("aliasConfig");
+  const config = stored.aliasConfig as { provider?: string; baseUrl?: string; token?: string } | undefined;
+  if (config === undefined) {
+    element<HTMLPreElement>("aliasStatus").textContent =
+      "No provider configured. Alias creation needs a provider you control.";
+    return;
+  }
+  element<HTMLSelectElement>("aliasProvider").value = config.provider ?? "cloudflare";
+  element<HTMLInputElement>("aliasBaseUrl").value = config.baseUrl ?? "";
+  element<HTMLInputElement>("aliasToken").placeholder = "saved token (blank keeps it)";
+  await loadAliases();
+}
+
+element<HTMLButtonElement>("saveAliasConfig").addEventListener("click", async () => {
+  const provider = element<HTMLSelectElement>("aliasProvider").value;
+  const baseUrl = element<HTMLInputElement>("aliasBaseUrl").value.trim();
+  const typed = element<HTMLInputElement>("aliasToken").value;
+  const stored = await browser.storage.local.get("aliasConfig");
+  const previous = stored.aliasConfig as { token?: string } | undefined;
+  const token = typed.length > 0 ? typed : previous?.token ?? "";
+  if (baseUrl.length === 0 || token.length < 20) {
+    element<HTMLPreElement>("aliasStatus").textContent = "Provider URL and token are required.";
+    return;
+  }
+  await browser.storage.local.set({ aliasConfig: { provider, baseUrl, token } });
+  element<HTMLPreElement>("aliasStatus").textContent =
+    "Provider saved. The token is stored in browser.storage.local, not an OS keychain.";
+  element<HTMLInputElement>("aliasToken").value = "";
+  element<HTMLInputElement>("aliasToken").placeholder = "saved token (blank keeps it)";
+  await loadAliases();
+});
+
+element<HTMLButtonElement>("createAlias").addEventListener("click", async () => {
+  const label = element<HTMLInputElement>("aliasLabel").value.trim();
+  if (label.length === 0) {
+    element<HTMLPreElement>("aliasStatus").textContent = "Enter a site name.";
+    return;
+  }
+  const reply: Response = await browser.runtime.sendMessage({ type: "create-alias", label });
+  if (reply.ok && reply.kind === "aliases") {
+    showAliases(reply.aliases);
+    element<HTMLPreElement>("aliasStatus").textContent = "Alias created and stored in the vault.";
+    element<HTMLInputElement>("aliasLabel").value = "";
+  } else if (!reply.ok) {
+    element<HTMLPreElement>("aliasStatus").textContent = reply.error;
+  }
+});
+
+void loadAliasConfig();
+void loadAliases();
 void showConflicts();
 void showSync();
 

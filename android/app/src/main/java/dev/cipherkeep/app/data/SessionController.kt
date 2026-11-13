@@ -13,6 +13,7 @@ import dev.cipherkeep.core.resolveSyncConflict
 import dev.cipherkeep.core.numericCode
 import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
+import dev.cipherkeep.app.data.alias.AliasRecord
 import dev.cipherkeep.app.data.db.VaultRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -350,6 +351,96 @@ class SessionController(context: Context) {
                 loadItems()
             }
         }
+
+    suspend fun saveAlias(record: AliasRecord): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(record.address.contains('@'))
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val payload = aliasPayload(record).encodeToByteArray()
+                val ciphertext = active.encryptItem(id, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = 1,
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    suspend fun setAliasEnabled(address: String, enabled: Boolean): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val entity = repo.list().firstOrNull { candidate ->
+                    val json = runCatching {
+                        JSONObject(active.decryptItem(candidate.itemId, candidate.ciphertext).decodeToString())
+                    }.getOrNull()
+                    json?.optString("type") == "alias" && json.optString("username") == address
+                } ?: error("alias not found")
+                val json = JSONObject(active.decryptItem(entity.itemId, entity.ciphertext).decodeToString())
+                json.put("enabled", enabled)
+                val payload = json.toString().encodeToByteArray()
+                val ciphertext = active.encryptItem(entity.itemId, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = entity.itemId,
+                    ciphertext = ciphertext,
+                    lamport = maxOf(entity.lamport + 1, 2),
+                    tombstone = false,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    suspend fun deleteAliasItem(address: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val entity = repo.list().firstOrNull { candidate ->
+                    val json = runCatching {
+                        JSONObject(active.decryptItem(candidate.itemId, candidate.ciphertext).decodeToString())
+                    }.getOrNull()
+                    json?.optString("type") == "alias" && json.optString("username") == address
+                } ?: error("alias not found")
+                repo.save(
+                    itemId = entity.itemId,
+                    ciphertext = ByteArray(0),
+                    lamport = maxOf(entity.lamport + 1, 2),
+                    tombstone = true,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    private fun aliasPayload(record: AliasRecord): String =
+        JSONObject()
+            .put("v", 1)
+            .put("type", "alias")
+            .put("title", record.label)
+            .put("username", record.address)
+            .put("password", "")
+            .put("provider", record.provider)
+            .put("providerId", record.providerId)
+            .put("enabled", record.enabled)
+            .put("url", "")
+            .put("notes", "")
+            .put("folder", "")
+            .put("tags", JSONArray())
+            .put("favorite", false)
+            .toString()
 
     suspend fun saveTotpItem(title: String, account: String, uri: String): Result<Unit> =
         withContext(Dispatchers.IO) {

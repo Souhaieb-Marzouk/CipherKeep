@@ -1,5 +1,14 @@
 import type { UpdateReport } from "../background/updates";
 
+export interface AliasView {
+  id: string;
+  address: string;
+  provider: string;
+  providerId: string;
+  label: string;
+  enabled: boolean;
+}
+
 export type Request =
   | { type: "status" }
   | { type: "check-updates" }
@@ -49,6 +58,10 @@ export type Request =
   | { type: "resolve-conflict"; item: string; field: number; keepRight: boolean }
   | { type: "export-sync-bundle" }
   | { type: "import-sync-bundle"; json: string }
+  | { type: "create-alias"; label: string }
+  | { type: "list-aliases" }
+  | { type: "disable-alias"; address: string }
+  | { type: "delete-alias"; address: string; id: string }
   | {
       type: "update-item";
       id: string;
@@ -109,9 +122,11 @@ export type Response =
   | { ok: true; kind: "recipes"; version: number; hash: string }
   | { ok: true; kind: "vault-id"; vaultId: string }
   | { ok: true; kind: "sync"; records: number; conflicts: number }
+  | { ok: true; kind: "aliases"; aliases: AliasView[] }
   | { ok: true; kind: "conflict-resolved" }
   | { ok: true; kind: "bundle"; json: string }
   | { ok: true; kind: "sync"; records: number; conflicts: number }
+  | { ok: true; kind: "aliases"; aliases: AliasView[] }
   | {
       ok: true;
       kind: "inspection";
@@ -167,6 +182,10 @@ function isRequestType(value: unknown): value is Request["type"] {
       "resolve-conflict",
       "export-sync-bundle",
       "import-sync-bundle",
+      "create-alias",
+      "list-aliases",
+      "disable-alias",
+      "delete-alias",
       "update-item",
     ].includes(value)
   );
@@ -276,6 +295,19 @@ export function isRequest(value: unknown): value is Request {
         typeof request.favorite === "boolean"
       );
     case "export-sync-bundle":
+    case "create-alias":
+      return isText(request.label, 128);
+    case "list-aliases":
+      return true;
+    case "disable-alias":
+      return typeof request.address === "string" && request.address.length <= 320;
+    case "delete-alias":
+      return (
+        typeof request.address === "string" &&
+        request.address.length <= 320 &&
+        typeof request.id === "string" &&
+        /^[0-9a-f]{32}$/i.test(request.id)
+      );
     case "import-sync-bundle":
       return true;
     case "resolve-conflict":

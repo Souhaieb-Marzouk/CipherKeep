@@ -5,6 +5,12 @@ import { checkForUpdates } from "./updates";
 import { recipeForOrigin, verifyRegistry, type RecipeRegistry } from "../shared/recipes";
 import { RECIPE_PUBLIC_KEY } from "../shared/recipe-key";
 import { EMPTY_SYNC_CONFIG, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
+import {
+  CloudflareAliasProvider,
+  SimpleLoginAliasProvider,
+  type AliasProvider,
+  type AliasRecord,
+} from "../shared/alias-provider";
 import { GitHubTransport, RelayTransport, WebDavTransport } from "../shared/sync-transport";
 
 let session: WasmVaultSession | null = null;
@@ -375,6 +381,82 @@ async function performSync(): Promise<Response> {
         return { ok: true, kind: "sync", records: merged.records.length, conflicts: merged.conflicts.length };
 }
 
+interface AliasConfig {
+  provider: "cloudflare" | "simplelogin";
+  baseUrl: string;
+  token: string;
+}
+
+async function aliasProvider(): Promise<AliasProvider> {
+  const stored = await browser.storage.local.get("aliasConfig");
+  const config = stored.aliasConfig as Partial<AliasConfig> | undefined;
+  if (config === undefined) throw new Error("No alias provider configured.");
+  if (typeof config.baseUrl !== "string" || typeof config.token !== "string") {
+    throw new Error("Alias provider configuration is incomplete.");
+  }
+  if (config.provider === "cloudflare") {
+    return new CloudflareAliasProvider(config.baseUrl, config.token);
+  }
+  if (config.provider === "simplelogin") {
+    return new SimpleLoginAliasProvider(config.baseUrl, config.token);
+  }
+  throw new Error("Alias provider is unsupported.");
+}
+
+async function aliasItems(): Promise<Array<{ id: string; record: AliasRecord }>> {
+  const active = requireSession();
+  await ensureItemStore();
+  const found: Array<{ id: string; record: AliasRecord }> = [];
+  for (const stored of await itemStore.list()) {
+    try {
+      const payload = active.decrypt_item(hexToBytes(stored.id), stored.ciphertext);
+      const json = JSON.parse(new TextDecoder().decode(payload)) as Record<string, unknown>;
+      payload.fill(0);
+      if (json.type !== "alias" || typeof json.username !== "string") continue;
+      found.push({
+        id: stored.id,
+        record: {
+          address: json.username,
+          provider: json.provider === "simplelogin" ? "simplelogin" : "cloudflare",
+          providerId: typeof json.providerId === "string" ? json.providerId : "",
+          label: typeof json.title === "string" ? json.title : "",
+          enabled: json.enabled !== false,
+        },
+      });
+    } catch {
+      // Skip records that do not belong to this vault.
+    }
+  }
+  return found;
+}
+
+async function storeAlias(record: AliasRecord, existingId?: string): Promise<string> {
+  const active = requireSession();
+  await ensureItemStore();
+  const id = existingId ?? bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      v: 1,
+      type: "alias",
+      title: record.label,
+      username: record.address,
+      password: "",
+      provider: record.provider,
+      providerId: record.providerId,
+      enabled: record.enabled,
+      url: "",
+      notes: "",
+      folder: "",
+      tags: [],
+      favorite: false,
+    }),
+  );
+  const ciphertext = active.encrypt_item(hexToBytes(id), payload);
+  payload.fill(0);
+  await itemStore.put({ id, ciphertext, updatedAt: Date.now() });
+  return id;
+}
+
 async function localV2Records(active: WasmVaultSession): Promise<string[]> {
   await ensureItemStore();
   const records = await itemStore.list();
@@ -552,6 +634,46 @@ async function handle(request: Request): Promise<Response> {
         payload.fill(0);
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "create-alias": {
+        const provider = await aliasProvider();
+        const record = await provider.create(request.label);
+        const id = await storeAlias(record);
+        return {
+          ok: true,
+          kind: "aliases",
+          aliases: (await aliasItems()).map((entry) => ({ id: entry.id, ...entry.record })),
+        };
+      }
+      case "list-aliases": {
+        return {
+          ok: true,
+          kind: "aliases",
+          aliases: (await aliasItems()).map((entry) => ({ id: entry.id, ...entry.record })),
+        };
+      }
+      case "disable-alias": {
+        const provider = await aliasProvider();
+        await provider.disable(request.address);
+        const found = (await aliasItems()).find((entry) => entry.record.address === request.address);
+        if (found !== undefined) {
+          await storeAlias({ ...found.record, enabled: false }, found.id);
+        }
+        return {
+          ok: true,
+          kind: "aliases",
+          aliases: (await aliasItems()).map((entry) => ({ id: entry.id, ...entry.record })),
+        };
+      }
+      case "delete-alias": {
+        const provider = await aliasProvider();
+        await provider.delete(request.address);
+        await itemStore.delete(request.id);
+        return {
+          ok: true,
+          kind: "aliases",
+          aliases: (await aliasItems()).map((entry) => ({ id: entry.id, ...entry.record })),
+        };
       }
       case "export-sync-bundle": {
         const active = requireSession();
