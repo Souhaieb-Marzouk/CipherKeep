@@ -56,3 +56,44 @@ assert passkeys.
   consistent with its provider returning empty create/get responses.
 - No CipherKeep credential-provider error appeared in logcat.
 - Flow cancelled; no passkey was created.
+
+
+## Implementation added 2026-11-14
+
+- Passkey metadata resource (`credential_provider.xml`).
+- P-256 Keystore keys and `PasskeyStore` records.
+- `PasskeyCreateActivity`:
+  - origin/RP verification
+  - device-credential/BiometricPrompt gate
+  - clientDataJSON
+  - authenticatorData
+  - COSE P-256 key
+  - CBOR `none` attestation
+  - registration response
+- `PasskeyGetActivity`:
+  - origin/RP verification
+  - device-credential/BiometricPrompt gate
+  - authenticatorData/sign counter
+  - ECDSA DER assertion
+- `CipherKeepCredentialProvider` returns create/get entries.
+
+## Remaining system blocker
+
+Android's `credential_service` is still:
+
+```text
+com.google.android.gms/.auth.api.credentials.credman.service.PasswordAndPasskeyService
+```
+
+CipherKeep is registered but is not the selected credential service. Changing
+`settings secure credential_service` requires `WRITE_SECURE_SETTINGS`, which adb
+shell does not have on this OPPO. The user must select CipherKeep in Android's
+passkey/credential-provider settings.
+
+The available test devices cannot complete this:
+- OPPO CPH2173 / ColorOS exposes no third-party passkey-provider selector.
+- Armor 9E runs Android 10, below the Android 14 requirement for
+  `CredentialProviderService`.
+
+The implementation is therefore build-verified but not hardware-verified
+end-to-end.
