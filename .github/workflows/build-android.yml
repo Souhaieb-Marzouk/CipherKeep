@@ -34,7 +34,6 @@ jobs:
         working-directory: android
     env:
       CIPHERKEEP_VERSION_NAME: ${{ inputs.version }}
-      CIPHERKEEP_KEYSTORE: ${{ runner.temp }}/release.keystore
       CIPHERKEEP_KEYSTORE_PASSWORD: ${{ secrets.CIPHERKEEP_KEYSTORE_PASSWORD }}
       CIPHERKEEP_KEY_ALIAS: ${{ secrets.CIPHERKEEP_KEY_ALIAS }}
       CIPHERKEEP_KEY_PASSWORD: ${{ secrets.CIPHERKEEP_KEY_PASSWORD }}
@@ -58,9 +57,11 @@ jobs:
           set -euo pipefail
           umask 077
           test -n "${KEYSTORE_BASE64:-}" || { echo "missing keystore secret" >&2; exit 1; }
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$CIPHERKEEP_KEYSTORE"
-          test -s "$CIPHERKEEP_KEYSTORE"
-          chmod 600 "$CIPHERKEEP_KEYSTORE"
+          keystore="$RUNNER_TEMP/release.keystore"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+          test -s "$keystore"
+          chmod 600 "$keystore"
+          echo "CIPHERKEEP_KEYSTORE=$keystore" >> "$GITHUB_ENV"
 
       - name: Build release APK and AAB
         shell: bash
@@ -126,4 +127,4 @@ jobs:
       - name: Remove the decoded keystore
         if: always()
         shell: bash
-        run: rm -f "$CIPHERKEEP_KEYSTORE"
+        run: rm -f "${CIPHERKEEP_KEYSTORE:-$RUNNER_TEMP/release.keystore}"
