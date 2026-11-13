@@ -79,3 +79,8 @@ desktop.ini
 *.tmp
 *.bak
 tmp/
+
+# Vendored crates must be complete, including build scripts and test fixtures.
+!vendor/
+!vendor/**/
+!vendor/**

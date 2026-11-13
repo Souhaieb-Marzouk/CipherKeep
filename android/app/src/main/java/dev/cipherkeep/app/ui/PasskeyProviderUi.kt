@@ -2,6 +2,8 @@ package dev.cipherkeep.app.ui
 
 import android.content.ComponentName
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +22,19 @@ import dev.cipherkeep.app.ui.theme.CKDimens
 
 @Composable
 fun PasskeyProviderSection(context: android.content.Context) {
+    if (Build.VERSION.SDK_INT < 34) {
+        Text(
+            "Passkey provider requires Android 14 or newer.",
+            style = MaterialTheme.typography.labelSmall,
+        )
+        return
+    }
+    PasskeyProviderSection34(context)
+}
+
+@RequiresApi(34)
+@Composable
+private fun PasskeyProviderSection34(context: android.content.Context) {
     val component = remember { ComponentName(context, CipherKeepCredentialProvider::class.java) }
     var enabled by remember { mutableStateOf(true) }
     fun refresh() {

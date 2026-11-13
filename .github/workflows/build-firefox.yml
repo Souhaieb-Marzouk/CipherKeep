@@ -60,12 +60,12 @@ jobs:
         shell: bash
         run: npm run check
 
-      - name: Install pinned web-ext in the runner only
+      - name: Install pinned web-ext from lockfile
         shell: bash
         run: |
           set -euo pipefail
-          npm install --prefix "$RUNNER_TEMP/web-ext" --no-audit --no-fund "web-ext@$WEB_EXT_VERSION"
-          echo "$RUNNER_TEMP/web-ext/node_modules/.bin" >> "$GITHUB_PATH"
+          npm ci --prefix "$GITHUB_WORKSPACE/tools/web-ext" --no-audit --no-fund
+          echo "$GITHUB_WORKSPACE/tools/web-ext/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Web-ext lint
         shell: bash

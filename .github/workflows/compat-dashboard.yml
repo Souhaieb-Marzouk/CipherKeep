@@ -30,8 +30,6 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22.22.0
-          cache: npm
-          cache-dependency-path: firefox/package-lock.json
       - run: npm ci
       - name: Install Chromium
         run: npx --no-install playwright install --with-deps chromium
@@ -45,7 +43,7 @@ jobs:
       - name: Validate schema, secrets and accessibility basics
         run: node scripts/check-compat.mjs
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
-      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v3.0.1
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v4.0.0
         with:
           path: firefox/dashboard
 

@@ -1,6 +1,7 @@
 package dev.cipherkeep.app.passkeys
 
 import android.app.PendingIntent
+import androidx.annotation.RequiresApi
 import android.content.Intent
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
@@ -21,6 +22,7 @@ import org.json.JSONObject
 /**
  * Android passkey provider. Every create/get is user-gated and origin-bound.
  */
+@RequiresApi(34)
 class CipherKeepCredentialProvider : CredentialProviderService() {
     override fun onBeginCreateCredentialRequest(
         request: BeginCreateCredentialRequest,

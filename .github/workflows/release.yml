@@ -64,7 +64,6 @@ jobs:
     uses: ./.github/workflows/build-android.yml
     with:
       version: ${{ needs.validate.outputs.version }}
-    secrets: inherit
 
   firefox:
     name: signed Firefox build
@@ -72,7 +71,6 @@ jobs:
     uses: ./.github/workflows/build-firefox.yml
     with:
       version: ${{ needs.validate.outputs.version }}
-    secrets: inherit
 
   integrity:
     name: checksums, Minisign and draft
@@ -133,21 +131,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          if gh release view "${{ needs.validate.outputs.tag }}" >/dev/null 2>&1; then
+          if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release already exists; refusing to overwrite" >&2
             exit 1
           fi
           if [ -n "${RELEASE_NOTES:-}" ]; then
-            gh release create "${{ needs.validate.outputs.tag }}" \
+            gh release create "$TAG" \
               --draft \
-              --title "CipherKeep ${{ needs.validate.outputs.version }}" \
+              --title "CipherKeep $VERSION" \
               --notes "$RELEASE_NOTES"
           else
-            gh release create "${{ needs.validate.outputs.tag }}" \
+            gh release create "$TAG" \
               --draft \
-              --title "CipherKeep ${{ needs.validate.outputs.version }}" \
+              --title "CipherKeep $VERSION" \
               --generate-notes
           fi
 
@@ -194,10 +194,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          SERVER_URL: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           test -s release-integrity/checksums.txt
           test -s release-integrity/checksums.txt.minisig
-          find release-integrity -maxdepth 1 -type f -print -exec gh release upload "${{ needs.validate.outputs.tag }}" {} --clobber \;
-          echo "Draft release: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.tag }}"
+          find release-integrity -maxdepth 1 -type f -print -exec gh release upload "$TAG" {} --clobber \;
+          echo "Draft release: $SERVER_URL/$REPO/releases/tag/$TAG"
           echo "Maintainer must review and publish manually."
