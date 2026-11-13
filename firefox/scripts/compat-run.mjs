@@ -1,5 +1,5 @@
 import { createServer } from "node:http";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -23,7 +23,7 @@ const server = createServer(async (request, response) => {
 });
 await new Promise((resolveListen) => server.listen(port, "127.0.0.1", resolveListen));
 
-const browser = await chromium.launch({ channel: "msedge", headless: true });
+const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext();
 
 async function inspect(path, originAllowed) {
@@ -90,6 +90,18 @@ for (const fixture of [
 
 await browser.close();
 server.close();
-await writeFile(resolve(root, "tests/compat/results.json"), JSON.stringify(results, null, 2), "utf8");
+const run = {
+  schema: "cipherkeep-compat-v1",
+  version: process.env.CIPHERKEEP_VERSION ?? "0.1.0",
+  recipeVersion: process.env.COMPAT_RECIPE_VERSION ?? "1",
+  startedAt: new Date().toISOString(),
+  browser: "chromium",
+  results,
+};
+await writeFile(resolve(root, "tests/compat/results.json"), JSON.stringify(run, null, 2), "utf8");
+const history = resolve(root, "tests/compat/history");
+await mkdir(history, { recursive: true });
+const stamp = run.startedAt.replaceAll(":", "").replaceAll("-", "").replace(".000Z", "Z");
+await writeFile(resolve(history, `${stamp}.json`), JSON.stringify(run, null, 2), "utf8");
 console.log(results);
 if (results.some((entry) => entry.status !== "pass")) process.exit(1);

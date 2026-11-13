@@ -1,0 +1,12 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><title>Compatibility run</title><style>
+body{font:16px/1.5 system-ui,sans-serif;max-width:72rem;margin:2rem auto;padding:0 1rem;color:#0f172a;background:#fff}
+a{color:#1d4ed8}table{border-collapse:collapse;width:100%;margin:1rem 0}
+caption{text-align:left;font-weight:600;margin:.5rem 0}th,td{border:1px solid #475569;padding:.5rem;text-align:left;vertical-align:top}
+th{background:#e2e8f0}.pass{color:#166534;font-weight:700}.fail{color:#991b1b;font-weight:700}.pending{color:#92400e;font-weight:700}
+nav{display:flex;gap:1rem;flex-wrap:wrap}.meta{color:#334155}
+</style></head><body><nav><a href="index.html">Latest</a><a href="history.html">History</a></nav><main><h1>Compatibility run</h1><p class="meta">0.1.0, recipe 1, 2026-11-13T06:58:58.715Z, chromium.</p><table><caption>Compatibility run 0.1.0 recipe 1 at 2026-11-13T06:58:58.715Z</caption><thead><tr><th scope="col">Fixture</th><th scope="col">Pattern</th><th scope="col">Shadow DOM</th><th scope="col">Iframe</th><th scope="col">Expected</th><th scope="col">Status</th><th scope="col">Observed</th></tr></thead><tbody><tr><th scope="row">plain-login</th><td>plain</td><td>no</td><td>no</td><td>fill</td><td class="pass">PASS</td><td>filled</td></tr>
+<tr><th scope="row">shadow-login</th><td>shadow</td><td>yes</td><td>no</td><td>fill</td><td class="pass">PASS</td><td>filled</td></tr>
+<tr><th scope="row">spa-login</th><td>spa</td><td>no</td><td>no</td><td>fill</td><td class="pass">PASS</td><td>filled</td></tr>
+<tr><th scope="row">hidden-field</th><td>hidden</td><td>no</td><td>no</td><td>refuse</td><td class="pass">PASS</td><td>not filled</td></tr>
+<tr><th scope="row">lookalike-origin</th><td>plain</td><td>no</td><td>no</td><td>refuse</td><td class="pass">PASS</td><td>not filled</td></tr>
+<tr><th scope="row">cross-origin-iframe</th><td>iframe</td><td>no</td><td>yes</td><td>refuse</td><td class="pass">PASS</td><td>not filled</td></tr></tbody></table></main></body></html>

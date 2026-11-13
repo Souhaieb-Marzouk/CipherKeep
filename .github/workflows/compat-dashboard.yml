@@ -1,0 +1,64 @@
+name: compat-dashboard
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: compat-dashboard
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: run fixtures and build dashboard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: firefox
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: firefox/package-lock.json
+      - run: npm ci
+      - name: Install Chromium
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run compatibility fixtures
+        env:
+          CIPHERKEEP_VERSION: ${{ github.ref_name }}
+          COMPAT_RECIPE_VERSION: "1"
+        run: npm run compat:run
+      - name: Build dashboard
+        run: node scripts/build-compat-dashboard.mjs
+      - name: Validate schema, secrets and accessibility basics
+        run: node scripts/check-compat.mjs
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b # v3.0.1
+        with:
+          path: firefox/dashboard
+
+  deploy:
+    name: deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5

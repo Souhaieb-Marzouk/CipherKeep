@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CipherKeep compatibility run",
+  "type": "object",
+  "required": [
+    "schema",
+    "version",
+    "recipeVersion",
+    "startedAt",
+    "browser",
+    "results"
+  ],
+  "properties": {
+    "schema": {
+      "const": "cipherkeep-compat-v1"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+"
+    },
+    "recipeVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "startedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "browser": {
+      "type": "string"
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail"
+            ]
+          },
+          "filled": {
+            "type": "boolean"
+          },
+          "submitted": {
+            "type": "boolean"
+          },
+          "hasPassword": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
