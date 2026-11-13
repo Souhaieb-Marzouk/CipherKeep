@@ -66,11 +66,13 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
-          toolchain: stable
+          toolchain: 1.99.1
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: ${{ hashFiles('Cargo.lock') }}
+      - name: Check vendored dependency hash
+        run: python3 scripts/vendor-hash.py --check
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo test --locked --workspace
@@ -114,6 +116,45 @@ jobs:
             echo "release APK is debuggable" >&2
             exit 1
           fi
+
+
+  reproducible:
+    name: reproducible firefox build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      SOURCE_DATE_EPOCH: "0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: left
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: right
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.22.0
+          cache: npm
+          cache-dependency-path: left/firefox/package-lock.json
+      - name: Install left
+        working-directory: left/firefox
+        run: npm ci
+      - name: Install right
+        working-directory: right/firefox
+        run: npm ci
+      - name: Build left
+        working-directory: left/firefox
+        run: npm run build && npm run build:xpi
+      - name: Build right
+        working-directory: right/firefox
+        run: npm run build && npm run build:xpi
+      - name: Compare dist trees
+        run: node left/scripts/compare-builds.mjs left/firefox/dist right/firefox/dist
+      - name: Compare unsigned XPI
+        run: cmp left/firefox/web-ext-artifacts/cipherkeep-0.1.0.zip right/firefox/web-ext-artifacts/cipherkeep-0.1.0.zip
 
   firefox:
     name: firefox typecheck test build lint
