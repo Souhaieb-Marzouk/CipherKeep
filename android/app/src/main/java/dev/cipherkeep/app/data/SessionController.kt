@@ -1069,6 +1069,7 @@ class SessionController(context: Context) {
         autoLockJob = null
         session?.lock()
         items = emptyList()
+        dev.cipherkeep.app.data.hibp.BreachCache.clear()
         backgroundedAt = null
         storage.closeBlocking()
         state = VaultUiState.Locked(message)

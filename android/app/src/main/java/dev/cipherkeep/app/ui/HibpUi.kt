@@ -85,7 +85,15 @@ fun HibpSection(context: android.content.Context, controller: SessionController)
                                 if (item.password.isEmpty()) continue
                                 checked += 1
                                 runCatching { client.check(item.password).getOrThrow() }
-                                    .onSuccess { if (it > 0) pwned += 1 }
+                                    .onSuccess {
+                                        if (it > 0) {
+                                            pwned += 1
+                                            dev.cipherkeep.app.data.hibp.BreachCache.put(
+                                                item.id.joinToString("") { byte -> "%02x".format(byte) },
+                                                it,
+                                            )
+                                        }
+                                    }
                             }
                             checked to pwned
                         }

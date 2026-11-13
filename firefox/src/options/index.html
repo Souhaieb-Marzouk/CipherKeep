@@ -109,6 +109,10 @@
         </div>
         <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <div id="aliasList" class="row"></div>
+        <h2 style="margin-top:28px">Password health</h2>
+        <p>Computed locally. No score or password leaves the device.</p>
+        <div class="row"><button id="healthScan" class="secondary">Analyze vault</button></div>
+        <pre id="healthStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
         <h2 style="margin-top:28px">Breach check</h2>
         <p>Off by default. When enabled, only the first 5 SHA-1 characters of a password are sent to api.pwnedpasswords.com. No password or full hash leaves the device.</p>
         <div class="row"><label><input id="hibpEnabled" type="checkbox" /> Enable opt-in breach checking</label></div>

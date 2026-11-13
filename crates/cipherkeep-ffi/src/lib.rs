@@ -1322,3 +1322,48 @@ pub fn phishing_check(url: String) -> Result<String, FfiError> {
     }))
     .map_err(|_| FfiError::Internal)
 }
+
+/// Local password health report as JSON.
+#[uniffi::export]
+pub fn health_report(items_json: String, now: u64, stale_secs: u64) -> Result<String, FfiError> {
+    let values: Vec<serde_json::Value> =
+        serde_json::from_str(&items_json).map_err(|_| FfiError::CorruptData)?;
+    let mut items = Vec::with_capacity(values.len());
+    for value in values {
+        items.push(cipherkeep_core::health::HealthInput {
+            item_id: value
+                .get("itemId")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            password: value
+                .get("password")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or_default()
+                .to_string(),
+            updated_at: value
+                .get("updatedAt")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0),
+            has_totp: value
+                .get("hasTotp")
+                .and_then(serde_json::Value::as_bool)
+                .unwrap_or(false),
+            breached: value.get("breached").and_then(serde_json::Value::as_u64),
+        });
+    }
+    let report = cipherkeep_core::health::analyze(&items, now, stale_secs);
+    serde_json::to_string(&serde_json::json!({
+        "weak": report.weak,
+        "reused": report.reused,
+        "old": report.old,
+        "breached": report.breached,
+        "missingTotp": report.missing_totp,
+        "items": report.items.iter().map(|item| serde_json::json!({
+            "itemId": item.item_id,
+            "score": item.score,
+            "reasons": item.reasons.iter().map(|reason| format!("{reason:?}")).collect::<Vec<_>>(),
+        })).collect::<Vec<_>>(),
+    }))
+    .map_err(|_| FfiError::Internal)
+}

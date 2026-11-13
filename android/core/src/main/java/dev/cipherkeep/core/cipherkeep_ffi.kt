@@ -681,6 +681,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_health_report(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_import_portable(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2(
@@ -845,6 +847,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_generate_password(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_health_report(`itemsJson`: RustBuffer.ByValue,`now`: Long,`staleSecs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_import_portable(`bytes`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_merge_sync_records_v2(`local`: RustBuffer.ByValue,`remote`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -981,6 +985,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_generate_password() and 0xFFFF) != 64626) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_health_report() and 0xFFFF) != 17880) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_portable() and 0xFFFF) != 4345) {
@@ -3431,6 +3438,23 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
     
         
         FfiConverterTypeFfiPasswordPolicy.lower(`policy`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Local password health report as JSON.
+         */
+    @Throws(FfiException::class) fun `healthReport`(`itemsJson`: kotlin.String, `now`: kotlin.ULong, `staleSecs`: kotlin.ULong): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_health_report(
+    
+        
+        FfiConverterString.lower(`itemsJson`),
+        FfiConverterULong.lower(`now`),
+        FfiConverterULong.lower(`staleSecs`),_status)
 }
     )
     }

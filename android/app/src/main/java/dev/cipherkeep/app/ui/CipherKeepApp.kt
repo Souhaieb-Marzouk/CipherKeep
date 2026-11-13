@@ -2076,6 +2076,7 @@ private fun SettingsScreen(
             EmergencySection(context, controller)
             TravelModeSection(controller)
             HibpSection(context, controller)
+            HealthSection(controller)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

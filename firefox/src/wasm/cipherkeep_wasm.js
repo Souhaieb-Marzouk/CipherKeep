@@ -831,6 +831,43 @@ let wasm_bindgen = (function(exports) {
     exports.generate_password = generate_password;
 
     /**
+     * Local password health report as JSON.
+     * @param {string} items_json
+     * @param {bigint} now
+     * @param {bigint} stale_secs
+     * @returns {string}
+     */
+    function health_report(items_json, now, stale_secs) {
+        let deferred5_0;
+        let deferred5_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val2 = BigInt.asIntN(64, now);
+            const val3 = BigInt.asIntN(64, stale_secs);
+            const ptr0 = passStringToWasm0(items_json, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.health_report(retptr, ptr0, len0, val2, val3);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr4 = r0;
+            var len4 = r1;
+            if (r3) {
+                ptr4 = 0; len4 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred5_0 = ptr4;
+            deferred5_1 = len4;
+            return getStringFromWasm0(ptr4, len4);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred5_0, deferred5_1, 1);
+        }
+    }
+    exports.health_report = health_report;
+
+    /**
      * Decrypt a portable export and return item JSON.
      *
      * # Errors

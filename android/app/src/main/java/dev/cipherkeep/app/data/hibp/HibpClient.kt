@@ -78,3 +78,19 @@ class HibpClient {
         const val MAX_RESPONSE = 4 * 1024 * 1024
     }
 }
+
+
+/** Session-only breach counts keyed by item id. Cleared on lock. */
+object BreachCache {
+    private val counts = mutableMapOf<String, Long>()
+
+    fun put(itemId: String, count: Long) {
+        if (count > 0) counts[itemId] = count
+    }
+
+    fun count(itemId: String): Long = counts[itemId] ?: 0L
+
+    fun clear() {
+        counts.clear()
+    }
+}

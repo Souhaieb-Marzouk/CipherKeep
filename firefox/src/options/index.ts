@@ -1,6 +1,8 @@
 import type { AliasView, Response } from "../shared/protocol";
 import { EMPTY_SYNC_CONFIG, configForStorage, testSyncConnection, validateSyncConfig, type SyncConfig } from "../shared/sync-config";
 
+const hibpBreaches = new Map<string, number>();
+
 function element<T extends HTMLElement>(id: string): T {
   const found = document.getElementById(id);
   if (!found) {
@@ -339,7 +341,11 @@ element<HTMLButtonElement>("hibpScan").addEventListener("click", async () => {
     if (item.password.length === 0) continue;
     checked += 1;
     try {
-      if ((await client.check(item.password)).count > 0) pwned += 1;
+      const count = (await client.check(item.password)).count;
+      if (count > 0) {
+        pwned += 1;
+        hibpBreaches.set(item.id, count);
+      }
     } catch {
       element<HTMLPreElement>("hibpStatus").textContent = "Breach provider unavailable; no result stored.";
       return;
@@ -347,6 +353,30 @@ element<HTMLButtonElement>("hibpScan").addEventListener("click", async () => {
   }
   element<HTMLPreElement>("hibpStatus").textContent =
     `Checked ${checked} password(s); ${pwned} appear in known breaches.`;
+});
+
+element<HTMLButtonElement>("healthScan").addEventListener("click", async () => {
+  const reply: Response = await browser.runtime.sendMessage({ type: "list-items" });
+  const status = element<HTMLPreElement>("healthStatus");
+  if (!reply.ok || reply.kind !== "items") {
+    status.textContent = reply.ok ? "No items." : reply.error;
+    return;
+  }
+  const payload = reply.items.map((item) => ({
+    itemId: item.id,
+    password: item.password,
+    updatedAt: Math.floor(item.updatedAt / 1000),
+    hasTotp: item.totpUri.length > 0,
+    breached: hibpBreaches.get(item.id) ?? 0,
+  }));
+  try {
+    const report = JSON.parse(health_report(JSON.stringify(payload), BigInt(Math.floor(Date.now() / 1000)), 90n * 86_400n)) as {
+      weak: number; reused: number; old: number; breached: number; missingTotp: number;
+    };
+    status.textContent = `Weak ${report.weak} · Reused ${report.reused} · Old ${report.old} · Breached ${report.breached} · No TOTP ${report.missingTotp}. Analysis is session-only.`;
+  } catch {
+    status.textContent = "Health analysis failed.";
+  }
 });
 void loadHibp();
 void loadTravel();
