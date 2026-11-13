@@ -98,7 +98,9 @@ jobs:
           fi
 
           "$apksigner" verify --verbose --print-certs "$apk" | tee apksigner.txt
-          fingerprint=$("$apksigner" verify --print-certs "$apk" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+          fingerprint=$("$apksigner" verify --print-certs "$apk" |
+            sed -nE 's/^(Signer #1|V2 Signer|V3 Signer|V3.1 Signer): certificate SHA-256 digest: //p' |
+            head -n 1)
           test -n "$fingerprint"
           echo "APK_SHA256=$fingerprint" >> "$GITHUB_STEP_SUMMARY"
           echo "$fingerprint" > certificate-sha256.txt
