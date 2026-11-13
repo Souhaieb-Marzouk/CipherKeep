@@ -14,6 +14,7 @@ import dev.cipherkeep.core.numericCode
 import dev.cipherkeep.app.data.keystore.BiometricStore
 import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.alias.AliasRecord
+import dev.cipherkeep.app.data.emergency.EmergencyContactInput
 import dev.cipherkeep.app.data.db.VaultRepository
 import org.json.JSONArray
 import org.json.JSONObject
@@ -336,6 +337,47 @@ class SessionController(context: Context) {
                     )
                     .put("favorite", favorite)
                     .put("autofillAllowed", autofillAllowed)
+                    .toString()
+                    .encodeToByteArray()
+                val ciphertext = active.encryptItem(id, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = 1,
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    fun recoveryShares(): List<String> = session?.recoveryShares() ?: emptyList()
+
+    suspend fun saveEmergencyContacts(
+        contacts: List<EmergencyContactInput>,
+        policyId: String,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(contacts.isNotEmpty() && contacts.size <= 2 && policyId.isNotBlank())
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val payload = JSONObject()
+                    .put("v", 1)
+                    .put("type", "emergency")
+                    .put("title", "Emergency access contacts")
+                    .put("policyId", policyId)
+                    .put(
+                        "contacts",
+                        JSONArray().apply {
+                            contacts.forEach {
+                                put(JSONObject().put("id", it.id).put("address", it.address))
+                            }
+                        },
+                    )
                     .toString()
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)

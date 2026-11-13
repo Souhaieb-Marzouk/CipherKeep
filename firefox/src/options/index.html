@@ -102,6 +102,25 @@
         </div>
         <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <div id="aliasList" class="row"></div>
+        <h2 style="margin-top:28px">Emergency access</h2>
+        <p>Optional dead-man's-switch. The cron receives one Shamir share and cannot decrypt alone. Coercion is not solved.</p>
+        <div class="row">
+          <input id="emergencyCronUrl" placeholder="https://emergency.example.com" autocomplete="off" />
+          <input id="emergencyToken" type="password" placeholder="cron token" autocomplete="off" />
+        </div>
+        <div class="row">
+          <input id="emergencyContact1" placeholder="contact 1 email" autocomplete="off" />
+          <input id="emergencyContact2" placeholder="contact 2 email (optional)" autocomplete="off" />
+        </div>
+        <div class="row">
+          <input id="emergencyDays" type="number" min="1" max="365" value="30" />
+          <input id="emergencyGrace" type="number" min="0" max="10080" value="60" />
+          <button id="armEmergency">Arm emergency access</button>
+          <button id="checkinEmergency" class="secondary">Check in</button>
+          <button id="cancelEmergency" class="secondary">Cancel</button>
+        </div>
+        <pre id="emergencyStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
+        <pre id="emergencyShares" style="white-space:pre-wrap;color:var(--danger);font:12px/1.5 ui-monospace,monospace"></pre>
       </div>
 
       <h2>Updates</h2>

@@ -238,6 +238,50 @@ element<HTMLButtonElement>("createAlias").addEventListener("click", async () => 
   }
 });
 
+
+function renderEmergency(reply: Response): void {
+  const status = element<HTMLPreElement>("emergencyStatus");
+  if (!reply.ok) { status.textContent = reply.error; return; }
+  if (reply.kind !== "emergency") return;
+  status.textContent = `Policy ${reply.status.state}: deadline ${new Date((reply.status.lastCheckIn + reply.status.inactivitySecs + reply.status.graceSecs) * 1000).toLocaleString()}`;
+  if (reply.contactShares !== undefined) {
+    element<HTMLPreElement>("emergencyShares").textContent =
+      "Give each share to its contact offline. The cron only receives the third share.\n" +
+      reply.contactShares.map((entry) => `${entry.id}: ${entry.share}`).join("\n");
+  }
+}
+
+element<HTMLButtonElement>("armEmergency").addEventListener("click", async () => {
+  const contacts = [element<HTMLInputElement>("emergencyContact1").value.trim(), element<HTMLInputElement>("emergencyContact2").value.trim()]
+    .filter((value) => value.length > 0)
+    .map((value, index) => ({ id: `contact-${index + 1}`, address: value }));
+  const reply: Response = await browser.runtime.sendMessage({
+    type: "arm-emergency",
+    cronUrl: element<HTMLInputElement>("emergencyCronUrl").value.trim(),
+    token: element<HTMLInputElement>("emergencyToken").value,
+    contacts,
+    inactivityDays: Number(element<HTMLInputElement>("emergencyDays").value),
+    graceMinutes: Number(element<HTMLInputElement>("emergencyGrace").value),
+  });
+  renderEmergency(reply);
+});
+
+for (const [button, type] of [
+  ["checkinEmergency", "checkin-emergency"],
+  ["cancelEmergency", "cancel-emergency"],
+] as const) {
+  element<HTMLButtonElement>(button).addEventListener("click", async () => {
+    const reply: Response = await browser.runtime.sendMessage({ type });
+    renderEmergency(reply);
+  });
+}
+
+async function showEmergencyStatus(): Promise<void> {
+  const reply: Response = await browser.runtime.sendMessage({ type: "emergency-status" });
+  renderEmergency(reply);
+}
+
+void showEmergencyStatus();
 void loadAliasConfig();
 void loadAliases();
 void showConflicts();

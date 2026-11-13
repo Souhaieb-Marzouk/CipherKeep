@@ -2071,6 +2071,7 @@ private fun SettingsScreen(
 
             SyncFolderSection(context, controller)
             AliasSection(context, controller)
+            EmergencySection(context, controller)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

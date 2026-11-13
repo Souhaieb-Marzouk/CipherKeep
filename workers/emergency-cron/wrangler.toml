@@ -1,0 +1,13 @@
+﻿name = "cipherkeep-emergency-cron"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+[triggers]
+crons = ["0 * * * *"]
+
+[[kv_namespaces]]
+binding = "POLICIES"
+id = "replace-with-kv-namespace-id"
+
+[vars]
+NOTIFY_WEBHOOK = ""
+NOTIFY_TOKEN = ""

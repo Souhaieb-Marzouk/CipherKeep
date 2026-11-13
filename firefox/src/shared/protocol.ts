@@ -63,6 +63,17 @@ export type Request =
   | { type: "disable-alias"; address: string }
   | { type: "delete-alias"; address: string; id: string }
   | {
+      type: "arm-emergency";
+      cronUrl: string;
+      token: string;
+      contacts: Array<{ id: string; address: string }>;
+      inactivityDays: number;
+      graceMinutes: number;
+    }
+  | { type: "emergency-status" }
+  | { type: "checkin-emergency" }
+  | { type: "cancel-emergency" }
+  | {
       type: "update-item";
       id: string;
       title: string;
@@ -123,10 +134,34 @@ export type Response =
   | { ok: true; kind: "vault-id"; vaultId: string }
   | { ok: true; kind: "sync"; records: number; conflicts: number }
   | { ok: true; kind: "aliases"; aliases: AliasView[] }
+  | {
+      ok: true;
+      kind: "emergency";
+      status: {
+        id: string;
+        state: string;
+        lastCheckIn: number;
+        inactivitySecs: number;
+        graceSecs: number;
+      };
+      contactShares?: Array<{ id: string; share: string }>;
+    }
   | { ok: true; kind: "conflict-resolved" }
   | { ok: true; kind: "bundle"; json: string }
   | { ok: true; kind: "sync"; records: number; conflicts: number }
   | { ok: true; kind: "aliases"; aliases: AliasView[] }
+  | {
+      ok: true;
+      kind: "emergency";
+      status: {
+        id: string;
+        state: string;
+        lastCheckIn: number;
+        inactivitySecs: number;
+        graceSecs: number;
+      };
+      contactShares?: Array<{ id: string; share: string }>;
+    }
   | {
       ok: true;
       kind: "inspection";
@@ -186,6 +221,10 @@ function isRequestType(value: unknown): value is Request["type"] {
       "list-aliases",
       "disable-alias",
       "delete-alias",
+      "arm-emergency",
+      "emergency-status",
+      "checkin-emergency",
+      "cancel-emergency",
       "update-item",
     ].includes(value)
   );
@@ -301,6 +340,29 @@ export function isRequest(value: unknown): value is Request {
       return true;
     case "disable-alias":
       return typeof request.address === "string" && request.address.length <= 320;
+    case "arm-emergency":
+      return (
+        typeof request.cronUrl === "string" &&
+        request.cronUrl.length <= 2_048 &&
+        typeof request.token === "string" &&
+        request.token.length <= 4_096 &&
+        Array.isArray(request.contacts) &&
+        request.contacts.length >= 1 &&
+        request.contacts.length <= 2 &&
+        request.contacts.every(
+          (contact) =>
+            typeof contact === "object" &&
+            contact !== null &&
+            typeof (contact as { id?: unknown }).id === "string" &&
+            typeof (contact as { address?: unknown }).address === "string",
+        ) &&
+        typeof request.inactivityDays === "number" &&
+        typeof request.graceMinutes === "number"
+      );
+    case "emergency-status":
+    case "checkin-emergency":
+    case "cancel-emergency":
+      return true;
     case "delete-alias":
       return (
         typeof request.address === "string" &&

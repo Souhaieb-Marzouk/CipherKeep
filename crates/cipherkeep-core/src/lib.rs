@@ -25,6 +25,7 @@
 
 pub mod alias;
 pub mod crdt;
+pub mod emergency;
 pub mod envelope;
 pub mod error;
 pub mod export;

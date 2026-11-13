@@ -11,6 +11,7 @@ import {
   type AliasProvider,
   type AliasRecord,
 } from "../shared/alias-provider";
+import { EmergencyCronClient, type EmergencyDraft, type EmergencyStatus } from "../shared/emergency-client";
 import { GitHubTransport, RelayTransport, WebDavTransport } from "../shared/sync-transport";
 
 let session: WasmVaultSession | null = null;
@@ -457,6 +458,52 @@ async function storeAlias(record: AliasRecord, existingId?: string): Promise<str
   return id;
 }
 
+interface EmergencyConfig {
+  cronUrl: string;
+  token: string;
+  policyId: string;
+}
+
+async function emergencyClient(): Promise<{ client: EmergencyCronClient; config: EmergencyConfig }> {
+  const stored = await browser.storage.local.get("emergencyConfig");
+  const config = stored.emergencyConfig as Partial<EmergencyConfig> | undefined;
+  if (
+    config === undefined ||
+    typeof config.cronUrl !== "string" ||
+    typeof config.token !== "string" ||
+    typeof config.policyId !== "string"
+  ) {
+    throw new Error("No emergency policy is armed.");
+  }
+  return {
+    client: new EmergencyCronClient(config.cronUrl, config.token),
+    config: config as EmergencyConfig,
+  };
+}
+
+async function storeEmergencyRecord(
+  contacts: Array<{ id: string; address: string }>,
+  policyId: string,
+): Promise<void> {
+  const active = requireSession();
+  await ensureItemStore();
+  const id = bytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+  const payload = new TextEncoder().encode(
+    JSON.stringify({
+      v: 1,
+      type: "emergency",
+      title: "Emergency access contacts",
+      contacts,
+      policyId,
+      username: "",
+      password: "",
+    }),
+  );
+  const ciphertext = active.encrypt_item(hexToBytes(id), payload);
+  payload.fill(0);
+  await itemStore.put({ id, ciphertext, updatedAt: Date.now() });
+}
+
 async function localV2Records(active: WasmVaultSession): Promise<string[]> {
   await ensureItemStore();
   const records = await itemStore.list();
@@ -634,6 +681,92 @@ async function handle(request: Request): Promise<Response> {
         payload.fill(0);
         await itemStore.put({ id: record.id, ciphertext, updatedAt: Date.now() });
         return { ok: true, kind: "items", items: await listItems() };
+      }
+      case "arm-emergency": {
+        const active = requireSession();
+        const shares = active.recovery_shares();
+        if (shares.length !== 3) return { ok: false, error: "Recovery shares are unavailable." };
+        const client = new EmergencyCronClient(request.cronUrl, request.token);
+        const inactivitySecs = Math.round(request.inactivityDays * 86_400);
+        const graceSecs = Math.round(request.graceMinutes * 60);
+        const draft: EmergencyDraft = {
+          contacts: request.contacts.map((contact) => ({ id: contact.id, address: contact.address })),
+          shares: request.contacts.map((contact) => ({
+            contactId: contact.id,
+            ciphertext: btoa(shares[2] ?? ""),
+          })),
+          inactivitySecs,
+          reminderLeadSecs: 86_400,
+          graceSecs,
+        };
+        const status = await client.create(draft);
+        const config: EmergencyConfig = {
+          cronUrl: request.cronUrl,
+          token: request.token,
+          policyId: status.id,
+        };
+        await browser.storage.local.set({ emergencyConfig: config });
+        await storeEmergencyRecord(request.contacts, status.id);
+        return {
+          ok: true,
+          kind: "emergency",
+          status: {
+            id: status.id,
+            state: status.state,
+            lastCheckIn: status.lastCheckIn,
+            inactivitySecs: status.inactivitySecs,
+            graceSecs: status.graceSecs,
+          },
+          contactShares: request.contacts.map((contact, index) => ({
+            id: contact.id,
+            share: shares[index] ?? "",
+          })),
+        };
+      }
+      case "emergency-status": {
+        const { client, config } = await emergencyClient();
+        const status: EmergencyStatus = await client.status(config.policyId);
+        return {
+          ok: true,
+          kind: "emergency",
+          status: {
+            id: status.id,
+            state: status.state,
+            lastCheckIn: status.lastCheckIn,
+            inactivitySecs: status.inactivitySecs,
+            graceSecs: status.graceSecs,
+          },
+        };
+      }
+      case "checkin-emergency": {
+        const { client, config } = await emergencyClient();
+        const status = await client.checkIn(config.policyId);
+        return {
+          ok: true,
+          kind: "emergency",
+          status: {
+            id: status.id,
+            state: status.state,
+            lastCheckIn: status.lastCheckIn,
+            inactivitySecs: status.inactivitySecs,
+            graceSecs: status.graceSecs,
+          },
+        };
+      }
+      case "cancel-emergency": {
+        const { client, config } = await emergencyClient();
+        const status = await client.cancel(config.policyId);
+        return {
+          ok: true,
+          kind: "emergency",
+          status: {
+            id: status.id,
+            state: status.state,
+            lastCheckIn: status.lastCheckIn,
+            inactivitySecs: status.inactivitySecs,
+            graceSecs: status.graceSecs,
+          },
+        };
       }
       case "create-alias": {
         const provider = await aliasProvider();
