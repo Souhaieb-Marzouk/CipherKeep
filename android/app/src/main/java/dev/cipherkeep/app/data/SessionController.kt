@@ -65,6 +65,7 @@ class SessionController(context: Context) {
     private val storage = VaultStorage(context.applicationContext)
     private val backoff = UnlockBackoffStore(context.applicationContext)
     private val travel = TravelModeStore(context.applicationContext)
+    private val rotationJournal = RotationJournal(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var autoLockJob: Job? = null
     private var repository: VaultRepository? = null
@@ -84,6 +85,29 @@ class SessionController(context: Context) {
         if (blob == null) {
             state = VaultUiState.Setup
             return
+        }
+        rotationJournal.load()?.let { journal ->
+            runCatching {
+                val repo = storage.repository()
+                journal.items.forEach { entity ->
+                    repo.save(
+                        itemId = entity.itemId,
+                        ciphertext = entity.ciphertext,
+                        lamport = entity.lamport,
+                        tombstone = entity.tombstone,
+                        schemaVersion = entity.schemaVersion,
+                        updatedAt = entity.updatedAt,
+                    )
+                }
+                if (journal.blob.isNotEmpty()) {
+                    blobs.save(journal.blob)
+                    blob = journal.blob
+                }
+                rotationJournal.clear()
+            }.onFailure {
+                state = VaultUiState.StorageError("Rotation recovery failed; keep the app data intact.")
+                return
+            }
         }
         if (travel.enabled()) {
             state = VaultUiState.Travel
@@ -718,6 +742,7 @@ class SessionController(context: Context) {
             val active = session ?: error("vault is locked")
             val repo = repository ?: error("storage is unavailable")
             val entities = repo.list()
+            rotationJournal.save(blob, entities)
             val request = JSONArray()
             entities.forEach { entity ->
                 request.put(
@@ -727,7 +752,9 @@ class SessionController(context: Context) {
                 )
             }
             val rotated = JSONObject(active.rotateFamilyKey(request.toString()))
-            blobs.save(hexBytes(rotated.getString("blob")))
+            val nextBlob = hexBytes(rotated.getString("blob"))
+            blobs.save(nextBlob)
+            blob = nextBlob
             val items = rotated.getJSONArray("items")
             for (index in 0 until items.length()) {
                 val item = items.getJSONObject(index)
@@ -743,6 +770,35 @@ class SessionController(context: Context) {
                 )
             }
             loadItems()
+            rotationJournal.clear()
+        }.onFailure {
+            runCatching {
+                val repo = repository
+                rotationJournal.load()?.let { journal ->
+                    if (repo != null) {
+                        journal.items.forEach { entity ->
+                            repo.save(
+                                itemId = entity.itemId,
+                                ciphertext = entity.ciphertext,
+                                lamport = entity.lamport,
+                                tombstone = entity.tombstone,
+                                schemaVersion = entity.schemaVersion,
+                                updatedAt = entity.updatedAt,
+                            )
+                        }
+                    }
+                    if (journal.blob.isNotEmpty()) {
+                        blobs.save(journal.blob)
+                        blob = journal.blob
+                    }
+                    rotationJournal.clear()
+                }
+            }
+            session?.close()
+            session = null
+            items = emptyList()
+            storage.closeBlocking()
+            state = VaultUiState.Locked("Rotation failed; reopen the vault.")
         }
     }
 

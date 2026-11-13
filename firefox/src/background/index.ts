@@ -116,7 +116,23 @@ browser.alarms.onAlarm.addListener((alarm) => {
 });
 
 async function load(): Promise<void> {
-  const stored = await browser.storage.local.get("vaultBlob");
+  const stored = await browser.storage.local.get(["vaultBlob", "rotationJournal"]);
+  const journal = stored.rotationJournal as
+    | { blob: string; items: Array<{ id: string; ciphertext: string; updatedAt: number }> }
+    | undefined;
+  if (journal !== undefined) {
+    await ensureItemStore();
+    for (const item of journal.items) {
+      await itemStore.put({
+        id: item.id,
+        ciphertext: hexToBytes(item.ciphertext),
+        updatedAt: item.updatedAt,
+      });
+    }
+    await browser.storage.local.set({ vaultBlob: journal.blob });
+    await browser.storage.local.remove("rotationJournal");
+    stored.vaultBlob = journal.blob;
+  }
   if (typeof stored.vaultBlob !== "string") {
     return;
   }
@@ -674,6 +690,16 @@ async function handle(request: Request): Promise<Response> {
         const active = requireSession();
         await ensureItemStore();
         const records = await itemStore.list();
+        await browser.storage.local.set({
+          rotationJournal: {
+            blob: vaultBlob ?? "",
+            items: records.map((record) => ({
+              id: record.id,
+              ciphertext: bytesToHex(record.ciphertext),
+              updatedAt: record.updatedAt,
+            })),
+          },
+        });
         const request = records.map((record) => ({
           id: record.id,
           blob: bytesToHex(record.ciphertext),
@@ -692,6 +718,7 @@ async function handle(request: Request): Promise<Response> {
         const blob = hexToBytes(rotated.blob);
         vaultBlob = bytesToBase64(blob);
         await browser.storage.local.set({ vaultBlob });
+        await browser.storage.local.remove("rotationJournal");
         return { ok: true, kind: "ok" };
       }
       case "clear-phishing-overrides":

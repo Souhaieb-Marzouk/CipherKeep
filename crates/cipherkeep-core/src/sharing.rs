@@ -266,11 +266,20 @@ impl FamilyVault {
         if role == Role::Owner || member_id == self.owner_id {
             return Err(CoreError::new(ErrorCode::InvalidArgument));
         }
+        {
+            let member = self
+                .members
+                .get_mut(member_id)
+                .ok_or_else(|| CoreError::new(ErrorCode::NotFound))?;
+            member.role = role;
+        }
         let member = self
             .members
-            .get_mut(member_id)
+            .get(member_id)
+            .cloned()
             .ok_or_else(|| CoreError::new(ErrorCode::NotFound))?;
-        member.role = role;
+        let wrapped = wrap_key(&self.vault, &member)?;
+        self.wrapped.insert(member_id.to_string(), wrapped);
         self.audit.push(AuditEvent::RoleChanged {
             member_id: member_id.to_string(),
             role,
@@ -468,6 +477,20 @@ mod tests {
         let new = family.unwrap("alice", &alice_secret).expect("new");
         assert_ne!(old, new.secret().expose_secret());
         assert_eq!(family.epoch(), 2);
+    }
+
+    #[test]
+    fn role_change_rewraps_and_unwraps() {
+        let (owner, _) = member("owner", Role::Owner);
+        let (alice, alice_secret) = member("alice", Role::Editor);
+        let mut family =
+            FamilyVault::new(VaultKey::generate().expect("vault"), owner).expect("family");
+        family.invite("owner", alice).expect("invite");
+        family
+            .set_role("owner", "alice", Role::Viewer)
+            .expect("role");
+        assert!(!family.can_write("alice"));
+        assert!(family.unwrap("alice", &alice_secret).is_ok());
     }
 
     #[test]

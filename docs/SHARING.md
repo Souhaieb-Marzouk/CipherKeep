@@ -22,6 +22,9 @@ The member unwraps locally with their static X25519 secret.
 - Editor — read/write
 - Viewer — read-only
 
+Changing a role re-wraps that member's vault key under the new role AAD; the old
+envelope is not reusable.
+
 Role checks exist in core; UI must show them, but cryptography is the real
 control.
 
@@ -69,6 +72,14 @@ ciphertexts in extension storage. Android and Firefox can change roles by
 re-wrapping the current vault key. Android and Firefox have member join screens: they unwrap the owner envelope
 with the member secret and create a local vault with the same vault ID/key, then
 sync pulls items. Joining replaces the local vault and warns the user.
+
+## Rotation journal
+
+Before rotation, Android writes a local journal containing the old vault blob
+and every item ciphertext (already encrypted). Firefox stores the same snapshot
+in `browser.storage.local`. Both platforms restore the snapshot on the next
+startup if rotation did not complete, then delete the journal only after the
+new blob and all rekeyed items are durably written.
 
 ## Current status
 

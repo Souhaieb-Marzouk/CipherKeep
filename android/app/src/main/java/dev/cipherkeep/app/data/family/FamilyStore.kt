@@ -24,6 +24,16 @@ class FamilyStore(context: Context) {
     }.getOrNull()
 
     fun save(state: JSONObject) {
+        state.optJSONObject("owner")?.let { owner ->
+            state.put(
+                "owner",
+                JSONObject()
+                    .put("public", owner.optString("public"))
+                    .put("memberId", owner.optString("memberId"))
+                    .put("fingerprint", owner.optString("fingerprint"))
+                    .put("role", owner.optString("role")),
+            )
+        }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, key())
         val encrypted = cipher.doFinal(state.toString().encodeToByteArray())

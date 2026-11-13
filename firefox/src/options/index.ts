@@ -384,6 +384,11 @@ interface FamilyMember { id: string; public: string; role: string; wrapped?: str
 async function loadFamily(): Promise<void> {
   const stored = await browser.storage.local.get(["familyIdentity", "familyMembers"]);
   const identity = stored.familyIdentity as { fingerprint?: string; secret?: string } | undefined;
+  if (identity !== undefined && "secret" in identity) {
+    const sanitized = { ...identity };
+    delete sanitized.secret;
+    await browser.storage.local.set({ familyIdentity: sanitized });
+  }
   element<HTMLPreElement>("familyStatus").textContent = identity === undefined
     ? "No owner identity. Create one and verify fingerprints out of band."
     : `Owner fingerprint: ${identity.fingerprint ?? ""}`;
@@ -429,8 +434,15 @@ async function loadFamily(): Promise<void> {
 }
 
 element<HTMLButtonElement>("familyIdentity").addEventListener("click", async () => {
-  const identity = JSON.parse(family_identity("owner", "owner")) as { fingerprint: string; secret: string; public: string };
-  await browser.storage.local.set({ familyIdentity: identity });
+  const identity = JSON.parse(family_identity("owner", "owner")) as { fingerprint: string; public: string; memberId: string; role: string };
+  await browser.storage.local.set({
+    familyIdentity: {
+      public: identity.public,
+      memberId: identity.memberId,
+      fingerprint: identity.fingerprint,
+      role: identity.role,
+    },
+  });
   element<HTMLPreElement>("familyStatus").textContent = `Owner fingerprint: ${identity.fingerprint}`;
 });
 

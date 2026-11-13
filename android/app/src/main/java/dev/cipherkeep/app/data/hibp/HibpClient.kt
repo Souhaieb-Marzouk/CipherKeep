@@ -63,9 +63,19 @@ class HibpClient {
             if (parts.size != 2) return@firstNotNullOfOrNull null
             val candidate = parts[0]
             if (candidate.length != 35) return@firstNotNullOfOrNull null
-            if (!candidate.equals(suffix, ignoreCase = true)) return@firstNotNullOfOrNull null
+            if (!suffixEquals(candidate, suffix)) return@firstNotNullOfOrNull null
             parts[1].trim().toLongOrNull()
         } ?: 0L
+    }
+
+    private fun suffixEquals(left: String, right: String): Boolean {
+        if (left.length != right.length) return false
+        var difference = 0
+        for (index in left.indices) {
+            difference = difference or
+                (left[index].uppercaseChar().code xor right[index].uppercaseChar().code)
+        }
+        return difference == 0
     }
 
     private fun hashPassword(password: String): Pair<String, String> {

@@ -2079,6 +2079,7 @@ private fun SettingsScreen(
             HealthSection(controller)
             FamilySection(context, controller)
             WebAuthnSection(context, controller)
+            PasskeyProviderSection(context)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

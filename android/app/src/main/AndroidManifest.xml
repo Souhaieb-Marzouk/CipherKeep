@@ -16,6 +16,15 @@
         android:usesCleartextTraffic="false">
 
         <service
+            android:name=".passkeys.CipherKeepCredentialProvider"
+            android:exported="true"
+            android:permission="android.permission.BIND_CREDENTIAL_PROVIDER_SERVICE">
+            <intent-filter>
+                <action android:name="androidx.credentials.provider.CredentialProviderService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".autofill.CipherKeepAutofillService"
             android:exported="true"
             android:permission="android.permission.BIND_AUTOFILL_SERVICE">
