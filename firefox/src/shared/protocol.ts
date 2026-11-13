@@ -78,6 +78,8 @@ export type Request =
   | { type: "family-vault-key" }
   | { type: "rotate-family-key" }
   | { type: "join-family"; password: string; vaultId: string; vaultKey: string }
+  | { type: "webauthn-enroll"; prf: string; credentialId: string; salt: string }
+  | { type: "webauthn-unlock"; prf: string }
   | { type: "clear-phishing-overrides" }
   | {
       type: "update-item";
@@ -236,6 +238,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "family-vault-key",
       "rotate-family-key",
       "join-family",
+      "webauthn-enroll",
+      "webauthn-unlock",
       "clear-phishing-overrides",
       "update-item",
     ].includes(value)
@@ -370,6 +374,14 @@ export function isRequest(value: unknown): value is Request {
         ) &&
         typeof request.inactivityDays === "number" &&
         typeof request.graceMinutes === "number"
+      );
+    case "webauthn-unlock":
+      return typeof request.prf === "string";
+    case "webauthn-enroll":
+      return (
+        typeof request.prf === "string" &&
+        typeof request.credentialId === "string" &&
+        typeof request.salt === "string"
       );
     case "join-family":
       return (

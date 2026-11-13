@@ -751,6 +751,10 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_vault_id(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_webauthn_open(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_webauthn_seal(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffisearchindex_new(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_constructor_ffivaultsession_create(
@@ -858,6 +862,10 @@ internal object UniffiLib {
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_unlock_again(`ptr`: Long,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_vault_id(`ptr`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_webauthn_open(`ptr`: Long,`sealed`: RustBuffer.ByValue,`prfOutput`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): Unit
+    external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_webauthn_seal(`ptr`: Long,`prfOutput`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_export_portable(`itemsJson`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1114,6 +1122,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_vault_id() and 0xFFFF) != 43541) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_webauthn_open() and 0xFFFF) != 61872) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_method_ffivaultsession_webauthn_seal() and 0xFFFF) != 14456) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_constructor_ffisearchindex_new() and 0xFFFF) != 56256) {
@@ -2112,6 +2126,16 @@ public interface FfiVaultSessionInterface {
      */
     fun `vaultId`(): kotlin.ByteArray
     
+    /**
+     * Open the PRF-sealed keyring copy.
+     */
+    fun `webauthnOpen`(`sealed`: kotlin.String, `prfOutput`: kotlin.ByteArray)
+    
+    /**
+     * Seal a second keyring copy under a WebAuthn PRF output.
+     */
+    fun `webauthnSeal`(`prfOutput`: kotlin.ByteArray): kotlin.String
+    
     companion object
 }
 
@@ -2625,6 +2649,42 @@ open class FfiVaultSession: Disposable, AutoCloseable, FfiVaultSessionInterface
     UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_vault_id(
         it,
         _status)
+}
+    }
+    )
+    }
+    
+
+    
+    /**
+     * Open the PRF-sealed keyring copy.
+     */
+    @Throws(FfiException::class)override fun `webauthnOpen`(`sealed`: kotlin.String, `prfOutput`: kotlin.ByteArray)
+        = 
+    callWithHandle {
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_webauthn_open(
+        it,
+        
+        FfiConverterString.lower(`sealed`),
+        FfiConverterByteArray.lower(`prfOutput`),_status)
+}
+    }
+    
+    
+
+    
+    /**
+     * Seal a second keyring copy under a WebAuthn PRF output.
+     */
+    @Throws(FfiException::class)override fun `webauthnSeal`(`prfOutput`: kotlin.ByteArray): kotlin.String {
+            return FfiConverterString.lift(
+    callWithHandle {
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_method_ffivaultsession_webauthn_seal(
+        it,
+        
+        FfiConverterByteArray.lower(`prfOutput`),_status)
 }
     }
     )

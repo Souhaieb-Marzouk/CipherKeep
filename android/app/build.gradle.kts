@@ -95,6 +95,8 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     implementation(libs.androidx.biometric)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services)
     implementation(libs.okhttp)
     implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.room.runtime)

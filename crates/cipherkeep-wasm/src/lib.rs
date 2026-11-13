@@ -666,6 +666,18 @@ impl WasmVaultSession {
             .map_err(js_error)
     }
 
+    /// Unlock the keyring using a WebAuthn PRF output.
+    pub fn webauthn_open(&mut self, sealed: Vec<u8>, prf_output: Vec<u8>) -> Result<(), JsValue> {
+        self.inner
+            .webauthn_open(&sealed, &prf_output)
+            .map_err(js_error)
+    }
+
+    /// Seal a second keyring copy under a WebAuthn PRF output.
+    pub fn webauthn_seal(&self, prf_output: Vec<u8>) -> Result<Vec<u8>, JsValue> {
+        self.inner.webauthn_seal(&prf_output).map_err(js_error)
+    }
+
     /// Active vault key for owner-initiated wrapping.
     pub fn family_vault_key(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.share_vault_key().map_err(js_error)

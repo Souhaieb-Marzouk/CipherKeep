@@ -109,6 +109,10 @@
         </div>
         <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <div id="aliasList" class="row"></div>
+        <h2 style="margin-top:28px">Hardware unlock (WebAuthn PRF)</h2>
+        <p>Optional. Password and recovery shares remain fallbacks. Unsupported devices stay fully usable.</p>
+        <div class="row"><button id="webauthnEnroll" class="secondary">Enroll security key</button><button id="webauthnUnlock" class="secondary">Unlock with security key</button></div>
+        <pre id="webauthnStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
         <h2 style="margin-top:28px">Family sharing</h2>
         <p>Owner-approved members receive a wrapped vault key. Revoking rotates the vault key and rekeys future writes. Ciphertext a removed member already had remains readable.</p>
         <div class="row"><button id="familyIdentity" class="secondary">Create owner identity</button><button id="familyRotate" class="secondary">Rotate vault key</button></div>

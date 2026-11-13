@@ -868,6 +868,21 @@ impl FfiVaultSession {
         })
     }
 
+    /// Open the PRF-sealed keyring copy.
+    pub fn webauthn_open(&self, sealed: String, prf_output: Vec<u8>) -> Result<(), FfiError> {
+        self.with_state_mut(|state| {
+            state
+                .session
+                .webauthn_open(&hex_bytes(&sealed)?, &prf_output)?;
+            Ok(())
+        })
+    }
+
+    /// Seal a second keyring copy under a WebAuthn PRF output.
+    pub fn webauthn_seal(&self, prf_output: Vec<u8>) -> Result<String, FfiError> {
+        self.with_state(|state| Ok(hex(&state.session.webauthn_seal(&prf_output)?)))
+    }
+
     /// Export the active vault key for owner-initiated family wrapping.
     pub fn family_vault_key(&self) -> Result<String, FfiError> {
         self.with_state(|state| Ok(hex(&state.session.share_vault_key()?)))

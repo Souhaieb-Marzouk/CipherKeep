@@ -50,6 +50,7 @@ pub mod sharing;
 pub mod sync;
 pub mod totp;
 pub mod travel;
+pub mod webauthn;
 
 pub use crdt::{ActorId, LamportClock, VersionVector};
 pub use envelope::{

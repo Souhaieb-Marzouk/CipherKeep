@@ -618,6 +618,31 @@ async function handle(request: Request): Promise<Response> {
         armAutoLock();
         return { ok: true, kind: "ok" };
       }
+      case "webauthn-unlock": {
+        const stored = await browser.storage.local.get("webauthn");
+        const record = stored.webauthn as { sealed?: string } | undefined;
+        if (record?.sealed === undefined) return { ok: false, error: "No hardware wrapping is enrolled." };
+        const sealed = Uint8Array.from(atob(record.sealed), (character) => character.charCodeAt(0));
+        const prf = Uint8Array.from(atob(request.prf), (character) => character.charCodeAt(0));
+        requireSession().webauthn_open(sealed, prf);
+        prf.fill(0);
+        armAutoLock();
+        return { ok: true, kind: "ok" };
+      }
+      case "webauthn-enroll": {
+        const active = requireSession();
+        const prf = Uint8Array.from(atob(request.prf), (character) => character.charCodeAt(0));
+        const sealed = active.webauthn_seal(prf);
+        prf.fill(0);
+        await browser.storage.local.set({
+          webauthn: {
+            credentialId: request.credentialId,
+            salt: request.salt,
+            sealed: bytesToBase64(sealed),
+          },
+        });
+        return { ok: true, kind: "ok" };
+      }
       case "join-family": {
         const password = new TextEncoder().encode(request.password);
         let joined: WasmVaultSession;

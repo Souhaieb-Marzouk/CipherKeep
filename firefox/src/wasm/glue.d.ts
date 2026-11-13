@@ -69,6 +69,8 @@ declare class WasmVaultSession {
   migrate_item(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
   export_sync_record(itemId: Uint8Array, ciphertext: Uint8Array, actor: Uint8Array, created_at: number, counter_start: number): Uint8Array;
   family_vault_key(): Uint8Array;
+  webauthn_seal(prfOutput: Uint8Array): Uint8Array;
+  webauthn_open(sealed: Uint8Array, prfOutput: Uint8Array): void;
   rotate_family_key(itemsJson: string): string;
   apply_sync_record(syncJson: Uint8Array): Uint8Array;
   decrypt_item(itemId: Uint8Array, ciphertext: Uint8Array): Uint8Array;

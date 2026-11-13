@@ -487,6 +487,88 @@ element<HTMLButtonElement>("joinFamily").addEventListener("click", async () => {
     element<HTMLPreElement>("familyStatus").textContent = "Join failed; check the envelope and secret.";
   }
 });
+
+element<HTMLButtonElement>("webauthnEnroll").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("webauthnStatus");
+  if (typeof PublicKeyCredential === "undefined") {
+    status.textContent = "This browser does not expose WebAuthn. Password unlock remains available.";
+    return;
+  }
+  try {
+    const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    if (!available) {
+      status.textContent = "No platform authenticator is available. Connect a security key or use the password.";
+      return;
+    }
+    const salt = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const credential = (await navigator.credentials.create({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        rp: { name: "CipherKeep" },
+        user: { id: userId, name: "owner", displayName: "CipherKeep owner" },
+        pubKeyCredParams: [{ type: "public-key", alg: -7 }],
+        authenticatorSelection: { userVerification: "required" },
+        extensions: { prf: { eval: { first: salt } } } as AuthenticationExtensionsClientInputs,
+      },
+    })) as PublicKeyCredential | null;
+    if (credential === null) throw new Error("cancelled");
+    const results = credential.getClientExtensionResults() as {
+      prf?: { results?: { first?: ArrayBuffer } };
+    };
+    const prf = results.prf?.results?.first;
+    if (prf === undefined) {
+      status.textContent = "This authenticator does not return a PRF result; enrollment is unsupported.";
+      return;
+    }
+    const reply: Response = await browser.runtime.sendMessage({
+      type: "webauthn-enroll",
+      prf: btoa(String.fromCharCode(...new Uint8Array(prf))),
+      credentialId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
+      salt: btoa(String.fromCharCode(...salt)),
+    });
+    status.textContent = reply.ok
+      ? "Hardware wrapping enrolled. Password and recovery shares remain valid fallbacks."
+      : reply.error;
+  } catch {
+    status.textContent = "Enrollment failed or was cancelled. Password unlock remains available.";
+  }
+});
+
+element<HTMLButtonElement>("webauthnUnlock").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("webauthnStatus");
+  const stored = await browser.storage.local.get("webauthn");
+  const record = stored.webauthn as { credentialId?: string; salt?: string } | undefined;
+  if (record?.credentialId === undefined || record.salt === undefined) {
+    status.textContent = "No hardware wrapping is enrolled.";
+    return;
+  }
+  try {
+    const credentialId = Uint8Array.from(atob(record.credentialId), (character) => character.charCodeAt(0));
+    const salt = Uint8Array.from(atob(record.salt), (character) => character.charCodeAt(0));
+    const assertion = (await navigator.credentials.get({
+      publicKey: {
+        challenge: crypto.getRandomValues(new Uint8Array(32)),
+        allowCredentials: [{ type: "public-key", id: credentialId }],
+        userVerification: "required",
+        extensions: { prf: { eval: { first: salt } } } as AuthenticationExtensionsClientInputs,
+      },
+    })) as PublicKeyCredential | null;
+    const results = assertion?.getClientExtensionResults() as { prf?: { results?: { first?: ArrayBuffer } } } | undefined;
+    const prf = results?.prf?.results?.first;
+    if (prf === undefined) {
+      status.textContent = "The authenticator did not return a PRF result.";
+      return;
+    }
+    const reply: Response = await browser.runtime.sendMessage({
+      type: "webauthn-unlock",
+      prf: btoa(String.fromCharCode(...new Uint8Array(prf))),
+    });
+    status.textContent = reply.ok ? "Unlocked with the security key." : reply.error;
+  } catch {
+    status.textContent = "Unlock failed or was cancelled; password unlock remains available.";
+  }
+});
 void loadFamily();
 void loadHibp();
 void loadTravel();

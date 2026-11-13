@@ -691,6 +691,23 @@ class SessionController(context: Context) {
         SyncOutcome(records.length(), merged.optJSONArray("conflicts")?.length() ?: 0)
     }
 
+    fun webauthnSeal(prfOutput: ByteArray): String {
+        val active = session ?: error("vault is locked")
+        return active.webauthnSeal(prfOutput)
+    }
+
+    suspend fun webauthnOpen(sealedHex: String, prfOutput: ByteArray): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                active.webauthnOpen(sealedHex, prfOutput)
+                if (!openStorage()) error("storage unavailable")
+                loadItems()
+                state = VaultUiState.Unlocked
+                recordActivity()
+            }
+        }
+
     fun familyVaultKeyHex(): String {
         val active = session ?: error("vault is locked")
         return active.familyVaultKey()

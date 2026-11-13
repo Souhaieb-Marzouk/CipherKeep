@@ -396,6 +396,35 @@ impl VaultSession {
         Ok(blob)
     }
 
+    /// Unlock the keyring using a WebAuthn PRF output and sealed copy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::AuthenticationFailed`] for a wrong PRF, wrong
+    /// sealed copy or tampering.
+    pub fn webauthn_open(&mut self, sealed: &[u8], prf_output: &[u8]) -> Result<()> {
+        let prefix = self.header.aad_prefix();
+        let keyring = crate::webauthn::open_keyring(sealed, prf_output, &prefix)?;
+        let master = crate::webauthn::derive_master(prf_output, &prefix)?;
+        self.state = Some(Unlocked { master, keyring });
+        self.failed_attempts = 0;
+        self.next_attempt_at = 0;
+        Ok(())
+    }
+
+    /// Seal a second keyring copy under a WebAuthn PRF output.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ErrorCode::Locked`] when locked or a redacted wrapping error.
+    pub fn webauthn_seal(&self, prf_output: &[u8]) -> Result<Vec<u8>> {
+        let unlocked = self
+            .state
+            .as_ref()
+            .ok_or_else(|| CoreError::new(ErrorCode::Locked))?;
+        crate::webauthn::seal_keyring(&unlocked.keyring, prf_output, &self.header.aad_prefix())
+    }
+
     /// Export the active vault key for an owner-initiated wrap.
     ///
     /// # Errors
