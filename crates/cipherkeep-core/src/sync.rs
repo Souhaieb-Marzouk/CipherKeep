@@ -470,8 +470,13 @@ mod tests {
             .seal_blob(&key(), ItemId::from_bytes([1u8; 16]), 1, b"secret")
             .expect("seal");
         let mut encoded = batch.encode().expect("encode");
-        let index = encoded.len() / 2;
-        encoded[index] ^= 1;
+        let marker = b"\"ciphertext\":\"";
+        let start = encoded
+            .windows(marker.len())
+            .position(|window| window == marker)
+            .expect("ciphertext present")
+            + marker.len();
+        encoded[start] = if encoded[start] == b'A' { b'B' } else { b'A' };
         let tampered = SyncBatch::decode(&encoded).expect("json still valid");
         assert!(tampered.open_blob(&key(), &tampered.manifests[0]).is_err());
         let mut other = batch.clone();
