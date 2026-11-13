@@ -67,6 +67,14 @@ internal class PasskeyStore(context: Context) {
     }
 
     fun find(credentialId: String): PasskeyRecord? = list().firstOrNull { it.credentialId == credentialId }
+
+    fun clear() {
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        list().forEach { record ->
+            runCatching { store.deleteEntry(record.alias) }
+        }
+        prefs.edit().clear().apply()
+    }
 }
 
 internal object PasskeyCrypto {
@@ -165,6 +173,15 @@ internal object Cbor {
     }
 }
 
+internal fun fixedCoordinate(value: java.math.BigInteger): ByteArray {
+    val raw = value.toByteArray()
+    return when {
+        raw.size == 32 -> raw
+        raw.size > 32 -> raw.takeLast(32).toByteArray()
+        else -> ByteArray(32 - raw.size) + raw
+    }
+}
+
 internal fun b64url(bytes: ByteArray): String =
     Base64.encodeToString(bytes, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)
 
@@ -197,8 +214,8 @@ internal fun createRegistration(
     val alias = "ck-passkey-${credentialIdText.take(24)}"
     val pair = PasskeyCrypto.createKey(alias)
     val publicKey = pair.public as java.security.interfaces.ECPublicKey
-    val x = publicKey.w.affineX.toByteArray().takeLast(32).toByteArray()
-    val y = publicKey.w.affineY.toByteArray().takeLast(32).toByteArray()
+    val x = fixedCoordinate(publicKey.w.affineX)
+    val y = fixedCoordinate(publicKey.w.affineY)
     val cose = Cbor.encode(
         mapOf(
             1 to 2,
@@ -269,6 +286,13 @@ internal fun createAssertion(
     val rpId = request.optString("rpId").ifEmpty { record.rpId }
     require(originMatchesRp(origin, rpId) && record.rpId == rpId) { "origin/RP mismatch" }
     val challenge = request.getString("challenge")
+    val allowed = request.optJSONArray("allowCredentials")
+    if (allowed != null && allowed.length() > 0) {
+        val permitted = (0 until allowed.length()).any { index ->
+            allowed.getJSONObject(index).optString("id") == record.credentialId
+        }
+        require(permitted) { "credential not allowed" }
+    }
     val clientData = JSONObject()
         .put("type", "webauthn.get")
         .put("challenge", challenge)

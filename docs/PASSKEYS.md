@@ -97,3 +97,25 @@ The available test devices cannot complete this:
 
 The implementation is therefore build-verified but not hardware-verified
 end-to-end.
+
+
+## Security audit 2026-11-14
+
+Fixed:
+- Get assertions now reject a credential absent from `allowCredentials`.
+- `onClearCredentialStateRequest` deletes stored records and Keystore aliases.
+- Create requests are type-checked before returning a passkey entry.
+- P-256 x/y coordinates are left-padded to 32 bytes.
+
+Open:
+- The test page still performs client-only WebAuthn; no server-side
+  attestation/assertion verifier is deployed, despite the agreed server-side
+  verification level.
+- The provider trusts `CallingAppInfo.getOrigin()` and does not independently
+  fetch Digital Asset Links for the caller. Android supplies the origin, but a
+  provider-side association check would be defense in depth.
+- Keystore keys are not created with `setUserAuthenticationRequired(true)`;
+  user verification is enforced by the consent activities, not cryptographically
+  bound to the key.
+- No Android 14 device with third-party passkey-provider selection was available
+  for an end-to-end test.

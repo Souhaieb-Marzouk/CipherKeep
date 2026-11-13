@@ -4,6 +4,7 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.CancellationSignal
 import android.os.OutcomeReceiver
+import androidx.credentials.PublicKeyCredential
 import androidx.credentials.exceptions.CreateCredentialException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.provider.BeginCreateCredentialRequest
@@ -26,6 +27,10 @@ class CipherKeepCredentialProvider : CredentialProviderService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<BeginCreateCredentialResponse, CreateCredentialException>,
     ) {
+        if (request.type != PublicKeyCredential.TYPE_PUBLIC_KEY_CREDENTIAL) {
+            callback.onResult(BeginCreateCredentialResponse.Builder().build())
+            return
+        }
         val pending = PendingIntent.getActivity(
             this,
             0,
@@ -90,6 +95,7 @@ class CipherKeepCredentialProvider : CredentialProviderService() {
         cancellationSignal: CancellationSignal,
         callback: OutcomeReceiver<Void?, androidx.credentials.exceptions.ClearCredentialException>,
     ) {
+        PasskeyStore(this).clear()
         callback.onResult(null)
     }
 }
