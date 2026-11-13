@@ -109,6 +109,11 @@
         </div>
         <pre id="aliasStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace;margin:12px 0 0"></pre>
         <div id="aliasList" class="row"></div>
+        <h2 style="margin-top:28px">Breach check</h2>
+        <p>Off by default. When enabled, only the first 5 SHA-1 characters of a password are sent to api.pwnedpasswords.com. No password or full hash leaves the device.</p>
+        <div class="row"><label><input id="hibpEnabled" type="checkbox" /> Enable opt-in breach checking</label></div>
+        <div class="row"><button id="hibpScan" class="secondary">Scan vault passwords</button></div>
+        <pre id="hibpStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
         <h2 style="margin-top:28px">Emergency access</h2>
         <p>Optional dead-man's-switch. The cron receives one Shamir share and cannot decrypt alone. Coercion is not solved.</p>
         <div class="row">

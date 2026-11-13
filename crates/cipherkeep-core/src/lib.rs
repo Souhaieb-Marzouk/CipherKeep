@@ -31,6 +31,7 @@ pub mod error;
 pub mod export;
 pub mod generator;
 pub mod header;
+pub mod hibp;
 pub mod import;
 pub mod item;
 pub mod item_store;

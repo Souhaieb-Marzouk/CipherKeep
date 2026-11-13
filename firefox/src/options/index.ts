@@ -305,6 +305,50 @@ element<HTMLButtonElement>("clearPhishing").addEventListener("click", async () =
     ? "Phishing overrides cleared."
     : reply.error;
 });
+
+import { HibpClient } from "../shared/hibp";
+
+async function loadHibp(): Promise<void> {
+  const stored = await browser.storage.local.get("hibpEnabled");
+  element<HTMLInputElement>("hibpEnabled").checked = stored.hibpEnabled === true;
+}
+element<HTMLInputElement>("hibpEnabled").addEventListener("change", async () => {
+  const enabled = element<HTMLInputElement>("hibpEnabled").checked;
+  await browser.storage.local.set({ hibpEnabled: enabled });
+  element<HTMLPreElement>("hibpStatus").textContent = enabled
+    ? "Breach checking enabled; only 5-character prefixes are sent."
+    : "Breach checking disabled.";
+});
+element<HTMLButtonElement>("hibpScan").addEventListener("click", async () => {
+  if (!element<HTMLInputElement>("hibpEnabled").checked) {
+    element<HTMLPreElement>("hibpStatus").textContent = "Enable opt-in breach checking first.";
+    return;
+  }
+  if (!window.confirm("Send one 5-character SHA-1 prefix per stored password to api.pwnedpasswords.com? No password or full hash is sent.")) {
+    return;
+  }
+  const reply: Response = await browser.runtime.sendMessage({ type: "list-items" });
+  if (!reply.ok || reply.kind !== "items") {
+    element<HTMLPreElement>("hibpStatus").textContent = reply.ok ? "No items." : reply.error;
+    return;
+  }
+  const client = new HibpClient();
+  let pwned = 0;
+  let checked = 0;
+  for (const item of reply.items) {
+    if (item.password.length === 0) continue;
+    checked += 1;
+    try {
+      if ((await client.check(item.password)).count > 0) pwned += 1;
+    } catch {
+      element<HTMLPreElement>("hibpStatus").textContent = "Breach provider unavailable; no result stored.";
+      return;
+    }
+  }
+  element<HTMLPreElement>("hibpStatus").textContent =
+    `Checked ${checked} password(s); ${pwned} appear in known breaches.`;
+});
+void loadHibp();
 void loadTravel();
 void showEmergencyStatus();
 void loadAliasConfig();
