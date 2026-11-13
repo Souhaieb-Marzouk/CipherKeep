@@ -1,23 +1,167 @@
-name: release-placeholder
+name: release-integrity
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: Semver version already built by build-android/build-firefox
+        required: true
+        default: 0.1.0
+        type: string
+      tag:
+        description: Release tag, for example v0.1.0
+        required: true
+        default: v0.1.0
+        type: string
+      artifact_run_id:
+        description: Workflow run ID containing cipherkeep-* artifacts
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  release:
-    name: protected release placeholder
+  checksums-and-minisign:
+    name: checksums and detached Minisign
     runs-on: ubuntu-latest
     environment: release
     permissions:
-      contents: read
+      contents: write
+    outputs:
+      subjects: ${{ steps.subjects.outputs.value }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Explain the P5 gate
+
+      - name: Install Minisign
+        shell: bash
         run: |
-          echo "Release signing and publishing are implemented in P5."
-          echo "This job is manual, environment-protected and has read-only contents."
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          minisign -v
+
+      - name: Download build artifacts
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          gh run download "${{ inputs.artifact_run_id }}" \
+            --pattern 'cipherkeep-*' \
+            --dir release-assets \
+            --repo "${{ github.repository }}"
+          find release-assets -type f -printf '%P\n' | sort
+
+      - name: Flatten and checksum every artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          find release-assets -type f -exec cp -t out {} +
+          cd out
+          find . -maxdepth 1 -type f ! -name 'checksums.txt' ! -name '*.minisig' -printf '%f\n' | sort |
+            while IFS= read -r file; do sha256sum "$file"; done > checksums.txt
+          cat checksums.txt
+
+      - name: Sign checksums with the offline Minisign key
+        shell: bash
+        env:
+          MINISIGN_SECRET_KEY_BASE64: ${{ secrets.MINISIGN_SECRET_KEY_BASE64 }}
+          MINISIGN_PASSWORD: ${{ secrets.MINISIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -n "${MINISIGN_SECRET_KEY_BASE64:-}" || { echo "missing Minisign secret" >&2; exit 1; }
+          printf '%s' "$MINISIGN_SECRET_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/minisign.key"
+          if [ -n "${MINISIGN_PASSWORD:-}" ]; then
+            printf '%s' "$MINISIGN_PASSWORD" | minisign -S -s "$RUNNER_TEMP/minisign.key" \
+              -m out/checksums.txt -x out/checksums.txt.minisig
+          else
+            minisign -S -W -s "$RUNNER_TEMP/minisign.key" \
+              -m out/checksums.txt -x out/checksums.txt.minisig
+          fi
+          minisign -V -p release/minisign.pub \
+            -m out/checksums.txt -x out/checksums.txt.minisig
+          rm -f "$RUNNER_TEMP/minisign.key"
+
+      - name: Create draft release and upload integrity files
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release view "${{ inputs.tag }}" >/dev/null 2>&1 ||
+            gh release create "${{ inputs.tag }}" \
+              --draft \
+              --title "CipherKeep ${{ inputs.version }}" \
+              --notes "Draft release ${{ inputs.version }}"
+
+      - name: Publish checksums and Minisign signature to draft
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "${{ inputs.tag }}" \
+            out/checksums.txt out/checksums.txt.minisig \
+            --clobber
+
+      - name: Export provenance subject
+        id: subjects
+        shell: bash
+        run: echo "value=$(base64 -w0 out/checksums.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Upload integrity artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-integrity
+          if-no-files-found: error
+          path: |
+            out/**
+
+  provenance:
+    name: SLSA Level 3 provenance
+    needs: checksums-and-minisign
+    permissions:
+      actions: read
+      id-token: write
+      contents: write
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@f7dd8c54c2067bafc12ca7a55595d5ee9b75204a # v2.1.0
+    with:
+      base64-subjects: ${{ needs.checksums-and-minisign.outputs.subjects }}
+      upload-assets: true
+      tag-name: ${{ inputs.tag }}
+
+  publish:
+    name: publish release assets
+    needs: [checksums-and-minisign, provenance]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download integrity files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-integrity
+          path: integrity
+
+      - name: Finalize release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -s integrity/checksums.txt
+          test -s integrity/checksums.txt.minisig
+          find integrity -maxdepth 1 -type f -print -exec gh release upload "${{ inputs.tag }}" {} --clobber \;
+          gh release edit "${{ inputs.tag }}" --draft=false
+          gh release view "${{ inputs.tag }}" --json url,assets
