@@ -84,3 +84,7 @@ tmp/
 !vendor/
 !vendor/**/
 !vendor/**
+
+# Public release verification key (never the private key).
+!/release/
+!/release/minisign.pub
