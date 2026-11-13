@@ -45,6 +45,10 @@ The workflow:
    ```text
    web-ext sign --channel unlisted
    ```
+
+The unlisted submission may wait for manual AMO reviewer approval. The
+workflow waits up to 30 minutes. Open the version URL printed by `web-ext`
+and approve it in the AMO developer hub while the job is waiting.
 6. renames the signed artifact to `cipherkeep-<version>.xpi`
 7. computes SHA-256 and writes `updates.json`
 8. copies it to the repository root and to `firefox-updates.json`

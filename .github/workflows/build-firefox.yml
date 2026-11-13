@@ -88,7 +88,7 @@ jobs:
             --channel unlisted \
             --source-dir dist \
             --artifacts-dir web-ext-artifacts \
-            --timeout 300000
+            --timeout 1800000
 
       - name: Normalize signed artifact and generate updates.json
         shell: bash
