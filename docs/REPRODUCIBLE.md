@@ -17,7 +17,7 @@
 Vendored Rust hash:
 
 ```text
-6d07b09ad1ab440b4013a625b2b732e49b8243f2dbf5cbb7ee5eb5115a9ab047
+7c50b9d99899c0ca85e4380b3579b97777b1291965fb53ed51d79dbb6007a407
 ```
 
 Check it:
@@ -26,8 +26,8 @@ Check it:
 python3 scripts/vendor-hash.py --check
 ```
 
-The hash covers exact vendored bytes. Cargo checksum files require the original
-CRLF/LF bytes, so the vendor tree is committed with `-text` in `.gitattributes`.
+The hash is computed from committed Git blob IDs, so Windows/Linux checkout
+line endings and path-case behaviour do not change it.
 
 ## Build
 

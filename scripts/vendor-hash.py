@@ -1,30 +1,42 @@
 #!/usr/bin/env python3
-"""Hash the vendored sources by exact file bytes."""
+"""Hash the committed vendor tree by Git blob identity.
+
+This is identical on Windows and Linux regardless of checkout line endings,
+path case behaviour or filesystem ordering.
+"""
 from __future__ import annotations
 
 import hashlib
+import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VENDOR = ROOT / "vendor"
 RECORD = ROOT / "vendor.sha256"
 
 
 def digest() -> str:
-    if not VENDOR.is_dir():
-        raise SystemExit("vendor/ is missing")
+    raw = subprocess.check_output(
+        ["git", "ls-tree", "-r", "-z", "HEAD", "--", "vendor"],
+        cwd=ROOT,
+    )
     outer = hashlib.sha256()
     count = 0
-    for path in sorted(p for p in VENDOR.rglob("*") if p.is_file()):
-        relative = path.relative_to(VENDOR).as_posix().encode()
-        file_hash = hashlib.sha256(path.read_bytes()).hexdigest().encode()
-        outer.update(len(relative).to_bytes(8, "big"))
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        meta, path = record.split(b"\t", 1)
+        _mode, kind, blob = meta.split(b" ")
+        if kind != b"blob":
+            continue
+        relative = path[len(b"vendor/"):]
         outer.update(relative)
-        outer.update(file_hash)
+        outer.update(b"\0")
+        outer.update(blob)
+        outer.update(b"\n")
         count += 1
     if count == 0:
-        raise SystemExit("vendor/ has no files")
+        raise SystemExit("vendor/ is missing from the commit")
     return outer.hexdigest()
 
 
