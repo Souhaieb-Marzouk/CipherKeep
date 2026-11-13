@@ -109,7 +109,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y minisign
           mkdir -p out
-          find release-assets -type f -exec cp -t out {} +
+          while IFS= read -r -d '' file; do
+            base=$(basename "$file")
+            parent=$(basename "$(dirname "$file")")
+            name="$base"
+            if [ -e "out/$name" ]; then
+              name="${parent}-${base}"
+            fi
+            suffix=1
+            while [ -e "out/$name" ]; do
+              name="${parent}-${suffix}-${base}"
+              suffix=$((suffix + 1))
+            done
+            cp "$file" "out/$name"
+          done < <(find release-assets -type f -print0)
           cd out
           find . -maxdepth 1 -type f ! -name 'checksums.txt' ! -name '*.minisig' -printf '%f\n' | sort |
             while IFS= read -r file; do sha256sum "$file"; done > checksums.txt
