@@ -73,7 +73,7 @@ jobs:
 
   firefox:
     name: signed Firefox build
-    needs: validate
+    needs: [validate, android]
     uses: ./.github/workflows/build-firefox.yml
     with:
       version: ${{ needs.validate.outputs.version }}
