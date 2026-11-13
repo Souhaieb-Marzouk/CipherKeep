@@ -198,6 +198,7 @@ jobs:
       upload-assets: true
       upload-tag-name: ${{ needs.validate.outputs.tag }}
       draft-release: "true"
+      compile-generator: true
 
   draft:
     name: assemble draft release
