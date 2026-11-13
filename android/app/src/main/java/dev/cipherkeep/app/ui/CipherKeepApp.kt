@@ -187,6 +187,7 @@ fun CipherKeepApp() {
                 VaultUiState.Setup -> SetupScreen(controller)
                 is VaultUiState.Recovery -> RecoveryScreen(controller, state)
                 is VaultUiState.Locked -> UnlockScreen(controller, state)
+            VaultUiState.Travel -> TravelScreen(controller)
                 VaultUiState.LockWarning -> LockWarningScreen(controller)
                 is VaultUiState.StorageError -> StorageErrorScreen(controller, state.message)
                 VaultUiState.Unlocked -> {
@@ -2072,6 +2073,7 @@ private fun SettingsScreen(
             SyncFolderSection(context, controller)
             AliasSection(context, controller)
             EmergencySection(context, controller)
+            TravelModeSection(controller)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

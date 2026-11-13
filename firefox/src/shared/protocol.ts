@@ -73,6 +73,7 @@ export type Request =
   | { type: "emergency-status" }
   | { type: "checkin-emergency" }
   | { type: "cancel-emergency" }
+  | { type: "enter-travel" }
   | {
       type: "update-item";
       id: string;
@@ -225,6 +226,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "emergency-status",
       "checkin-emergency",
       "cancel-emergency",
+      "enter-travel",
       "update-item",
     ].includes(value)
   );
@@ -359,6 +361,8 @@ export function isRequest(value: unknown): value is Request {
         typeof request.inactivityDays === "number" &&
         typeof request.graceMinutes === "number"
       );
+    case "enter-travel":
+      return true;
     case "emergency-status":
     case "checkin-emergency":
     case "cancel-emergency":

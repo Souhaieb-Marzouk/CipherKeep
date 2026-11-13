@@ -12,6 +12,7 @@ import {
   type AliasRecord,
 } from "../shared/alias-provider";
 import { EmergencyCronClient, type EmergencyDraft, type EmergencyStatus } from "../shared/emergency-client";
+import { assertTravelVisible } from "../shared/travel";
 import { GitHubTransport, RelayTransport, WebDavTransport } from "../shared/sync-transport";
 
 let session: WasmVaultSession | null = null;
@@ -214,6 +215,8 @@ async function writeFolderNames(active: WasmVaultSession, names: string[]): Prom
 }
 
 async function listItems(): Promise<ItemView[]> {
+  const travel = await browser.storage.local.get("travelMode");
+  assertTravelVisible(travel.travelMode === true);
   await ensureItemStore();
   const active = requireSession();
   const records = await itemStore.list();
@@ -304,6 +307,10 @@ async function status(): Promise<Response> {
 }
 
 async function performSync(): Promise<Response> {
+        const travel = await browser.storage.local.get("travelMode");
+        if (travel.travelMode === true) {
+          return { ok: false, error: "Travel Mode is active." };
+        }
 
         const active = requireSession();
         const stored = await browser.storage.local.get(["syncConfig", "syncActor", "syncCreated"]);
@@ -607,9 +614,14 @@ async function handle(request: Request): Promise<Response> {
           password.fill(0);
         }
         await clearBackoff();
+        await browser.storage.local.remove("travelMode");
         armAutoLock();
         return { ok: true, kind: "ok" };
       }
+      case "enter-travel":
+        await browser.storage.local.set({ travelMode: true });
+        await lockSession();
+        return { ok: true, kind: "ok" };
       case "lock":
         await lockSession();
         return { ok: true, kind: "ok" };

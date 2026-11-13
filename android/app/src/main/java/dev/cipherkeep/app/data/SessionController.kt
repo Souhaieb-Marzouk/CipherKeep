@@ -43,6 +43,7 @@ sealed interface VaultUiState {
         val error: String? = null,
         val retryAfterSeconds: Long = 0,
     ) : VaultUiState
+    data object Travel : VaultUiState
     data object LockWarning : VaultUiState
     data class StorageError(val message: String) : VaultUiState
     data object Unlocked : VaultUiState
@@ -63,6 +64,7 @@ class SessionController(context: Context) {
     private val biometrics = BiometricStore(context.applicationContext)
     private val storage = VaultStorage(context.applicationContext)
     private val backoff = UnlockBackoffStore(context.applicationContext)
+    private val travel = TravelModeStore(context.applicationContext)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var autoLockJob: Job? = null
     private var repository: VaultRepository? = null
@@ -81,6 +83,10 @@ class SessionController(context: Context) {
         blob = blobs.load()
         if (blob == null) {
             state = VaultUiState.Setup
+            return
+        }
+        if (travel.enabled()) {
+            state = VaultUiState.Travel
             return
         }
         session = withContext(Dispatchers.IO) {
@@ -144,6 +150,7 @@ class SessionController(context: Context) {
                     state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
                     return@runCatching
                 }
+                travel.clear()
                 loadItems()
                 state = VaultUiState.Unlocked
                 recordActivity()
@@ -242,6 +249,10 @@ class SessionController(context: Context) {
     }
 
     private suspend fun loadItems() {
+        if (travel.enabled()) {
+            items = emptyList()
+            return
+        }
         val repo = repository ?: return
         val active = session ?: return
         items = runCatching {
@@ -521,6 +532,7 @@ class SessionController(context: Context) {
 
     suspend fun syncNow(endpoint: String, token: String, namespace: String): SyncOutcome =
         withContext(Dispatchers.IO) {
+            if (travel.enabled()) error("Travel Mode is active")
             val active = session ?: error("vault is locked")
             val repo = repository ?: error("storage is unavailable")
             if (!Regex("^[a-f0-9]{32}$").matches(namespace)) error("invalid sync namespace")
@@ -1037,6 +1049,19 @@ class SessionController(context: Context) {
             repository?.delete(item.id)
             loadItems()
         }
+    }
+
+    /** Hide the vault without deleting it; the session key is locked. */
+    fun enterTravelMode() {
+        if (state != VaultUiState.Unlocked) return
+        travel.enable()
+        autoLockJob?.cancel()
+        autoLockJob = null
+        session?.lock()
+        items = emptyList()
+        backgroundedAt = null
+        storage.closeBlocking()
+        state = VaultUiState.Travel
     }
 
     fun lock(message: String? = null) {

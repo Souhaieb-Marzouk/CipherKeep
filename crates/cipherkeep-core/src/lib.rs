@@ -45,6 +45,7 @@ pub mod session;
 pub mod shamir;
 pub mod sync;
 pub mod totp;
+pub mod travel;
 
 pub use crdt::{ActorId, LamportClock, VersionVector};
 pub use envelope::{

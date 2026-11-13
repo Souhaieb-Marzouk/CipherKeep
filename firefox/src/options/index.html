@@ -45,6 +45,10 @@
     </style>
   </head>
   <body>
+    <div id="travelBanner" hidden style="padding:12px 16px;margin:8px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);background:var(--surface)">
+      Travel Mode is active: this vault is hidden and the session is locked. This is not plausible deniability; local metadata may reveal a vault exists. Unlock with the master password to restore it.
+    </div>
+    <div class="row"><button id="enableTravel" class="secondary">Enable Travel Mode</button></div>
     <main>
       <h1>CipherKeep settings</h1>
       <p>Version 0.1.0 shell. No account, no telemetry, no remote scripts.</p>

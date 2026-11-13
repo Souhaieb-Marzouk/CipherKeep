@@ -281,6 +281,16 @@ async function showEmergencyStatus(): Promise<void> {
   renderEmergency(reply);
 }
 
+
+async function loadTravel(): Promise<void> {
+  const stored = await browser.storage.local.get("travelMode");
+  element<HTMLDivElement>("travelBanner").hidden = stored.travelMode !== true;
+}
+element<HTMLButtonElement>("enableTravel").addEventListener("click", async () => {
+  await browser.runtime.sendMessage({ type: "enter-travel" });
+  await loadTravel();
+});
+void loadTravel();
 void showEmergencyStatus();
 void loadAliasConfig();
 void loadAliases();
