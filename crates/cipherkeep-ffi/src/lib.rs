@@ -1303,3 +1303,22 @@ pub fn resolve_sync_conflict(
     }))
     .map_err(|_| FfiError::Internal)
 }
+
+/// Offline phishing/homograph assessment for an autofill origin.
+#[uniffi::export]
+pub fn phishing_check(url: String) -> Result<String, FfiError> {
+    let assessment = cipherkeep_core::phishing::analyze_url(&url)?;
+    let reasons: Vec<String> = assessment
+        .reasons
+        .iter()
+        .map(|reason| format!("{reason:?}"))
+        .collect();
+    serde_json::to_string(&serde_json::json!({
+        "asciiHost": assessment.ascii_host,
+        "decodedHost": assessment.decoded_host,
+        "scripts": assessment.scripts,
+        "reasons": reasons,
+        "requiresConfirmation": assessment.requires_confirmation(),
+    }))
+    .map_err(|_| FfiError::Internal)
+}

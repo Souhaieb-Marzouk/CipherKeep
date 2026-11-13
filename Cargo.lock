@@ -249,6 +249,7 @@ dependencies = [
  "getrandom 0.2.17",
  "hkdf",
  "hmac",
+ "idna",
  "percent-encoding",
  "serde_json",
  "sha1",

@@ -1,6 +1,7 @@
 package dev.cipherkeep.app.autofill
 
 import android.app.assist.AssistStructure
+import android.content.Intent
 import android.os.CancellationSignal
 import android.service.autofill.AutofillService
 import android.service.autofill.Dataset
@@ -11,6 +12,8 @@ import android.service.autofill.SaveCallback
 import android.service.autofill.SaveRequest
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
+import dev.cipherkeep.core.phishingCheck
+import org.json.JSONObject
 
 /** Exact-origin, tap-to-fill login service. It never submits a form. */
 class CipherKeepAutofillService : AutofillService() {
@@ -26,6 +29,25 @@ class CipherKeepAutofillService : AutofillService() {
         }
         val form = parseLoginForm(structure)
         if (form.passwordId == null || form.webDomain.isNullOrBlank()) {
+            callback.onSuccess(null)
+            return
+        }
+        val risk = runCatching {
+            JSONObject(phishingCheck("https://${form.webDomain}"))
+        }.getOrNull()
+        if (risk?.optBoolean("requiresConfirmation") == true &&
+            !PhishingOverrideStore(this).isAllowed(form.webDomain)
+        ) {
+            val review = Intent(this, PhishingWarningActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                putExtra(PhishingWarningActivity.EXTRA_HOST, form.webDomain)
+                putExtra(PhishingWarningActivity.EXTRA_DECODED, risk.optString("decodedHost"))
+                putExtra(
+                    PhishingWarningActivity.EXTRA_REASONS,
+                    risk.optJSONArray("reasons")?.toString().orEmpty(),
+                )
+            }
+            startActivity(review)
             callback.onSuccess(null)
             return
         }

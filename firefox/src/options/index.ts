@@ -290,6 +290,21 @@ element<HTMLButtonElement>("enableTravel").addEventListener("click", async () =>
   await browser.runtime.sendMessage({ type: "enter-travel" });
   await loadTravel();
 });
+
+element<HTMLButtonElement>("allowOriginButton").addEventListener("click", async () => {
+  const origin = element<HTMLInputElement>("allowOrigin").value.trim();
+  const reply: Response = await browser.runtime.sendMessage({ type: "allow-phishing-origin", origin });
+  element<HTMLPreElement>("allowOriginStatus").textContent = reply.ok
+    ? "Origin allowed after review. Suspicious-origin warnings will be skipped for this host."
+    : reply.error;
+  if (reply.ok) element<HTMLInputElement>("allowOrigin").value = "";
+});
+element<HTMLButtonElement>("clearPhishing").addEventListener("click", async () => {
+  const reply: Response = await browser.runtime.sendMessage({ type: "clear-phishing-overrides" });
+  element<HTMLPreElement>("allowOriginStatus").textContent = reply.ok
+    ? "Phishing overrides cleared."
+    : reply.error;
+});
 void loadTravel();
 void showEmergencyStatus();
 void loadAliasConfig();

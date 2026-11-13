@@ -685,6 +685,8 @@ internal object IntegrityCheckingUniffiLib {
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2(
     ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_phishing_check(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_resolve_sync_conflict(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_totp_code(
@@ -847,6 +849,8 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_merge_sync_records_v2(`local`: RustBuffer.ByValue,`remote`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_phishing_check(`url`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_resolve_sync_conflict(`local`: RustBuffer.ByValue,`remote`: RustBuffer.ByValue,`fieldId`: Short,`keepRight`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_totp_code(`uri`: RustBuffer.ByValue,`unixSecs`: Long,uniffi_out_err: UniffiRustCallStatus, 
@@ -983,6 +987,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2() and 0xFFFF) != 46137) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_phishing_check() and 0xFFFF) != 18027) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_resolve_sync_conflict() and 0xFFFF) != 10399) {
@@ -3460,6 +3467,21 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
         
         FfiConverterSequenceString.lower(`local`),
         FfiConverterSequenceString.lower(`remote`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Offline phishing/homograph assessment for an autofill origin.
+         */
+    @Throws(FfiException::class) fun `phishingCheck`(`url`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_phishing_check(
+    
+        
+        FfiConverterString.lower(`url`),_status)
 }
     )
     }

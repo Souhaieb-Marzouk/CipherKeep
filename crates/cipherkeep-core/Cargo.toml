@@ -16,6 +16,7 @@ data-encoding.workspace = true
 getrandom.workspace = true
 hkdf.workspace = true
 hmac.workspace = true
+idna = "1"
 sha1.workspace = true
 url.workspace = true
 percent-encoding.workspace = true

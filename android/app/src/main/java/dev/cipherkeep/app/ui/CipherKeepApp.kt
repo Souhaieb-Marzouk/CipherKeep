@@ -2050,6 +2050,7 @@ private fun SettingsScreen(
                         it.autofillAllowed && it.url.isNotBlank() && it.password.isNotEmpty()
                     }
                     Text("${eligible.size} item(s) explicitly allowed for autofill")
+            OutlinedButton(onClick = { dev.cipherkeep.app.autofill.PhishingOverrideStore(context).clear() }) { Text("Clear phishing overrides") }
                     eligible.forEach { item ->
                         val origin = runCatching { java.net.URI(item.url).host }.getOrNull() ?: "invalid URL"
                         Text(

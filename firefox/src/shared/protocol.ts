@@ -74,6 +74,8 @@ export type Request =
   | { type: "checkin-emergency" }
   | { type: "cancel-emergency" }
   | { type: "enter-travel" }
+  | { type: "allow-phishing-origin"; origin: string }
+  | { type: "clear-phishing-overrides" }
   | {
       type: "update-item";
       id: string;
@@ -227,6 +229,8 @@ function isRequestType(value: unknown): value is Request["type"] {
       "checkin-emergency",
       "cancel-emergency",
       "enter-travel",
+      "allow-phishing-origin",
+      "clear-phishing-overrides",
       "update-item",
     ].includes(value)
   );
@@ -363,6 +367,10 @@ export function isRequest(value: unknown): value is Request {
       );
     case "enter-travel":
       return true;
+    case "clear-phishing-overrides":
+      return true;
+    case "allow-phishing-origin":
+      return typeof request.origin === "string" && request.origin.length <= 253;
     case "emergency-status":
     case "checkin-emergency":
     case "cancel-emergency":

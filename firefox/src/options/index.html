@@ -49,6 +49,9 @@
       Travel Mode is active: this vault is hidden and the session is locked. This is not plausible deniability; local metadata may reveal a vault exists. Unlock with the master password to restore it.
     </div>
     <div class="row"><button id="enableTravel" class="secondary">Enable Travel Mode</button></div>
+    <div class="row"><input id="allowOrigin" placeholder="Allow a reviewed autofill origin" /><button id="allowOriginButton" class="secondary">Allow origin</button></div>
+    <div class="row"><button id="clearPhishing" class="secondary">Clear phishing overrides</button></div>
+    <pre id="allowOriginStatus" style="white-space:pre-wrap;color:var(--muted);font:12px/1.5 ui-monospace,monospace"></pre>
     <main>
       <h1>CipherKeep settings</h1>
       <p>Version 0.1.0 shell. No account, no telemetry, no remote scripts.</p>

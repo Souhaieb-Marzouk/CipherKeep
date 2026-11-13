@@ -618,6 +618,20 @@ async function handle(request: Request): Promise<Response> {
         armAutoLock();
         return { ok: true, kind: "ok" };
       }
+      case "clear-phishing-overrides":
+        await browser.storage.local.remove("phishingOverrides");
+        return { ok: true, kind: "ok" };
+      case "allow-phishing-origin": {
+        const stored = await browser.storage.local.get("phishingOverrides");
+        const origins = Array.isArray(stored.phishingOverrides)
+          ? stored.phishingOverrides.filter((entry): entry is string => typeof entry === "string")
+          : [];
+        const origin = request.origin.trim().toLowerCase();
+        if (origin.length === 0) return { ok: false, error: "Origin is empty." };
+        if (!origins.includes(origin)) origins.push(origin);
+        await browser.storage.local.set({ phishingOverrides: origins.slice(-100) });
+        return { ok: true, kind: "ok" };
+      }
       case "enter-travel":
         await browser.storage.local.set({ travelMode: true });
         await lockSession();
@@ -910,6 +924,20 @@ async function handle(request: Request): Promise<Response> {
         const tabHost = hostOf(tab.url);
         if (tabHost === null) {
           return { ok: false, error: "Page URL is invalid." };
+        }
+        const risk = JSON.parse(phishing_check(tab.url)) as {
+          decodedHost?: string;
+          requiresConfirmation?: boolean;
+        };
+        const overrides = await browser.storage.local.get("phishingOverrides");
+        const allowed = Array.isArray(overrides.phishingOverrides)
+          ? overrides.phishingOverrides.includes(tabHost.toLowerCase())
+          : false;
+        if (risk.requiresConfirmation === true && !allowed) {
+          return {
+            ok: false,
+            error: `Suspicious origin blocked: ${risk.decodedHost ?? tabHost}. Review it in CipherKeep options to allow this origin.`,
+          };
         }
         const items = await listItems();
         const item = items.find((candidate) => candidate.id === request.id);

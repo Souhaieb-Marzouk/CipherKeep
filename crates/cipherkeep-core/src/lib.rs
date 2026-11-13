@@ -38,6 +38,7 @@ pub mod kdf;
 pub mod keyring;
 pub mod keys;
 pub mod lock;
+pub mod phishing;
 pub mod recipes;
 pub mod search;
 pub mod secret;

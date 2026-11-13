@@ -1095,3 +1095,22 @@ pub fn resolve_sync_conflict(
     serde_json::to_string(&serde_json::json!({"v":2,"item":item,"key":local_key,"record":record}))
         .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
 }
+
+/// Offline phishing/homograph assessment for an autofill origin.
+#[wasm_bindgen]
+pub fn phishing_check(url: String) -> Result<String, JsValue> {
+    let assessment = cipherkeep_core::phishing::analyze_url(&url).map_err(js_error)?;
+    let reasons: Vec<String> = assessment
+        .reasons
+        .iter()
+        .map(|reason| format!("{reason:?}"))
+        .collect();
+    serde_json::to_string(&serde_json::json!({
+        "asciiHost": assessment.ascii_host,
+        "decodedHost": assessment.decoded_host,
+        "scripts": assessment.scripts,
+        "reasons": reasons,
+        "requiresConfirmation": assessment.requires_confirmation(),
+    }))
+    .map_err(|_| js_error(CoreError::new(ErrorCode::Internal)))
+}
