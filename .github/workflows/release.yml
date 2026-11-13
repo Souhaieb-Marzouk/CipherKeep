@@ -61,6 +61,7 @@ jobs:
   android:
     name: signed Android build
     needs: validate
+    # zizmor: ignore[self-repository]
     uses: ./.github/workflows/build-android.yml
     with:
       version: ${{ needs.validate.outputs.version }}
@@ -68,6 +69,7 @@ jobs:
   firefox:
     name: signed Firefox build
     needs: validate
+    # zizmor: ignore[self-repository]
     uses: ./.github/workflows/build-firefox.yml
     with:
       version: ${{ needs.validate.outputs.version }}

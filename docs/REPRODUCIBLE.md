@@ -17,7 +17,7 @@
 Vendored Rust hash:
 
 ```text
-6d07b09ad1ab440b4013a625b2b732e49b8243f2dbf5cbb7ee5eb5115a9ab047
+76f16b4634530072483a36359067c4b48926e32b21003bde2a72795feca9eb4d
 ```
 
 Check it:
@@ -25,6 +25,9 @@ Check it:
 ```bash
 python3 scripts/vendor-hash.py --check
 ```
+
+The hash is computed from committed Git blob IDs, so Windows/Linux checkout
+line endings do not change it.
 
 ## Build
 
