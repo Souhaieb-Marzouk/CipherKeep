@@ -9,180 +9,674 @@
   },
   "color": {
     "light": {
-      "primary": { "$type": "color", "$value": "#312E81", "$description": "Brand primary; 10.92:1 on background, 11.42:1 with white text." },
-      "onPrimary": { "$type": "color", "$value": "#FFFFFF" },
-      "primaryContainer": { "$type": "color", "$value": "#E0E7FF" },
-      "onPrimaryContainer": { "$type": "color", "$value": "#1E1B4B", "$description": "12.98:1 on primaryContainer." },
-      "accent": { "$type": "color", "$value": "#0D9488", "$description": "Decorative and large-text accent only: 3.58:1 on background. Use accentStrong for body text/buttons." },
-      "accentStrong": { "$type": "color", "$value": "#0F766E", "$description": "5.23:1 on background; 5.47:1 with white text." },
-      "onAccent": { "$type": "color", "$value": "#FFFFFF" },
-      "background": { "$type": "color", "$value": "#F8FAFC" },
-      "surface": { "$type": "color", "$value": "#FFFFFF" },
-      "surfaceMuted": { "$type": "color", "$value": "#F1F5F9" },
-      "border": { "$type": "color", "$value": "#CBD5E1", "$description": "Decorative dividers only; not a 3:1 control boundary." },
-      "borderStrong": { "$type": "color", "$value": "#64748B", "$description": "Control boundaries; verified >=3:1 against background." },
-      "text": { "$type": "color", "$value": "#0F172A", "$description": "17.06:1 on background." },
-      "textMuted": { "$type": "color", "$value": "#64748B", "$description": "4.55:1 on background; 4.76:1 on surface. Do not use below 14 px." },
-      "success": { "$type": "color", "$value": "#16A34A", "$description": "Large text/icons only: 3.15:1 on background." },
-      "successText": { "$type": "color", "$value": "#15803D", "$description": "4.79:1 on background." },
-      "successContainer": { "$type": "color", "$value": "#DCFCE7" },
-      "onSuccessContainer": { "$type": "color", "$value": "#052E16" },
-      "warning": { "$type": "color", "$value": "#D97706", "$description": "Large text/icons only: 3.04:1 on background." },
-      "warningText": { "$type": "color", "$value": "#B45309", "$description": "4.80:1 on background." },
-      "warningContainer": { "$type": "color", "$value": "#FEF3C7" },
-      "onWarningContainer": { "$type": "color", "$value": "#451A03" },
-      "danger": { "$type": "color", "$value": "#DC2626", "$description": "4.62:1 on background; passes normal text." },
-      "dangerText": { "$type": "color", "$value": "#B91C1C", "$description": "6.18:1 on background; 5.30:1 on dangerContainer." },
-      "dangerContainer": { "$type": "color", "$value": "#FEE2E2" },
-      "onDangerContainer": { "$type": "color", "$value": "#7F1D1D" },
-      "focus": { "$type": "color", "$value": "#0F766E", "$description": "2 px focus ring, 2 px offset; 5.23:1 on background." },
-      "overlay": { "$type": "color", "$value": "rgba(15, 23, 42, 0.48)" }
+      "primary": {
+        "$type": "color",
+        "$value": "#166534",
+        "$description": "Brand primary; 10.92:1 on background, 11.42:1 with white text."
+      },
+      "onPrimary": {
+        "$type": "color",
+        "$value": "#FFFFFF"
+      },
+      "primaryContainer": {
+        "$type": "color",
+        "$value": "#DCFCE7"
+      },
+      "onPrimaryContainer": {
+        "$type": "color",
+        "$value": "#052E16",
+        "$description": "12.98:1 on primaryContainer."
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "#0F766E",
+        "$description": "Decorative and large-text accent only: 3.58:1 on background. Use accentStrong for body text/buttons."
+      },
+      "accentStrong": {
+        "$type": "color",
+        "$value": "#0F766E",
+        "$description": "5.23:1 on background; 5.47:1 with white text."
+      },
+      "onAccent": {
+        "$type": "color",
+        "$value": "#FFFFFF"
+      },
+      "background": {
+        "$type": "color",
+        "$value": "#FAF7F0"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#FFFFFF"
+      },
+      "surfaceMuted": {
+        "$type": "color",
+        "$value": "#F1EDE3"
+      },
+      "border": {
+        "$type": "color",
+        "$value": "#D8D2C4",
+        "$description": "Decorative dividers only; not a 3:1 control boundary."
+      },
+      "borderStrong": {
+        "$type": "color",
+        "$value": "#5F6B63",
+        "$description": "Control boundaries; verified >=3:1 against background."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#18211B",
+        "$description": "17.06:1 on background."
+      },
+      "textMuted": {
+        "$type": "color",
+        "$value": "#5F6B63",
+        "$description": "4.55:1 on background; 4.76:1 on surface. Do not use below 14 px."
+      },
+      "success": {
+        "$type": "color",
+        "$value": "#16A34A",
+        "$description": "Large text/icons only: 3.15:1 on background."
+      },
+      "successText": {
+        "$type": "color",
+        "$value": "#15803D",
+        "$description": "4.79:1 on background."
+      },
+      "successContainer": {
+        "$type": "color",
+        "$value": "#DCFCE7"
+      },
+      "onSuccessContainer": {
+        "$type": "color",
+        "$value": "#052E16"
+      },
+      "warning": {
+        "$type": "color",
+        "$value": "#D97706",
+        "$description": "Large text/icons only: 3.04:1 on background."
+      },
+      "warningText": {
+        "$type": "color",
+        "$value": "#B45309",
+        "$description": "4.80:1 on background."
+      },
+      "warningContainer": {
+        "$type": "color",
+        "$value": "#FEF3C7"
+      },
+      "onWarningContainer": {
+        "$type": "color",
+        "$value": "#451A03"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#DC2626",
+        "$description": "4.62:1 on background; passes normal text."
+      },
+      "dangerText": {
+        "$type": "color",
+        "$value": "#B91C1C",
+        "$description": "6.18:1 on background; 5.30:1 on dangerContainer."
+      },
+      "dangerContainer": {
+        "$type": "color",
+        "$value": "#FEE2E2"
+      },
+      "onDangerContainer": {
+        "$type": "color",
+        "$value": "#7F1D1D"
+      },
+      "focus": {
+        "$type": "color",
+        "$value": "#0F766E",
+        "$description": "2 px focus ring, 2 px offset; 5.23:1 on background."
+      },
+      "overlay": {
+        "$type": "color",
+        "$value": "rgba(15, 23, 42, 0.48)"
+      }
     },
     "dark": {
-      "primary": { "$type": "color", "$value": "#818CF8", "$description": "6.31:1 on background; 6.31:1 with onPrimary." },
-      "onPrimary": { "$type": "color", "$value": "#0B1120" },
-      "primaryContainer": { "$type": "color", "$value": "#312E81" },
-      "onPrimaryContainer": { "$type": "color", "$value": "#E0E7FF", "$description": "9.27:1 on primaryContainer." },
-      "accent": { "$type": "color", "$value": "#2DD4BF", "$description": "10.12:1 on background; safe for text." },
-      "accentStrong": { "$type": "color", "$value": "#2DD4BF" },
-      "onAccent": { "$type": "color", "$value": "#042F2E", "$description": "7.77:1 on accent." },
-      "background": { "$type": "color", "$value": "#0B1120" },
-      "surface": { "$type": "color", "$value": "#111827" },
-      "surfaceMuted": { "$type": "color", "$value": "#1E293B" },
-      "border": { "$type": "color", "$value": "#334155" },
-      "borderStrong": { "$type": "color", "$value": "#94A3B8", "$description": "Control boundaries; verified >=3:1 against background." },
-      "text": { "$type": "color", "$value": "#E2E8F0", "$description": "15.27:1 on background." },
-      "textMuted": { "$type": "color", "$value": "#94A3B8", "$description": "7.34:1 on background; 6.92:1 on surface." },
-      "success": { "$type": "color", "$value": "#4ADE80", "$description": "10.81:1 on background." },
-      "successText": { "$type": "color", "$value": "#4ADE80" },
-      "successContainer": { "$type": "color", "$value": "#052E16" },
-      "onSuccessContainer": { "$type": "color", "$value": "#86EFAC" },
-      "warning": { "$type": "color", "$value": "#FBBF24", "$description": "11.28:1 on background." },
-      "warningText": { "$type": "color", "$value": "#FBBF24" },
-      "warningContainer": { "$type": "color", "$value": "#451A03" },
-      "onWarningContainer": { "$type": "color", "$value": "#FCD34D" },
-      "danger": { "$type": "color", "$value": "#F87171", "$description": "6.81:1 on background." },
-      "dangerText": { "$type": "color", "$value": "#F87171" },
-      "dangerContainer": { "$type": "color", "$value": "#450A0A" },
-      "onDangerContainer": { "$type": "color", "$value": "#FCA5A5" },
-      "focus": { "$type": "color", "$value": "#2DD4BF" },
-      "overlay": { "$type": "color", "$value": "rgba(0, 0, 0, 0.64)" }
+      "primary": {
+        "$type": "color",
+        "$value": "#86EFAC",
+        "$description": "6.31:1 on background; 6.31:1 with onPrimary."
+      },
+      "onPrimary": {
+        "$type": "color",
+        "$value": "#0F1512"
+      },
+      "primaryContainer": {
+        "$type": "color",
+        "$value": "#14532D"
+      },
+      "onPrimaryContainer": {
+        "$type": "color",
+        "$value": "#DCFCE7",
+        "$description": "9.27:1 on primaryContainer."
+      },
+      "accent": {
+        "$type": "color",
+        "$value": "#5EEAD4",
+        "$description": "10.12:1 on background; safe for text."
+      },
+      "accentStrong": {
+        "$type": "color",
+        "$value": "#5EEAD4"
+      },
+      "onAccent": {
+        "$type": "color",
+        "$value": "#052E16",
+        "$description": "7.77:1 on accent."
+      },
+      "background": {
+        "$type": "color",
+        "$value": "#0F1512"
+      },
+      "surface": {
+        "$type": "color",
+        "$value": "#17201B"
+      },
+      "surfaceMuted": {
+        "$type": "color",
+        "$value": "#223029"
+      },
+      "border": {
+        "$type": "color",
+        "$value": "#33443A"
+      },
+      "borderStrong": {
+        "$type": "color",
+        "$value": "#A7B5AC",
+        "$description": "Control boundaries; verified >=3:1 against background."
+      },
+      "text": {
+        "$type": "color",
+        "$value": "#E7F5EC",
+        "$description": "15.27:1 on background."
+      },
+      "textMuted": {
+        "$type": "color",
+        "$value": "#A7B5AC",
+        "$description": "7.34:1 on background; 6.92:1 on surface."
+      },
+      "success": {
+        "$type": "color",
+        "$value": "#4ADE80",
+        "$description": "10.81:1 on background."
+      },
+      "successText": {
+        "$type": "color",
+        "$value": "#4ADE80"
+      },
+      "successContainer": {
+        "$type": "color",
+        "$value": "#052E16"
+      },
+      "onSuccessContainer": {
+        "$type": "color",
+        "$value": "#86EFAC"
+      },
+      "warning": {
+        "$type": "color",
+        "$value": "#FBBF24",
+        "$description": "11.28:1 on background."
+      },
+      "warningText": {
+        "$type": "color",
+        "$value": "#FBBF24"
+      },
+      "warningContainer": {
+        "$type": "color",
+        "$value": "#451A03"
+      },
+      "onWarningContainer": {
+        "$type": "color",
+        "$value": "#FCD34D"
+      },
+      "danger": {
+        "$type": "color",
+        "$value": "#F87171",
+        "$description": "6.81:1 on background."
+      },
+      "dangerText": {
+        "$type": "color",
+        "$value": "#F87171"
+      },
+      "dangerContainer": {
+        "$type": "color",
+        "$value": "#450A0A"
+      },
+      "onDangerContainer": {
+        "$type": "color",
+        "$value": "#FCA5A5"
+      },
+      "focus": {
+        "$type": "color",
+        "$value": "#5EEAD4"
+      },
+      "overlay": {
+        "$type": "color",
+        "$value": "rgba(0, 0, 0, 0.64)"
+      }
     }
   },
   "typography": {
     "family": {
-      "sans": { "$type": "fontFamily", "$value": ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"] },
-      "mono": { "$type": "fontFamily", "$value": ["ui-monospace", "SFMono-Regular", "Cascadia Mono", "Consolas", "Liberation Mono", "monospace"] }
+      "sans": {
+        "$type": "fontFamily",
+        "$value": [
+          "Inter",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif"
+        ]
+      },
+      "mono": {
+        "$type": "fontFamily",
+        "$value": [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Cascadia Mono",
+          "Consolas",
+          "Liberation Mono",
+          "monospace"
+        ]
+      }
     },
     "weight": {
-      "regular": { "$type": "fontWeight", "$value": 400 },
-      "medium": { "$type": "fontWeight", "$value": 500 },
-      "semibold": { "$type": "fontWeight", "$value": 600 },
-      "bold": { "$type": "fontWeight", "$value": 700 }
+      "regular": {
+        "$type": "fontWeight",
+        "$value": 400
+      },
+      "medium": {
+        "$type": "fontWeight",
+        "$value": 500
+      },
+      "semibold": {
+        "$type": "fontWeight",
+        "$value": 600
+      },
+      "bold": {
+        "$type": "fontWeight",
+        "$value": 700
+      }
     },
     "scale": {
-      "display": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "32px", "fontWeight": 700, "lineHeight": "40px", "letterSpacing": "-0.02em" } },
-      "h1": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "28px", "fontWeight": 700, "lineHeight": "36px", "letterSpacing": "-0.01em" } },
-      "h2": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "24px", "fontWeight": 600, "lineHeight": "32px", "letterSpacing": "0" } },
-      "h3": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "20px", "fontWeight": 600, "lineHeight": "28px", "letterSpacing": "0" } },
-      "body": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "16px", "fontWeight": 400, "lineHeight": "24px", "letterSpacing": "0" } },
-      "bodyStrong": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "16px", "fontWeight": 600, "lineHeight": "24px", "letterSpacing": "0" } },
-      "small": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "14px", "fontWeight": 400, "lineHeight": "20px", "letterSpacing": "0" } },
-      "caption": { "$type": "typography", "$value": { "fontFamily": "{typography.family.sans}", "fontSize": "12px", "fontWeight": 500, "lineHeight": "16px", "letterSpacing": "0.01em" } },
-      "code": { "$type": "typography", "$value": { "fontFamily": "{typography.family.mono}", "fontSize": "14px", "fontWeight": 400, "lineHeight": "20px", "letterSpacing": "0" } }
+      "display": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "32px",
+          "fontWeight": 700,
+          "lineHeight": "40px",
+          "letterSpacing": "-0.02em"
+        }
+      },
+      "h1": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "28px",
+          "fontWeight": 700,
+          "lineHeight": "36px",
+          "letterSpacing": "-0.01em"
+        }
+      },
+      "h2": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "24px",
+          "fontWeight": 600,
+          "lineHeight": "32px",
+          "letterSpacing": "0"
+        }
+      },
+      "h3": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "20px",
+          "fontWeight": 600,
+          "lineHeight": "28px",
+          "letterSpacing": "0"
+        }
+      },
+      "body": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "16px",
+          "fontWeight": 400,
+          "lineHeight": "24px",
+          "letterSpacing": "0"
+        }
+      },
+      "bodyStrong": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "16px",
+          "fontWeight": 600,
+          "lineHeight": "24px",
+          "letterSpacing": "0"
+        }
+      },
+      "small": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "14px",
+          "fontWeight": 400,
+          "lineHeight": "20px",
+          "letterSpacing": "0"
+        }
+      },
+      "caption": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.sans}",
+          "fontSize": "12px",
+          "fontWeight": 500,
+          "lineHeight": "16px",
+          "letterSpacing": "0.01em"
+        }
+      },
+      "code": {
+        "$type": "typography",
+        "$value": {
+          "fontFamily": "{typography.family.mono}",
+          "fontSize": "14px",
+          "fontWeight": 400,
+          "lineHeight": "20px",
+          "letterSpacing": "0"
+        }
+      }
     }
   },
   "spacing": {
-    "0": { "$type": "dimension", "$value": "0px" },
-    "1": { "$type": "dimension", "$value": "4px" },
-    "2": { "$type": "dimension", "$value": "8px" },
-    "3": { "$type": "dimension", "$value": "12px" },
-    "4": { "$type": "dimension", "$value": "16px" },
-    "6": { "$type": "dimension", "$value": "24px" },
-    "8": { "$type": "dimension", "$value": "32px" },
-    "10": { "$type": "dimension", "$value": "40px" },
-    "12": { "$type": "dimension", "$value": "48px" }
+    "0": {
+      "$type": "dimension",
+      "$value": "0px"
+    },
+    "1": {
+      "$type": "dimension",
+      "$value": "4px"
+    },
+    "2": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "3": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "4": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "6": {
+      "$type": "dimension",
+      "$value": "24px"
+    },
+    "8": {
+      "$type": "dimension",
+      "$value": "32px"
+    },
+    "10": {
+      "$type": "dimension",
+      "$value": "40px"
+    },
+    "12": {
+      "$type": "dimension",
+      "$value": "48px"
+    }
   },
   "radius": {
-    "sm": { "$type": "dimension", "$value": "8px" },
-    "md": { "$type": "dimension", "$value": "12px" },
-    "lg": { "$type": "dimension", "$value": "16px" },
-    "full": { "$type": "dimension", "$value": "999px" }
+    "sm": {
+      "$type": "dimension",
+      "$value": "8px"
+    },
+    "md": {
+      "$type": "dimension",
+      "$value": "12px"
+    },
+    "lg": {
+      "$type": "dimension",
+      "$value": "16px"
+    },
+    "full": {
+      "$type": "dimension",
+      "$value": "999px"
+    }
   },
   "border": {
     "width": {
-      "hairline": { "$type": "dimension", "$value": "1px" },
-      "focus": { "$type": "dimension", "$value": "2px" }
+      "hairline": {
+        "$type": "dimension",
+        "$value": "1px"
+      },
+      "focus": {
+        "$type": "dimension",
+        "$value": "2px"
+      }
     }
   },
   "elevation": {
-    "0": { "$type": "shadow", "$value": "none" },
-    "1": { "$type": "shadow", "$value": "0 1px 2px rgba(15, 23, 42, 0.08)" },
-    "2": { "$type": "shadow", "$value": "0 4px 12px rgba(15, 23, 42, 0.10)" },
-    "3": { "$type": "shadow", "$value": "0 8px 24px rgba(15, 23, 42, 0.14)" }
+    "0": {
+      "$type": "shadow",
+      "$value": "none"
+    },
+    "1": {
+      "$type": "shadow",
+      "$value": "0 1px 2px rgba(15, 23, 42, 0.08)"
+    },
+    "2": {
+      "$type": "shadow",
+      "$value": "0 4px 12px rgba(15, 23, 42, 0.10)"
+    },
+    "3": {
+      "$type": "shadow",
+      "$value": "0 8px 24px rgba(15, 23, 42, 0.14)"
+    }
   },
   "motion": {
     "duration": {
-      "instant": { "$type": "duration", "$value": "0ms" },
-      "fast": { "$type": "duration", "$value": "150ms" },
-      "base": { "$type": "duration", "$value": "200ms" },
-      "slow": { "$type": "duration", "$value": "300ms" }
+      "instant": {
+        "$type": "duration",
+        "$value": "0ms"
+      },
+      "fast": {
+        "$type": "duration",
+        "$value": "150ms"
+      },
+      "base": {
+        "$type": "duration",
+        "$value": "200ms"
+      },
+      "slow": {
+        "$type": "duration",
+        "$value": "300ms"
+      }
     },
     "easing": {
-      "standard": { "$type": "cubicBezier", "$value": [0.2, 0, 0, 1] },
-      "exit": { "$type": "cubicBezier", "$value": [0.4, 0, 1, 1] },
-      "enter": { "$type": "cubicBezier", "$value": [0, 0, 0, 1] }
+      "standard": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.2,
+          0,
+          0,
+          1
+        ]
+      },
+      "exit": {
+        "$type": "cubicBezier",
+        "$value": [
+          0.4,
+          0,
+          1,
+          1
+        ]
+      },
+      "enter": {
+        "$type": "cubicBezier",
+        "$value": [
+          0,
+          0,
+          0,
+          1
+        ]
+      }
     },
     "reducedMotion": {
-      "duration": { "$type": "duration", "$value": "0ms" },
-      "policy": { "$type": "string", "$value": "When prefers-reduced-motion is reduce, or Android animator duration scale is 0, all transitions collapse to instant and non-essential animation is removed. Progress indicators may remain." }
+      "duration": {
+        "$type": "duration",
+        "$value": "0ms"
+      },
+      "policy": {
+        "$type": "string",
+        "$value": "When prefers-reduced-motion is reduce, or Android animator duration scale is 0, all transitions collapse to instant and non-essential animation is removed. Progress indicators may remain."
+      }
     }
   },
   "sizing": {
-    "touchTarget": { "$type": "dimension", "$value": "48px" },
-    "controlHeight": { "$type": "dimension", "$value": "48px" },
-    "icon": {
-      "sm": { "$type": "dimension", "$value": "20px" },
-      "md": { "$type": "dimension", "$value": "24px" },
-      "lg": { "$type": "dimension", "$value": "32px" }
+    "touchTarget": {
+      "$type": "dimension",
+      "$value": "48px"
     },
-    "contentMaxWidth": { "$type": "dimension", "$value": "720px" },
-    "popupWidth": { "$type": "dimension", "$value": "380px" },
-    "popupMaxHeight": { "$type": "dimension", "$value": "600px" }
+    "controlHeight": {
+      "$type": "dimension",
+      "$value": "48px"
+    },
+    "icon": {
+      "sm": {
+        "$type": "dimension",
+        "$value": "20px"
+      },
+      "md": {
+        "$type": "dimension",
+        "$value": "24px"
+      },
+      "lg": {
+        "$type": "dimension",
+        "$value": "32px"
+      }
+    },
+    "contentMaxWidth": {
+      "$type": "dimension",
+      "$value": "720px"
+    },
+    "popupWidth": {
+      "$type": "dimension",
+      "$value": "380px"
+    },
+    "popupMaxHeight": {
+      "$type": "dimension",
+      "$value": "600px"
+    }
   },
   "breakpoints": {
-    "compact": { "$type": "dimension", "$value": "0px" },
-    "medium": { "$type": "dimension", "$value": "600px" },
-    "expanded": { "$type": "dimension", "$value": "840px" },
-    "wide": { "$type": "dimension", "$value": "1200px" }
+    "compact": {
+      "$type": "dimension",
+      "$value": "0px"
+    },
+    "medium": {
+      "$type": "dimension",
+      "$value": "600px"
+    },
+    "expanded": {
+      "$type": "dimension",
+      "$value": "840px"
+    },
+    "wide": {
+      "$type": "dimension",
+      "$value": "1200px"
+    }
   },
   "zIndex": {
-    "base": { "$type": "number", "$value": 0 },
-    "sticky": { "$type": "number", "$value": 10 },
-    "overlay": { "$type": "number", "$value": 100 },
-    "dialog": { "$type": "number", "$value": 200 },
-    "toast": { "$type": "number", "$value": 300 }
+    "base": {
+      "$type": "number",
+      "$value": 0
+    },
+    "sticky": {
+      "$type": "number",
+      "$value": 10
+    },
+    "overlay": {
+      "$type": "number",
+      "$value": 100
+    },
+    "dialog": {
+      "$type": "number",
+      "$value": 200
+    },
+    "toast": {
+      "$type": "number",
+      "$value": 300
+    }
   },
   "component": {
     "button": {
-      "height": { "$type": "dimension", "$value": "48px" },
-      "paddingX": { "$type": "dimension", "$value": "16px" },
-      "radius": { "$type": "dimension", "$value": "12px" },
-      "gap": { "$type": "dimension", "$value": "8px" }
+      "height": {
+        "$type": "dimension",
+        "$value": "48px"
+      },
+      "paddingX": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "12px"
+      },
+      "gap": {
+        "$type": "dimension",
+        "$value": "8px"
+      }
     },
     "input": {
-      "height": { "$type": "dimension", "$value": "48px" },
-      "paddingX": { "$type": "dimension", "$value": "12px" },
-      "radius": { "$type": "dimension", "$value": "8px" }
+      "height": {
+        "$type": "dimension",
+        "$value": "48px"
+      },
+      "paddingX": {
+        "$type": "dimension",
+        "$value": "12px"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "8px"
+      }
     },
     "card": {
-      "padding": { "$type": "dimension", "$value": "16px" },
-      "radius": { "$type": "dimension", "$value": "16px" },
-      "gap": { "$type": "dimension", "$value": "12px" }
+      "padding": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "radius": {
+        "$type": "dimension",
+        "$value": "16px"
+      },
+      "gap": {
+        "$type": "dimension",
+        "$value": "12px"
+      }
     },
     "focusRing": {
-      "width": { "$type": "dimension", "$value": "2px" },
-      "offset": { "$type": "dimension", "$value": "2px" }
+      "width": {
+        "$type": "dimension",
+        "$value": "2px"
+      },
+      "offset": {
+        "$type": "dimension",
+        "$value": "2px"
+      }
     }
   }
 }

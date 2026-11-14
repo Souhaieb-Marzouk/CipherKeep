@@ -194,7 +194,9 @@ pub fn detect_format(bytes: &[u8]) -> Option<ImportFormat> {
         Some(ImportFormat::KeePassCsv)
     } else if header.contains("title") && header.contains("url") && header.contains("password") {
         Some(ImportFormat::OnePasswordCsv)
-    } else if header.contains("autofillurls") || (header.contains("type") && header.contains("name") && header.contains("totp")) {
+    } else if header.contains("autofillurls")
+        || (header.contains("type") && header.contains("name") && header.contains("totp"))
+    {
         Some(ImportFormat::ProtonCsv)
     } else if header.contains("name") || header.contains("password") {
         Some(ImportFormat::GenericCsv)
@@ -345,9 +347,6 @@ fn import_bitwarden_json(
     states.finish()
 }
 
-
-
-
 fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResult> {
     let value: Value =
         serde_json::from_str(text).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
@@ -379,7 +378,9 @@ fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResul
             if let Some(content) = content {
                 if let Some(text) = content.as_str() {
                     if !text.trim().is_empty() {
-                        if !notes.is_empty() { notes.push('\n'); }
+                        if !notes.is_empty() {
+                            notes.push('\n');
+                        }
                         notes.push_str(text);
                     }
                 }
@@ -414,11 +415,17 @@ fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResul
                 .to_string();
             let totp = string_field(content, "totpUri");
             if !totp.trim().is_empty() {
-                if !notes.is_empty() { notes.push('\n'); }
+                if !notes.is_empty() {
+                    notes.push('\n');
+                }
                 notes.push_str("TOTP: ");
                 notes.push_str(totp.trim());
             }
-            if kind_name == "login" && username.is_empty() && password.is_empty() && notes.is_empty() {
+            if kind_name == "login"
+                && username.is_empty()
+                && password.is_empty()
+                && notes.is_empty()
+            {
                 states.failed += 1;
                 continue;
             }
@@ -498,7 +505,11 @@ fn import_onepux_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResul
                 } else {
                     ImportKind::Login
                 };
-                if kind == ImportKind::Login && password.is_empty() && username.is_empty() && notes.is_empty() {
+                if kind == ImportKind::Login
+                    && password.is_empty()
+                    && username.is_empty()
+                    && notes.is_empty()
+                {
                     states.failed += 1;
                     continue;
                 }

@@ -28,5 +28,8 @@ pub fn decrypt_proton_pgp(bytes: &[u8], passphrase: &str) -> crate::Result<Vec<u
     let decrypted = message
         .decrypt_with_password(|| passphrase.to_string())
         .map_err(|_| corrupt())?;
-    decrypted.get_content().map_err(|_| corrupt())?.ok_or_else(corrupt)
+    decrypted
+        .get_content()
+        .map_err(|_| corrupt())?
+        .ok_or_else(corrupt)
 }

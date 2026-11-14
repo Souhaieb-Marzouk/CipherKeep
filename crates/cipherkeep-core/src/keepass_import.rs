@@ -17,7 +17,11 @@ fn map_error() -> CoreError {
 ///
 /// Returns a redacted error for wrong passwords, corrupt databases, unsupported
 /// KDBX features or a database with no usable entries.
-pub fn import_kdbx(bytes: &[u8], password: &str, policy: DuplicatePolicy) -> crate::Result<ImportResult> {
+pub fn import_kdbx(
+    bytes: &[u8],
+    password: &str,
+    policy: DuplicatePolicy,
+) -> crate::Result<ImportResult> {
     if bytes.is_empty() || !bytes.starts_with(b"\x03\xd9\xa2\x9a") {
         return Err(map_error());
     }

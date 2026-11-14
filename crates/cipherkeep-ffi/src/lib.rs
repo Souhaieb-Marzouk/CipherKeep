@@ -324,16 +324,18 @@ pub fn import_kdbx_json(bytes: Vec<u8>, password: String) -> Result<String, FfiE
     let items = result
         .items
         .iter()
-        .map(|item| serde_json::json!({
-            "kind": "login",
-            "title": item.title,
-            "username": item.username,
-            "password": item.password,
-            "url": item.url,
-            "notes": item.notes,
-            "folder": item.folder,
-            "tags": item.tags,
-        }))
+        .map(|item| {
+            serde_json::json!({
+                "kind": "login",
+                "title": item.title,
+                "username": item.username,
+                "password": item.password,
+                "url": item.url,
+                "notes": item.notes,
+                "folder": item.folder,
+                "tags": item.tags,
+            })
+        })
         .collect::<Vec<_>>();
     Ok(serde_json::json!({
         "format": result.report.format.name(),
