@@ -9,11 +9,25 @@ import androidx.activity.enableEdgeToEdge
 import dev.cipherkeep.app.ui.CipherKeepApp
 import dev.cipherkeep.app.data.BackupFileBridge
 import dev.cipherkeep.app.data.SensitiveClipboard
+import dev.cipherkeep.app.data.DisplayPreferences
 
 class MainActivity : FragmentActivity() {
     override fun onStop() {
         super.onStop()
         SensitiveClipboard.clearIfOwned(this)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        applyScreenProtection()
+    }
+
+    private fun applyScreenProtection() {
+        if (DisplayPreferences(this).screenshotsAllowed()) {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        } else {
+            window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -32,8 +46,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         enableEdgeToEdge()
+        applyScreenProtection()
         setContent {
             CipherKeepApp()
         }

@@ -2,6 +2,7 @@ package dev.cipherkeep.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.view.WindowManager
 import android.net.Uri
 import dev.cipherkeep.app.BuildConfig
 import dev.cipherkeep.app.update.UpdateInstaller
@@ -40,6 +41,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -108,6 +111,7 @@ import dev.cipherkeep.app.update.UpdateScheduler
 import dev.cipherkeep.app.data.keystore.BiometricKeyManager
 import dev.cipherkeep.app.data.keystore.WrappedSecret
 import dev.cipherkeep.app.data.BackupFileBridge
+import dev.cipherkeep.app.data.DisplayPreferences
 import dev.cipherkeep.app.data.SessionController
 import dev.cipherkeep.app.data.VaultItem
 import dev.cipherkeep.core.FfiException
@@ -226,6 +230,7 @@ fun CipherKeepApp() {
                                 item = controller.items[selectedIndex],
                                 onBack = { selectedIndex = -1 },
                                 onDeleted = { selectedIndex = -1 },
+                                onStable = { id -> selectedIndex = controller.items.indexOfFirst { it.id.contentEquals(id) } },
                             )
                         } else {
                             VaultScreen(
@@ -858,6 +863,7 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val scanQr = rememberQrScanner({ totpUri = it }, { error = it })
 
     fun saveLogin() {
         busy = true
@@ -950,7 +956,8 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                     OutlinedTextField(username, { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true)
                     OutlinedTextField(password, { password = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                     OutlinedTextField(url, { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("URL (optional)") }, singleLine = true)
-                    OutlinedTextField(totpUri, { totpUri = it }, modifier = Modifier.fillMaxWidth(), label = { Text("TOTP code (optional)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    OutlinedTextField(totpUri, { totpUri = it }, modifier = Modifier.fillMaxWidth(), label = { Text("TOTP code (paste otpauth URI)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    OutlinedButton(onClick = scanQr, modifier = Modifier.fillMaxWidth()) { Text("Scan QR code") }
                 }
                 "card" -> {
                     OutlinedTextField(cardholder, { cardholder = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Cardholder name") }, singleLine = true)
@@ -1041,10 +1048,8 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
             Text("Password health", style = MaterialTheme.typography.titleMedium)
-            HealthSection(controller)
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Text("Breach monitoring", style = MaterialTheme.typography.titleMedium)
-            HibpSection(context, controller)
         }
     }
 }
@@ -1057,12 +1062,18 @@ private fun typeGlyph(item: VaultItem): String = when (item.type) {
     else -> "L"
 }
 
-private fun itemSubtitle(item: VaultItem): String = when (item.type) {
+@Composable
+private fun itemSubtitle(item: VaultItem): String {
+    val showUsername = DisplayPreferences(LocalContext.current).showUsernames()
+    return when (item.type) {
     "note" -> "Secure note"
     "card" -> listOf("Card", item.cardholder).filter(String::isNotBlank).joinToString(" · ")
     "identity" -> listOf("Identity", item.fullName.ifBlank { item.email }).filter(String::isNotBlank).joinToString(" · ")
     "totp" -> listOf("TOTP", item.username).filter(String::isNotBlank).joinToString(" · ")
-    else -> listOf("Login", item.username, item.url).filter(String::isNotBlank).joinToString(" · ")
+        else -> listOf("Login", if (showUsername) item.username else "", item.url)
+            .filter(String::isNotBlank)
+            .joinToString(" · ")
+    }
 }
 
 
@@ -1349,7 +1360,27 @@ private fun VaultScreen(
                     }
                 }
             }
-            items(visibleItems) { item ->
+            val pinnedItems = visibleItems.filter { it.favorite }
+            if (pinnedItems.isNotEmpty()) {
+                item { Text("Pinned", style = MaterialTheme.typography.titleMedium) }
+                items(pinnedItems) { item ->
+                    val index = items.indexOf(item)
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth().clickable { onOpen(index) },
+                    ) {
+                        Row(Modifier.fillMaxWidth().padding(CKDimens.Space3), verticalAlignment = Alignment.CenterVertically) {
+                            Text("★", color = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(CKDimens.Space2))
+                            Text(item.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Text(itemSubtitle(item), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                item { Text("All items", style = MaterialTheme.typography.titleMedium) }
+            }
+            items(visibleItems.filterNot { it.favorite }) { item ->
                 val index = items.indexOf(item)
                 Card(
                     modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${item.title}") { onOpen(index) },
@@ -1511,11 +1542,13 @@ private fun ItemDetailScreen(
     item: VaultItem,
     onBack: () -> Unit,
     onDeleted: () -> Unit,
+    onStable: (ByteArray) -> Unit = {},
 ) {
     var revealed by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
     var showMove by remember { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     DisposableEffect(item.id) {
         val reset = { revealed = false }
@@ -1535,7 +1568,8 @@ private fun ItemDetailScreen(
                     totpCode(item.totpUri, (System.currentTimeMillis() / 1000).toULong())
                 }.onSuccess {
                     totpValue = it.code
-                    totpRemaining = it.secondsRemaining.toInt()
+                    totpRemaining = it.secondsRemaining.toInt().takeIf { seconds -> seconds > 0 }
+                        ?: (30 - (System.currentTimeMillis() / 1000 % 30)).toInt()
                 }
                 delay(1_000)
             }
@@ -1550,8 +1584,20 @@ private fun ItemDetailScreen(
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
-                    TextButton(onClick = { showEdit = true }) { Text("Edit") }
-                    TextButton(onClick = { showDelete = true }) { Text("Delete") }
+                    TextButton(onClick = { menuOpen = true }) { Text("⋮") }
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(text = { Text("Pin / unpin") }, onClick = {
+                            menuOpen = false
+                            scope.launch { controller.setFavorite(item, !item.favorite).onSuccess { onStable(item.id) }.onFailure { actionError = "Could not update pin." } }
+                        })
+                        DropdownMenuItem(text = { Text("Move to folder") }, onClick = { menuOpen = false; showMove = true })
+                        DropdownMenuItem(text = { Text("Duplicate") }, onClick = {
+                            menuOpen = false
+                            scope.launch { controller.duplicateItem(item).onSuccess { onStable(item.id) }.onFailure { actionError = "Could not duplicate." } }
+                        })
+                        DropdownMenuItem(text = { Text("Edit") }, onClick = { menuOpen = false; showEdit = true })
+                        DropdownMenuItem(text = { Text("Delete") }, onClick = { menuOpen = false; showDelete = true })
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -1592,16 +1638,6 @@ private fun ItemDetailScreen(
                         Text(item.folder, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-            }
-            Spacer(Modifier.height(CKDimens.Space3))
-            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                OutlinedButton(onClick = {
-                    scope.launch { controller.setFavorite(item, !item.favorite).onFailure { actionError = "Could not update pin." } }
-                }) { Text(if (item.favorite) "Unpin" else "Pin") }
-                OutlinedButton(onClick = { showMove = true }) { Text("Move") }
-                OutlinedButton(onClick = {
-                    scope.launch { controller.duplicateItem(item).onFailure { actionError = "Could not duplicate." } }
-                }) { Text("Duplicate") }
             }
             Spacer(Modifier.height(CKDimens.Space4))
             if (item.totpUri.isNotEmpty()) {
@@ -1651,7 +1687,7 @@ private fun ItemDetailScreen(
                         }
                     }
                 }
-            } else {
+            }
             Card(
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -1677,7 +1713,17 @@ private fun ItemDetailScreen(
                         item.password.length >= 16 && item.password.any { !it.isLetterOrDigit() } -> "Strong"
                         else -> "Good"
                     }
-                    Text("Strength: $strength", style = MaterialTheme.typography.labelSmall, color = if (strength == "Weak") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = if (strength == "Weak") MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Text(
+                            strength,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = if (strength == "Weak") MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
                     if (item.type == "card") {
                         if (item.cardholder.isNotBlank()) DetailRow("Cardholder", item.cardholder)
                         if (item.cardNumber.isNotBlank()) {
@@ -1731,7 +1777,6 @@ private fun ItemDetailScreen(
                     }
                 }
             }
-            }
             Spacer(Modifier.height(CKDimens.Space4))
             Text(
                 text = "Clipboard clears after 30 seconds. Codes are generated locally.",
@@ -1752,7 +1797,7 @@ private fun ItemDetailScreen(
                 Column {
                     OutlinedTextField(value = folderText, onValueChange = { folderText = it }, label = { Text("Folder") }, singleLine = true)
                     TextButton(onClick = {
-                        scope.launch { controller.moveItem(item, folderText.trim()).onSuccess { showMove = false }.onFailure { actionError = "Could not move item." } }
+                        scope.launch { controller.moveItem(item, folderText.trim()).onSuccess { showMove = false; onStable(item.id) }.onFailure { actionError = "Could not move item." } }
                     }) { Text("Move") }
                 }
             },
@@ -1791,6 +1836,7 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
     var notes by remember { mutableStateOf(item.notes) }
     var folder by remember { mutableStateOf(item.folder) }
     var tags by remember { mutableStateOf(item.tags.joinToString(",")) }
+    var totpUri by remember { mutableStateOf(item.totpUri) }
     var favorite by remember { mutableStateOf(item.favorite) }
     var autofillAllowed by remember { mutableStateOf(item.autofillAllowed) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -1821,6 +1867,7 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
                 OutlinedTextField(notes, { notes = it }, label = { Text("Notes") }, minLines = 2)
                 OutlinedTextField(folder, { folder = it }, label = { Text("Folder") }, singleLine = true)
                 OutlinedTextField(tags, { tags = it }, label = { Text("Tags") }, singleLine = true)
+                OutlinedTextField(totpUri, { totpUri = it }, label = { Text("TOTP code (optional)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 Row(
                     modifier = Modifier.fillMaxWidth().clickable { favorite = !favorite },
                     verticalAlignment = Alignment.CenterVertically,
@@ -1849,7 +1896,7 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
                 scope.launch {
                     controller.updateItem(
                         item, title.trim(), username.trim(), password, url.trim(), notes,
-                        folder.trim(), tags, favorite, autofillAllowed,
+                        folder.trim(), tags, favorite, autofillAllowed, totpUri.trim(),
                     ).onSuccess { onDismiss() }
                         .onFailure { error = "Item could not be saved." }
                 }
@@ -1877,7 +1924,6 @@ private fun DetailRow(label: String, value: String, copyValue: String = value) {
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = CKDimens.Space1),
         )
-        Text("Tap to copy", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 
@@ -2244,6 +2290,32 @@ private fun SettingsScreen(
                     }
                 }
             }
+            val displayPrefs = remember { DisplayPreferences(context) }
+            var autofillDefault by remember { mutableStateOf(displayPrefs.autofillDefault()) }
+            var screenshotsAllowed by remember { mutableStateOf(displayPrefs.screenshotsAllowed()) }
+            var showUsernames by remember { mutableStateOf(displayPrefs.showUsernames()) }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    Text("Preferences", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Autofill new items", modifier = Modifier.weight(1f))
+                        Switch(checked = autofillDefault, onCheckedChange = { autofillDefault = it; displayPrefs.setAutofillDefault(it) })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Allow screenshots and app preview", modifier = Modifier.weight(1f))
+                        Switch(checked = screenshotsAllowed, onCheckedChange = {
+                            screenshotsAllowed = it
+                            displayPrefs.setScreenshotsAllowed(it)
+                            if (it) activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                            else activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                        })
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Show usernames under item names", modifier = Modifier.weight(1f))
+                        Switch(checked = showUsernames, onCheckedChange = { showUsernames = it; displayPrefs.setShowUsernames(it) })
+                    }
+                }
+            }
             Text(
                 text = "Appearance",
                 style = MaterialTheme.typography.titleMedium,
@@ -2535,16 +2607,10 @@ private fun SettingsScreen(
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
             SyncFolderSection(context, controller)
-            AliasSection(context, controller)
-            EmergencySection(context, controller)
-            TravelModeSection(controller)
             HibpSection(context, controller)
             HealthSection(controller)
-            FamilySection(context, controller)
             WebAuthnSection(context, controller)
             PasskeyProviderSection(context)
-            ImportSection(context, controller)
-            AboutSection(context)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

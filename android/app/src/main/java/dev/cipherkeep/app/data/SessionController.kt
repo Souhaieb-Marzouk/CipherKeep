@@ -378,7 +378,7 @@ class SessionController(context: Context) {
         folder: String = "",
         tags: String = "",
         favorite: Boolean = false,
-        autofillAllowed: Boolean = false,
+        autofillAllowed: Boolean = true,
         totpUri: String = "",
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -407,7 +407,7 @@ class SessionController(context: Context) {
                         ),
                     )
                     .put("favorite", favorite)
-                    .put("autofillAllowed", autofillAllowed)
+                    .put("autofillAllowed", autofillAllowed && DisplayPreferences(appContext).autofillDefault())
                     .put("totpUri", totpUri)
                     .toString()
                     .encodeToByteArray()
@@ -451,7 +451,7 @@ class SessionController(context: Context) {
                     .put("folder", folder)
                     .put("tags", org.json.JSONArray(tags.split(',').map(String::trim).filter(String::isNotEmpty)))
                     .put("favorite", favorite)
-                    .put("autofillAllowed", false)
+                    .put("autofillAllowed", DisplayPreferences(appContext).autofillDefault())
                 fields.forEach { (key, value) -> payload.put(key, value) }
                 val bytes = payload.toString().encodeToByteArray()
                 val ciphertext = active.encryptItem(id, bytes)
@@ -1003,7 +1003,7 @@ class SessionController(context: Context) {
             items.forEach { item ->
                 array.put(
                     JSONObject()
-                        .put("type", if (item.totpUri.isNotEmpty()) "totp" else "login")
+                        .put("type", "login")
                         .put("title", item.title)
                         .put("username", item.username)
                         .put("password", item.password)
@@ -1250,6 +1250,7 @@ class SessionController(context: Context) {
         tags: String,
         favorite: Boolean,
         autofillAllowed: Boolean = item.autofillAllowed,
+        totpUri: String = item.totpUri,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             require(title.isNotBlank())
@@ -1262,7 +1263,7 @@ class SessionController(context: Context) {
             val previous = repo.get(item.id) ?: error("item not found")
             val payload = JSONObject()
                 .put("v", 1)
-                .put("type", if (item.totpUri.isNotEmpty()) "totp" else "login")
+                .put("type", "login")
                 .put("title", title)
                 .put("username", username)
                 .put("password", password)
