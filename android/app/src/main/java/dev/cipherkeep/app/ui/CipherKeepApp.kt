@@ -69,6 +69,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.graphics.Brush
@@ -203,6 +205,20 @@ fun CipherKeepApp() {
                         screen = "vault"
                         selectedIndex = -1
                     }
+                    Scaffold(
+                        contentWindowInsets = WindowInsets.safeDrawing,
+                        bottomBar = {
+                            AuroraNavBar(
+                                current = screen,
+                                onVault = { screen = "vault"; selectedIndex = -1 },
+                                onAdd = { screen = "add" },
+                                onSecurity = { screen = "security"; selectedIndex = -1 },
+                                onSettings = { screen = "settings"; selectedIndex = -1 },
+                                onMonitor = { screen = "monitor"; selectedIndex = -1 },
+                            )
+                        },
+                    ) { shellPadding ->
+                    Box(Modifier.padding(shellPadding)) {
                     when (screen) {
                         "vault" -> if (selectedIndex in controller.items.indices) {
                             ItemDetailScreen(
@@ -247,6 +263,12 @@ fun CipherKeepApp() {
                             onThemeMode = { themeName = it.name },
                             onBack = { screen = "settings" },
                         )
+                        "monitor" -> MonitorScreen(
+                            controller = controller,
+                            onOpen = { index -> selectedIndex = index; screen = "vault" },
+                        )
+                    }
+                    }
                     }
                 }
             }
@@ -1045,7 +1067,7 @@ private fun itemSubtitle(item: VaultItem): String = when (item.type) {
 
 
 @Composable
-private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit, onLock: () -> Unit) {
+private fun AuroraNavBar(current: String, onVault: () -> Unit, onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit, onMonitor: () -> Unit) {
     Box(Modifier.fillMaxWidth().height(96.dp).navigationBarsPadding()) {
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = CKDimens.Space4).height(66.dp),
@@ -1059,11 +1081,11 @@ private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⌂", "Vault", true, {}) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◈", "Security", false, onSecurity) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⌂", "Vault", current == "vault", onVault) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◈", "Security", current == "security", onSecurity) }
                 Spacer(Modifier.weight(1f))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⚙", "Settings", false, onSettings) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⏻", "Lock", false, onLock) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⚙", "Settings", current == "settings" || current == "settings_advanced", onSettings) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◔", "Monitor", current == "monitor", onMonitor) }
             }
         }
         Surface(
@@ -1087,6 +1109,94 @@ private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onCli
     ) {
         Text(glyph, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
         Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+
+private fun passwordWeak(password: String): Boolean {
+    if (password.length < 12) return true
+    val classes = listOf(
+        password.any(Char::isLowerCase),
+        password.any(Char::isUpperCase),
+        password.any(Char::isDigit),
+        password.any { !it.isLetterOrDigit() },
+    ).count { it }
+    return classes < 3
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MonitorScreen(controller: SessionController, onOpen: (Int) -> Unit) {
+    var filter by remember { mutableStateOf("all") }
+    val logins = controller.items.filter { it.type == "login" && it.password.isNotEmpty() }
+    val groups = logins.groupBy { it.password }
+    val weak = logins.filter { passwordWeak(it.password) }
+    val reused = logins.filter { (groups[it.password]?.size ?: 0) > 1 }
+    val no2fa = logins.filter { it.totpUri.isBlank() }
+    val filtered = when (filter) {
+        "weak" -> weak
+        "reused" -> reused
+        "no2fa" -> no2fa
+        else -> logins
+    }
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Monitor") }) },
+        contentWindowInsets = WindowInsets.safeDrawing,
+    ) { padding ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding),
+            contentPadding = PaddingValues(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
+        ) {
+            item {
+                Text("Password health", style = MaterialTheme.typography.headlineSmall)
+                Text("Tap a card to filter the list.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.height(CKDimens.Space3))
+                Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    MonitorMetric("Weak", weak.size, filter == "weak", Modifier.weight(1f)) { filter = "weak" }
+                    MonitorMetric("Reused", reused.size, filter == "reused", Modifier.weight(1f)) { filter = "reused" }
+                    MonitorMetric("No 2FA", no2fa.size, filter == "no2fa", Modifier.weight(1f)) { filter = "no2fa" }
+                }
+                if (filter != "all") {
+                    TextButton(onClick = { filter = "all" }) { Text("Show all logins") }
+                }
+                Text("${filtered.size} items", style = MaterialTheme.typography.titleMedium)
+            }
+            items(filtered) { item ->
+                val index = controller.items.indexOf(item)
+                Card(
+                    modifier = Modifier.fillMaxWidth().clickable { onOpen(index) },
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalAlignment = Alignment.CenterVertically) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(44.dp)) {
+                            Box(contentAlignment = Alignment.Center) { WebsiteIcon(item, typeGlyph(item)) }
+                        }
+                        Spacer(Modifier.width(CKDimens.Space3))
+                        Column(Modifier.weight(1f)) {
+                            Text(item.title, style = MaterialTheme.typography.titleMedium)
+                            Text(item.username.ifBlank { "No username" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(if (item.totpUri.isBlank()) "2FA off" else "2FA on", style = MaterialTheme.typography.labelSmall, color = if (item.totpUri.isBlank()) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonitorMetric(label: String, count: Int, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        modifier = modifier.clickable(onClick = onClick),
+    ) {
+        Column(Modifier.padding(CKDimens.Space3), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(count.toString(), style = MaterialTheme.typography.headlineMedium, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -1150,7 +1260,6 @@ private fun VaultScreen(
     }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
-        bottomBar = { AuroraNavBar(onAdd = onAdd, onSecurity = onSecurity, onSettings = onSettings, onLock = onLock) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -1406,6 +1515,7 @@ private fun ItemDetailScreen(
     var revealed by remember { mutableStateOf(false) }
     var showEdit by remember { mutableStateOf(false) }
     var showDelete by remember { mutableStateOf(false) }
+    var showMove by remember { mutableStateOf(false) }
     var actionError by remember { mutableStateOf<String?>(null) }
     DisposableEffect(item.id) {
         val reset = { revealed = false }
@@ -1483,6 +1593,16 @@ private fun ItemDetailScreen(
                     }
                 }
             }
+            Spacer(Modifier.height(CKDimens.Space3))
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                OutlinedButton(onClick = {
+                    scope.launch { controller.setFavorite(item, !item.favorite).onFailure { actionError = "Could not update pin." } }
+                }) { Text(if (item.favorite) "Unpin" else "Pin") }
+                OutlinedButton(onClick = { showMove = true }) { Text("Move") }
+                OutlinedButton(onClick = {
+                    scope.launch { controller.duplicateItem(item).onFailure { actionError = "Could not duplicate." } }
+                }) { Text("Duplicate") }
+            }
             Spacer(Modifier.height(CKDimens.Space4))
             if (item.totpUri.isNotEmpty()) {
                 Card(
@@ -1549,18 +1669,27 @@ private fun ItemDetailScreen(
                     DetailRow(
                         label = "Password",
                         value = if (revealed) item.password else if (item.password.isEmpty()) "" else "\u2022".repeat(item.password.length.coerceAtMost(32)),
+                        copyValue = item.password,
                     )
+                    val strength = when {
+                        item.password.length < 8 -> "Weak"
+                        item.password.length < 12 -> "Fair"
+                        item.password.length >= 16 && item.password.any { !it.isLetterOrDigit() } -> "Strong"
+                        else -> "Good"
+                    }
+                    Text("Strength: $strength", style = MaterialTheme.typography.labelSmall, color = if (strength == "Weak") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     if (item.type == "card") {
                         if (item.cardholder.isNotBlank()) DetailRow("Cardholder", item.cardholder)
                         if (item.cardNumber.isNotBlank()) {
                             DetailRow(
                                 "Card number",
                                 if (revealed) item.cardNumber else "•••• " + item.cardNumber.takeLast(4),
+                                item.cardNumber,
                             )
                         }
                         if (item.cardExpiry.isNotBlank()) DetailRow("Expiry", item.cardExpiry)
                         if (item.cardCvv.isNotBlank()) {
-                            DetailRow("CVV", if (revealed) item.cardCvv else "•••")
+                            DetailRow("CVV", if (revealed) item.cardCvv else "•••", item.cardCvv)
                         }
                     }
                     if (item.type == "identity") {
@@ -1613,6 +1742,22 @@ private fun ItemDetailScreen(
                 Text(actionError.orEmpty(), color = MaterialTheme.colorScheme.error)
             }
         }
+    }
+    if (showMove) {
+        var folderText by remember { mutableStateOf(item.folder) }
+        AlertDialog(
+            onDismissRequest = { showMove = false },
+            title = { Text("Move to folder") },
+            text = {
+                Column {
+                    OutlinedTextField(value = folderText, onValueChange = { folderText = it }, label = { Text("Folder") }, singleLine = true)
+                    TextButton(onClick = {
+                        scope.launch { controller.moveItem(item, folderText.trim()).onSuccess { showMove = false }.onFailure { actionError = "Could not move item." } }
+                    }) { Text("Move") }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showMove = false }) { Text("Cancel") } },
+        )
     }
     if (showEdit) {
         EditItemDialog(controller, item, onDismiss = { showEdit = false })
@@ -1715,8 +1860,13 @@ private fun EditItemDialog(controller: SessionController, item: VaultItem, onDis
 }
 
 @Composable
-private fun DetailRow(label: String, value: String) {
-    Column {
+private fun DetailRow(label: String, value: String, copyValue: String = value) {
+    val clipboard = LocalClipboardManager.current
+    Column(
+        modifier = Modifier.fillMaxWidth().clickable {
+            if (copyValue.isNotEmpty()) clipboard.setText(AnnotatedString(copyValue))
+        }.padding(vertical = CKDimens.Space2),
+    ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
@@ -1727,6 +1877,7 @@ private fun DetailRow(label: String, value: String) {
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.padding(top = CKDimens.Space1),
         )
+        Text("Tap to copy", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
     }
 }
 

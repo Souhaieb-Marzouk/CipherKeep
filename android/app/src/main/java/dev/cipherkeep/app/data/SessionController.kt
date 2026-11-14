@@ -1292,6 +1292,52 @@ class SessionController(context: Context) {
         }
     }
 
+    suspend fun setFavorite(item: VaultItem, favorite: Boolean): Result<Unit> =
+        mutateItem(item) { it.put("favorite", favorite) }
+
+    suspend fun moveItem(item: VaultItem, folder: String): Result<Unit> =
+        mutateItem(item) { it.put("folder", folder.take(64)) }
+
+    suspend fun duplicateItem(item: VaultItem): Result<Unit> = withContext(Dispatchers.IO) {
+        runCatching {
+            val active = session ?: error("vault is locked")
+            val repo = repository ?: error("storage is unavailable")
+            val source = repo.get(item.id) ?: error("item not found")
+            val json = JSONObject(active.decryptItem(source.itemId, source.ciphertext).decodeToString())
+            json.put("title", (json.optString("title") + " copy").take(512))
+            json.put("favorite", false)
+            val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
+            val payload = json.toString().encodeToByteArray()
+            val ciphertext = active.encryptItem(id, payload)
+            payload.fill(0)
+            repo.save(id, ciphertext, 1, false, 1, System.currentTimeMillis())
+            loadItems()
+        }
+    }
+
+    private suspend fun mutateItem(item: VaultItem, change: (JSONObject) -> Unit): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val entity = repo.get(item.id) ?: error("item not found")
+                val json = JSONObject(active.decryptItem(entity.itemId, entity.ciphertext).decodeToString())
+                change(json)
+                val payload = json.toString().encodeToByteArray()
+                val ciphertext = active.encryptItem(item.id, payload)
+                payload.fill(0)
+                repo.save(
+                    itemId = item.id,
+                    ciphertext = ciphertext,
+                    lamport = maxOf(entity.lamport + 1, 2),
+                    tombstone = false,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
     suspend fun deleteItem(item: VaultItem): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             repository?.delete(item.id)
