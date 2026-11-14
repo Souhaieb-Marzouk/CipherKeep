@@ -2258,6 +2258,25 @@ private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick:
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PairingSection(controller: SessionController) {
+    var code by remember { mutableStateOf<String?>(null) }
+    val clipboard = LocalClipboardManager.current
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            Text("Pair with Firefox", style = MaterialTheme.typography.titleMedium)
+            Text("Creates a one-time pairing code containing this vault identity and relay settings. Treat it like a password.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = { code = controller.pairingCode() }, modifier = Modifier.fillMaxWidth()) { Text("Generate pairing code") }
+            code?.let { value ->
+                Text(value, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
+                TextButton(onClick = { clipboard.setText(AnnotatedString(value)) }) { Text("Copy code") }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
@@ -2404,6 +2423,7 @@ private fun SettingsScreen(
                     }
                 }
             }
+            PairingSection(controller)
             Text(
                 text = "Appearance",
                 style = MaterialTheme.typography.titleMedium,

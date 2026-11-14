@@ -1,6 +1,7 @@
 package dev.cipherkeep.app.data
 
 import android.content.Context
+import android.util.Base64
 import android.net.Uri
 import android.os.SystemClock
 import androidx.compose.runtime.getValue
@@ -848,6 +849,24 @@ class SessionController(context: Context) {
                 recordActivity()
             }
         }
+
+    fun pairingCode(): String? = runCatching {
+        val active = session ?: return@runCatching null
+        val endpoint = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+            .getString("relay_endpoint", "https://cipherkeep-relay.marzouk-souhaieb.workers.dev")
+            .orEmpty()
+        val token = SyncCredentialStore(appContext).load().orEmpty()
+        val json = JSONObject()
+            .put("v", 1)
+            .put("vaultId", active.vaultId().joinToString("") { "%02x".format(it) })
+            .put("vaultKey", active.familyVaultKey())
+            .put("endpoint", endpoint)
+            .put("token", token)
+        "CKPAIR1:" + Base64.encodeToString(
+            json.toString().toByteArray(),
+            Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
+        )
+    }.getOrNull()
 
     fun familyVaultKeyHex(): String {
         val active = session ?: error("vault is locked")

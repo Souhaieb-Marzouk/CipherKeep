@@ -76,6 +76,55 @@ element<HTMLButtonElement>("syncNow").addEventListener("click", async () => {
   await showConflicts();
 });
 
+element<HTMLButtonElement>("pairNow").addEventListener("click", async () => {
+  const status = element<HTMLPreElement>("pairStatus");
+  const code = element<HTMLTextAreaElement>("pairCode").value.trim();
+  const password = element<HTMLInputElement>("pairPassword").value;
+  if (!code.startsWith("CKPAIR1:")) {
+    status.textContent = "Pairing code must start with CKPAIR1:.";
+    return;
+  }
+  if (password.length < 12) {
+    status.textContent = "Use a Firefox master password of at least 12 characters.";
+    return;
+  }
+  let data: { vaultId: string; vaultKey: string; endpoint?: string; token?: string };
+  try {
+    const encoded = code.slice("CKPAIR1:".length).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = encoded + "=".repeat((4 - (encoded.length % 4)) % 4);
+    data = JSON.parse(atob(padded)) as typeof data;
+  } catch {
+    status.textContent = "Pairing code is invalid.";
+    return;
+  }
+  status.textContent = "Pairing…";
+  const reply: Response = await browser.runtime.sendMessage({
+    type: "join-family",
+    password,
+    vaultId: data.vaultId,
+    vaultKey: data.vaultKey,
+  });
+  if (!reply.ok) {
+    status.textContent = reply.error;
+    return;
+  }
+  if (data.endpoint && data.token) {
+    await browser.storage.local.set({
+      syncConfig: {
+        ...EMPTY_SYNC_CONFIG,
+        transport: "relay",
+        endpoint: data.endpoint,
+        token: data.token,
+      },
+    });
+  }
+  const sync: Response = await browser.runtime.sendMessage({ type: "sync-now" });
+  status.textContent = sync.ok
+    ? "Paired. Sync request completed."
+    : `Paired, but sync failed: ${sync.error}`;
+  element<HTMLInputElement>("pairPassword").value = "";
+});
+
 async function showConflicts(): Promise<void> {
   const output = element<HTMLPreElement>("syncConflicts");
   const actions = element<HTMLDivElement>("syncConflictActions");
