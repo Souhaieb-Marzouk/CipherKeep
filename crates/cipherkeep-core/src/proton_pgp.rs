@@ -21,9 +21,14 @@ pub fn decrypt_proton_pgp(bytes: &[u8], passphrase: &str) -> crate::Result<Vec<u
     if bytes.is_empty() || passphrase.is_empty() {
         return Err(corrupt());
     }
-    let message = Message::from_armor_single(bytes)
+    let trimmed = std::str::from_utf8(bytes)
+        .ok()
+        .map(str::trim)
+        .map(str::as_bytes)
+        .unwrap_or(bytes);
+    let message = Message::from_armor_single(trimmed)
         .map(|(message, _)| message)
-        .or_else(|_| Message::from_bytes(bytes))
+        .or_else(|_| Message::from_bytes(trimmed))
         .map_err(|_| corrupt())?;
     let decrypted = message
         .decrypt_with_password(|| passphrase.to_string())

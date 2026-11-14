@@ -2122,13 +2122,9 @@ private fun ImportSection(context: Context, controller: SessionController) {
                     }
                 }
                 activity.startActivityForResult(
-                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    Intent(Intent.ACTION_GET_CONTENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
-                        putExtra(
-                            Intent.EXTRA_MIME_TYPES,
-                            arrayOf("application/zip", "application/x-zip-compressed", "text/csv", "application/json", "application/octet-stream"),
-                        )
                     },
                     BackupFileBridge.TEXT_IMPORT_REQUEST_CODE,
                 )
