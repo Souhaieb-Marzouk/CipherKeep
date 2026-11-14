@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -67,6 +68,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.fragment.app.FragmentActivity
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -833,11 +835,33 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
             modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(CKDimens.Space4),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
-            Text("What are you adding?", style = MaterialTheme.typography.titleMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space1)) {
-                listOf("login" to "Login", "totp" to "TOTP", "note" to "Note", "card" to "Card", "identity" to "Identity").forEach { (value, label) ->
-                    TextButton(onClick = { kind = value }) {
-                        Text(if (kind == value) "• $label" else label)
+            Text("What are you adding?", style = MaterialTheme.typography.titleLarge)
+            Text("Choose a card to start. Only the fields you need will appear.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+            ) {
+                listOf(
+                    Triple("login", "Login", "✦"),
+                    Triple("totp", "TOTP", "◷"),
+                    Triple("note", "Note", "✎"),
+                    Triple("card", "Card", "▣"),
+                    Triple("identity", "Identity", "◎"),
+                ).forEach { (value, label, glyph) ->
+                    val selected = kind == value
+                    Surface(
+                        shape = RoundedCornerShape(22.dp),
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.width(88.dp).height(82.dp).clickable { kind = value },
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize().padding(10.dp),
+                            verticalArrangement = Arrangement.Center,
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Text(glyph, style = MaterialTheme.typography.headlineSmall, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
+                            Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
             }
@@ -972,6 +996,46 @@ private fun itemSubtitle(item: VaultItem): String = when (item.type) {
     else -> listOf("Login", item.username, item.url).filter(String::isNotBlank).joinToString(" · ")
 }
 
+
+@Composable
+private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = CKDimens.Space4, vertical = CKDimens.Space2),
+        shape = RoundedCornerShape(28.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        tonalElevation = 8.dp,
+        shadowElevation = 8.dp,
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            AuroraNavItem("⌂", "Vault", true, {})
+            AuroraNavItem("＋", "Add", false, onAdd)
+            AuroraNavItem("◈", "Security", false, onSecurity)
+            AuroraNavItem("⚙", "Settings", false, onSettings)
+        }
+    }
+}
+
+@Composable
+private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(22.dp),
+        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
+        modifier = Modifier.clickable(onClick = onClick),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(glyph, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun VaultScreen(
@@ -1032,27 +1096,7 @@ private fun VaultScreen(
     }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(selected = true, onClick = {}, icon = { Text("V") }, label = { Text("Vault") })
-                NavigationBarItem(selected = false, onClick = onAdd, icon = { Text("+") }, label = { Text("Add") })
-                NavigationBarItem(selected = false, onClick = onSecurity, icon = { Text("S") }, label = { Text("Security") })
-                NavigationBarItem(selected = false, onClick = onSettings, icon = { Text("G") }, label = { Text("Settings") })
-            }
-        },
-        topBar = {
-            TopAppBar(
-                title = { Text("Vault") },
-                actions = {
-                    TextButton(onClick = onAdd) { Text("Add") }
-                    TextButton(onClick = onLock) { Text("Lock") }
-                    TextButton(onClick = onSettings) { Text("Settings") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
-        },
+        bottomBar = { AuroraNavBar(onAdd = onAdd, onSecurity = onSecurity, onSettings = onSettings) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -1062,25 +1106,34 @@ private fun VaultScreen(
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
             item {
-                Text(
-                    text = "Vault",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.semantics { heading() },
-                )
-                Text(
-                    text = "Items are encrypted with the session key and stored in the local encrypted database.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = CKDimens.Space1),
-                )
-                Spacer(Modifier.height(CKDimens.Space2))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(52.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("C", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    }
+                    Spacer(Modifier.width(CKDimens.Space3))
+                    Column(Modifier.weight(1f)) {
+                        Text("CipherKeep", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
+                        Text("Your private space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondaryContainer) {
+                        TextButton(onClick = onLock) { Text("Lock") }
+                    }
+                }
+                Spacer(Modifier.height(CKDimens.Space4))
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Search title or username") },
+                    placeholder = { Text("Search your vault") },
+                    leadingIcon = { Text("⌕", style = MaterialTheme.typography.titleLarge) },
                     singleLine = true,
-                    shape = MaterialTheme.shapes.small,
+                    shape = RoundedCornerShape(50),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
                     TextButton(onClick = { favoritesOnly = false }) { Text("All") }

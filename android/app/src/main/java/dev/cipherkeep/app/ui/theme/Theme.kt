@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.unit.sp
 
@@ -25,8 +26,8 @@ private val LightColors = lightColorScheme(
     onPrimary = CKColor.LightOnPrimary,
     primaryContainer = CKColor.LightPrimaryContainer,
     onPrimaryContainer = CKColor.LightOnPrimaryContainer,
-    secondary = CKColor.LightAccentStrong,
-    onSecondary = CKColor.LightOnAccent,
+    secondary = Color(0xFFF97316),
+    onSecondary = Color.White,
     tertiary = CKColor.LightAccent,
     onTertiary = CKColor.LightOnAccent,
     background = CKColor.LightBackground,
@@ -47,8 +48,8 @@ private val DarkColors = darkColorScheme(
     onPrimary = CKColor.DarkOnPrimary,
     primaryContainer = CKColor.DarkPrimaryContainer,
     onPrimaryContainer = CKColor.DarkOnPrimaryContainer,
-    secondary = CKColor.DarkAccentStrong,
-    onSecondary = CKColor.DarkOnAccent,
+    secondary = Color(0xFFFB923C),
+    onSecondary = Color(0xFF2A1000),
     tertiary = CKColor.DarkAccent,
     onTertiary = CKColor.DarkOnAccent,
     background = CKColor.DarkBackground,
