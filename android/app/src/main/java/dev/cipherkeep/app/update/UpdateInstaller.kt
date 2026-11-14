@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import androidx.core.content.FileProvider
+import androidx.core.content.pm.PackageInfoCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -72,7 +73,11 @@ object UpdateInstaller {
         }
         val archive = pm.getPackageArchiveInfo(apk.path, flags) ?: error("Downloaded file is not an APK.")
         require(archive.packageName == context.packageName) { "Downloaded APK belongs to another app." }
-        require(archive.longVersionCode >= context.packageManager.getPackageInfo(context.packageName, 0).longVersionCode) {
+        val archiveVersion = PackageInfoCompat.getLongVersionCode(archive)
+        val currentVersion = PackageInfoCompat.getLongVersionCode(
+            context.packageManager.getPackageInfo(context.packageName, 0),
+        )
+        require(archiveVersion >= currentVersion) {
             "Downloaded APK is older than the installed app."
         }
         val archiveCerts = certificates(archive)

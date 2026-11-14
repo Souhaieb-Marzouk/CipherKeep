@@ -182,7 +182,10 @@ pub fn detect_format(bytes: &[u8]) -> Option<ImportFormat> {
         if value.get("accounts").and_then(Value::as_array).is_some() {
             return Some(ImportFormat::OnePassword1pux);
         }
-        if value.get("vaults").is_some_and(|vaults| vaults.is_array() || vaults.is_object()) {
+        if value
+            .get("vaults")
+            .is_some_and(|vaults| vaults.is_array() || vaults.is_object())
+        {
             return Some(ImportFormat::ProtonJson);
         }
         return Some(ImportFormat::BitwardenJson);
