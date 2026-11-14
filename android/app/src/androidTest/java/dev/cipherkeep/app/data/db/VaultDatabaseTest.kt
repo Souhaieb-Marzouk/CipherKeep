@@ -40,7 +40,7 @@ class VaultDatabaseTest {
         db = VaultDatabase.open(context, passphrase)
         val loaded = db.itemDao().get(itemId)
         assertEquals(1, db.itemDao().count())
-        assertEquals(3, loaded?.lamport)
+        assertEquals(3L, loaded?.lamport)
         db.close()
     }
 
@@ -57,5 +57,6 @@ class VaultDatabaseTest {
         assertThrows(Exception::class.java) {
             VaultDatabase.open(context, wrong).also { it.openHelper.writableDatabase }
         }
+        Unit
     }
 }

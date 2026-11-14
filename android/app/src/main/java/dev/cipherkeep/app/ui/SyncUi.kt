@@ -182,7 +182,7 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
             OutlinedTextField(
                 value = token,
                 onValueChange = { token = it },
-                label = { Text("Relay token (session only)") },
+                label = { Text("Relay token (saved encrypted)") },
                 singleLine = true,
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
@@ -223,7 +223,7 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
                 }
             }
             Text(
-                "The token is not saved. Use a test vault until conflict resolution is complete.",
+                "The token is encrypted with Android Keystore. Use a test vault until conflict resolution is complete.",
                 style = MaterialTheme.typography.labelSmall,
             )
         }

@@ -42,9 +42,9 @@ class SensitiveClipboard(
         clearScope.launch {
             delay(timeoutMillis)
             val description = manager.primaryClipDescription
-            if (description?.label == label &&
-                description.extras?.getString(EXTRA_CIPHERKEEP_TOKEN) == token
-            ) {
+            val ownedByToken = description?.extras?.getString(EXTRA_CIPHERKEEP_TOKEN) == token
+            val ownedByLabel = description?.label?.toString() == label
+            if (ownedByToken || ownedByLabel) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     manager.clearPrimaryClip()
                 } else {
@@ -63,7 +63,10 @@ class SensitiveClipboard(
         /** Clear only a clip CipherKeep marked; safe to call from onStop. */
         fun clearIfOwned(context: Context) {
             val manager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            if (manager.primaryClipDescription?.extras?.containsKey(EXTRA_CIPHERKEEP_TOKEN) != true) {
+            val description = manager.primaryClipDescription
+            val ownedByToken = description?.extras?.containsKey(EXTRA_CIPHERKEEP_TOKEN) == true
+            val ownedByLabel = description?.label?.toString()?.startsWith("CipherKeep ") == true
+            if (!ownedByToken && !ownedByLabel) {
                 return
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {

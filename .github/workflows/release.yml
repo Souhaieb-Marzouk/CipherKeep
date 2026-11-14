@@ -225,6 +225,10 @@ jobs:
           set -euo pipefail
           test -s release-integrity/checksums.txt
           test -s release-integrity/checksums.txt.minisig
-          find release-integrity -maxdepth 1 -type f -print -exec gh release upload "$TAG" {} --clobber \;
+          for file in release-integrity/*; do
+            [ -f "$file" ] || continue
+            echo "uploading $file"
+            gh release upload "$TAG" "$file" --repo "$REPO" --clobber
+          done
           echo "Draft release: $SERVER_URL/$REPO/releases/tag/$TAG"
           echo "Maintainer must review and publish manually."
