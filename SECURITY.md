@@ -108,11 +108,13 @@ These are known and must not be described as solved:
   installed, but no Android 14 device with third-party provider selection was
   available. The test RP is client-only; no server-side WebAuthn verifier is
   deployed.
-- **Passkey keys are not cryptographically bound to user authentication.**
-  Device-credential verification is enforced by the consent activity, not
-  `setUserAuthenticationRequired`.
-- **The provider trusts `CallingAppInfo.getOrigin()`.** It does not fetch
-  Digital Asset Links itself.
+- **Passkey keys are now cryptographically bound to per-use user
+  authentication**, with assertions completed through a
+  `BiometricPrompt.CryptoObject`. Existing passkeys created before this
+  change are not retroactively bound.
+- **The provider still does not fetch Digital Asset Links itself.** It uses
+  Android's `CallingAppInfo` plus a browser package allowlist and, for
+  app-origin credentials, the caller signing-certificate hash.
 - **Emergency cron shares are base64 recovery shares**, not encrypted to the
   contact. One share remains below the 2-of-3 threshold.
 - **Some OEM clipboard services strip the `IS_SENSITIVE` extra.** CipherKeep

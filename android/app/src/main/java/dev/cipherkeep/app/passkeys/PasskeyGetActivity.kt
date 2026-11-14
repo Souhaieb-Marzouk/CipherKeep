@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
+import androidx.annotation.RequiresApi
 import androidx.credentials.GetCredentialResponse
 import androidx.credentials.GetPublicKeyCredentialOption
 import androidx.credentials.PublicKeyCredential
@@ -16,6 +17,7 @@ import androidx.fragment.app.FragmentActivity
 import org.json.JSONObject
 
 /** Explicit consent + device-credential gate for passkey assertions. */
+@RequiresApi(34)
 class PasskeyGetActivity : FragmentActivity() {
     private var record: PasskeyRecord? = null
     private var origin = ""
@@ -37,7 +39,7 @@ class PasskeyGetActivity : FragmentActivity() {
         val rpId = runCatching { JSONObject(requestJson).optString("rpId") }
             .getOrDefault("")
             .ifEmpty { record?.rpId.orEmpty() }
-        if (record == null || !originMatchesRp(origin, rpId) || record?.rpId != rpId) {
+        if (record == null || record?.rpId != rpId || !verifyCallingApp(info, rpId)) {
             finish()
             return
         }
@@ -72,18 +74,30 @@ class PasskeyGetActivity : FragmentActivity() {
     }
 
     private fun authenticate() {
+        val current = record ?: run {
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
+        val signature = runCatching { PasskeyCrypto.beginSign(current.alias) }.getOrElse {
+            setResult(RESULT_CANCELED)
+            finish()
+            return
+        }
         val prompt = BiometricPrompt(
             this,
             ContextCompat.getMainExecutor(this),
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                    val current = record
-                    if (current == null) {
+                    val authenticated = result.cryptoObject?.signature
+                    if (authenticated == null) {
                         setResult(RESULT_CANCELED)
                         finish()
                         return
                     }
-                    runCatching { createAssertion(this@PasskeyGetActivity, current, requestJson, origin) }
+                    runCatching {
+                        createAssertion(this@PasskeyGetActivity, current, requestJson, origin, authenticated)
+                    }
                         .onSuccess { json ->
                             PendingIntentHandler.setGetCredentialResponse(
                                 intent,
@@ -113,6 +127,7 @@ class PasskeyGetActivity : FragmentActivity() {
                         BiometricManager.Authenticators.DEVICE_CREDENTIAL,
                 )
                 .build(),
+            BiometricPrompt.CryptoObject(signature),
         )
     }
 

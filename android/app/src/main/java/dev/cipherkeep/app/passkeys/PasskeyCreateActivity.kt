@@ -9,12 +9,14 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import androidx.annotation.RequiresApi
 import androidx.credentials.CreatePublicKeyCredentialRequest
 import androidx.credentials.CreatePublicKeyCredentialResponse
 import androidx.credentials.provider.PendingIntentHandler
 import org.json.JSONObject
 
 /** Explicit consent + device-credential gate for passkey creation. */
+@RequiresApi(34)
 class PasskeyCreateActivity : FragmentActivity() {
     private var origin = ""
     private var requestJson = ""
@@ -35,7 +37,7 @@ class PasskeyCreateActivity : FragmentActivity() {
             JSONObject(requestJson).getJSONObject("rp").optString("id")
         }.getOrDefault("")
         if (rpId.isEmpty()) rpId = originHost(origin).orEmpty()
-        if (!originMatchesRp(origin, rpId)) {
+        if (!verifyCallingApp(info, rpId)) {
             finish()
             return
         }

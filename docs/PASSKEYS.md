@@ -119,3 +119,19 @@ Open:
   bound to the key.
 - No Android 14 device with third-party passkey-provider selection was available
   for an end-to-end test.
+
+
+## Passkey hardening 2026-11-14
+
+- New passkey keys are generated with:
+  - `setUserAuthenticationRequired(true)`
+  - per-use validity (`-1`)
+- Assertions use a `BiometricPrompt.CryptoObject` tied to the ECDSA
+  `Signature`; the key cannot sign without a fresh device credential.
+- Origins are checked against an explicit browser allowlist for `https://`
+  origins, or against the caller signing-certificate hash for
+  `android:apk-key-hash:` origins.
+- Existing passkeys created before this change are not retroactively
+  auth-bound; remove and re-enroll them.
+- The provider still does not fetch Digital Asset Links itself; Android's
+  `CallingAppInfo` origin plus the browser allowlist is the current boundary.

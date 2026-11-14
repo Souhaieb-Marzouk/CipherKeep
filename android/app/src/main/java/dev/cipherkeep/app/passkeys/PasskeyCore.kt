@@ -2,6 +2,7 @@ package dev.cipherkeep.app.passkeys
 
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
+import androidx.credentials.provider.CallingAppInfo
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import org.json.JSONArray
@@ -86,6 +87,8 @@ internal object PasskeyCrypto {
             KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
                 .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
                 .setDigests(KeyProperties.DIGEST_SHA256)
+                .setUserAuthenticationRequired(true)
+                .setUserAuthenticationValidityDurationSeconds(-1)
                 .build(),
         )
         return generator.generateKeyPair()
@@ -96,10 +99,14 @@ internal object PasskeyCrypto {
         return store.getEntry(alias, null) as? KeyStore.PrivateKeyEntry
     }
 
-    fun sign(alias: String, data: ByteArray): ByteArray {
+    fun beginSign(alias: String): Signature {
         val entry = key(alias) ?: error("passkey key missing")
-        val signature = Signature.getInstance("SHA256withECDSA")
-        signature.initSign(entry.privateKey)
+        return Signature.getInstance("SHA256withECDSA").apply {
+            initSign(entry.privateKey)
+        }
+    }
+
+    fun signWith(signature: Signature, data: ByteArray): ByteArray {
         signature.update(data)
         return signature.sign()
     }
@@ -198,6 +205,35 @@ internal fun originMatchesRp(origin: String, rpId: String): Boolean {
     return host == rpId || host.endsWith(".$rpId")
 }
 
+private val BROWSER_PACKAGES = setOf(
+    "com.android.chrome",
+    "org.mozilla.firefox",
+    "com.duckduckgo.mobile.android",
+    "com.brave.browser",
+    "com.microsoft.emmx",
+    "com.opera.browser",
+    "com.sec.android.app.sbrowser",
+    "com.vivaldi.browser",
+)
+
+/** Enforces origin/package binding before consent or assertion. */
+@androidx.annotation.RequiresApi(34)
+internal fun verifyCallingApp(info: CallingAppInfo, rpId: String): Boolean {
+    val origin = runCatching { info.getOrigin(info.packageName).orEmpty() }.getOrDefault("")
+    if (origin.startsWith("https://")) {
+        return info.packageName in BROWSER_PACKAGES && originMatchesRp(origin, rpId)
+    }
+    if (origin.startsWith("android:apk-key-hash:")) {
+        val expected = origin.removePrefix("android:apk-key-hash:")
+        val signer = runCatching {
+            info.signingInfo?.apkContentsSigners?.firstOrNull()?.toByteArray()
+        }.getOrNull() ?: return false
+        val actual = b64url(sha256(signer))
+        return actual == expected
+    }
+    return false
+}
+
 internal fun createRegistration(
     context: Context,
     requestJson: String,
@@ -281,6 +317,7 @@ internal fun createAssertion(
     record: PasskeyRecord,
     requestJson: String,
     origin: String,
+    signature: Signature,
 ): String {
     val request = JSONObject(requestJson)
     val rpId = request.optString("rpId").ifEmpty { record.rpId }
@@ -314,7 +351,7 @@ internal fun createAssertion(
         )
     }.toByteArray()
     val signed = authData + sha256(clientData)
-    val signature = PasskeyCrypto.sign(record.alias, signed)
+    val assertionSignature = PasskeyCrypto.signWith(signature, signed)
     PasskeyStore(context).save(record)
     return JSONObject()
         .put("id", record.credentialId)
@@ -324,7 +361,7 @@ internal fun createAssertion(
             JSONObject()
                 .put("clientDataJSON", b64url(clientData))
                 .put("authenticatorData", b64url(authData))
-                .put("signature", b64url(signature))
+                .put("signature", b64url(assertionSignature))
                 .put("userHandle", record.userHandle),
         )
         .put("type", "public-key")

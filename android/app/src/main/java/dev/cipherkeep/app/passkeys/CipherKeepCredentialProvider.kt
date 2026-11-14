@@ -73,7 +73,7 @@ class CipherKeepCredentialProvider : CredentialProviderService() {
             val rpId = runCatching {
                 JSONObject(option.requestJson).optString("rpId")
             }.getOrDefault("")
-            if (rpId.isEmpty() || !originMatchesRp(origin, rpId)) continue
+            if (rpId.isEmpty() || !verifyCallingApp(info, rpId)) continue
             for (record in store.list().filter { it.rpId == rpId }) {
                 val pending = PendingIntent.getActivity(
                     this,
