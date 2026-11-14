@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -234,11 +235,17 @@ fun CipherKeepApp() {
                             controller = controller,
                             onBack = { screen = "vault" },
                         )
-                        "settings" -> SettingsScreen(
+                        "settings" -> SettingsHubScreen(
+                            context = context,
+                            controller = controller,
+                            onAdvanced = { screen = "settings_advanced" },
+                            onBack = { screen = "vault" },
+                        )
+                        "settings_advanced" -> SettingsScreen(
                             controller = controller,
                             themeMode = ThemeMode.valueOf(themeName),
                             onThemeMode = { themeName = it.name },
-                            onBack = { screen = "vault" },
+                            onBack = { screen = "settings" },
                         )
                     }
                 }
@@ -526,6 +533,47 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
     LaunchedEffect(controller) {
         biometricWrapped = controller.biometricWrapped()
     }
+    var biometricAttempted by remember { mutableStateOf(false) }
+    LaunchedEffect(biometricWrapped, activity) {
+        if (!biometricAttempted && biometricWrapped != null && activity != null && canUseBiometrics(activity)) {
+            biometricAttempted = true
+            busy = true
+            error = null
+            val wrapped = biometricWrapped ?: return@LaunchedEffect
+            try {
+                val cipher = biometricKey.decryptCipher(wrapped.iv)
+                promptBiometric(
+                    activity = activity,
+                    cipher = cipher,
+                    title = "Unlock CipherKeep",
+                    subtitle = "Authenticate to unwrap the vault master key.",
+                    onSuccess = { authenticated ->
+                        scope.launch {
+                            try {
+                                val master = authenticated.doFinal(wrapped.ciphertext)
+                                val result = controller.unlockWithMasterKey(master)
+                                master.fill(0)
+                                busy = false
+                                if (result.isFailure) {
+                                    error = "Biometric unlock failed. Use your master password."
+                                }
+                            } catch (_: Exception) {
+                                busy = false
+                                error = "Biometric unlock failed. Use your master password."
+                            }
+                        }
+                    },
+                    onFailure = { reason ->
+                        busy = false
+                        error = "Biometric authentication failed: $reason"
+                    },
+                )
+            } catch (_: Exception) {
+                busy = false
+                error = "Biometric key is unavailable. Use your master password."
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -795,7 +843,7 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
             val result = if (kind == "totp") {
                 controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
             } else {
-                controller.saveItem(title.trim(), username.trim(), password, url.trim(), notes, folder.trim(), tags, favorite)
+                controller.saveItem(title.trim(), username.trim(), password, url.trim(), notes, folder.trim(), tags, favorite, false, totpUri.trim())
             }
             busy = false
             password = ""
@@ -846,7 +894,6 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
             ) {
                 listOf(
                     Triple("login", "Login", "✦"),
-                    Triple("totp", "TOTP", "◷"),
                     Triple("note", "Note", "✎"),
                     Triple("card", "Card", "▣"),
                     Triple("identity", "Identity", "◎"),
@@ -881,10 +928,7 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                     OutlinedTextField(username, { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true)
                     OutlinedTextField(password, { password = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
                     OutlinedTextField(url, { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("URL (optional)") }, singleLine = true)
-                }
-                "totp" -> {
-                    OutlinedTextField(username, { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Account") }, singleLine = true)
-                    OutlinedTextField(totpUri, { totpUri = it }, modifier = Modifier.fillMaxWidth(), label = { Text("TOTP otpauth URI") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
+                    OutlinedTextField(totpUri, { totpUri = it }, modifier = Modifier.fillMaxWidth(), label = { Text("TOTP code (optional)") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 }
                 "card" -> {
                     OutlinedTextField(cardholder, { cardholder = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Cardholder name") }, singleLine = true)
@@ -912,8 +956,8 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(
-                onClick = { if (kind == "login" || kind == "totp") saveLogin() else saveTyped() },
-                enabled = !busy && title.isNotBlank() && (kind != "login" || password.isNotEmpty()) && (kind != "totp" || totpUri.isNotBlank()),
+                onClick = { if (kind == "login") saveLogin() else saveTyped() },
+                enabled = !busy && title.isNotBlank() && (kind != "login" || password.isNotEmpty()),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (busy) "Saving…" else "Save ${kind.replaceFirstChar(Char::uppercase)}") }
         }
@@ -1001,8 +1045,8 @@ private fun itemSubtitle(item: VaultItem): String = when (item.type) {
 
 
 @Composable
-private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit) {
-    Box(Modifier.fillMaxWidth().height(96.dp)) {
+private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit, onLock: () -> Unit) {
+    Box(Modifier.fillMaxWidth().height(96.dp).navigationBarsPadding()) {
         Surface(
             modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = CKDimens.Space4).height(66.dp),
             shape = RoundedCornerShape(26.dp),
@@ -1015,10 +1059,11 @@ private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: 
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                AuroraNavItem("⌂", "Vault", true, {})
-                AuroraNavItem("◈", "Security", false, onSecurity)
-                Spacer(Modifier.width(64.dp))
-                AuroraNavItem("⚙", "Settings", false, onSettings)
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⌂", "Vault", true, {}) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◈", "Security", false, onSecurity) }
+                Spacer(Modifier.weight(1f))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⚙", "Settings", false, onSettings) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⏻", "Lock", false, onLock) }
             }
         }
         Surface(
@@ -1105,7 +1150,7 @@ private fun VaultScreen(
     }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
-        bottomBar = { AuroraNavBar(onAdd = onAdd, onSecurity = onSecurity, onSettings = onSettings) },
+        bottomBar = { AuroraNavBar(onAdd = onAdd, onSecurity = onSecurity, onSettings = onSettings, onLock = onLock) },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -1842,6 +1887,88 @@ private fun AboutSection(context: Context) {
                 TextButton(onClick = { open("https://github.com/Souhaieb-Marzouk/CipherKeep/blob/main/LICENSE") }) { Text("License") }
                 TextButton(onClick = { open("https://github.com/Souhaieb-Marzouk/CipherKeep/blob/main/SECURITY.md") }) { Text("Security") }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsHubScreen(
+    context: Context,
+    controller: SessionController,
+    onAdvanced: () -> Unit,
+    onBack: () -> Unit,
+) {
+    var section by remember { mutableStateOf<String?>(null) }
+    Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
+        topBar = {
+            TopAppBar(
+                title = { Text("Settings") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+            )
+        },
+    ) { padding ->
+        Column(
+            Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+        ) {
+            Text("Everything in one place", style = MaterialTheme.typography.headlineSmall)
+            Text("Choose an area. Each opens its own window.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(CKDimens.Space2))
+            SettingsRow("♥", "Password health", "Weak, reused and aging passwords") { section = "health" }
+            SettingsRow("◆", "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
+            SettingsRow("↓", "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
+            SettingsRow("✉", "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
+            SettingsRow("◷", "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
+            SettingsRow("✈", "Travel Mode", "Decoy vault for travel") { section = "travel" }
+            SettingsRow("◎", "Family sharing", "Owner, editor and viewer roles") { section = "family" }
+            SettingsRow("ℹ", "About CipherKeep", "Designer, version, license and links") { section = "about" }
+            Spacer(Modifier.height(CKDimens.Space2))
+            SettingsRow("⚙", "Advanced settings", "Backup, sync, biometrics, updates, passkeys") { onAdvanced() }
+        }
+    }
+    section?.let { selected ->
+        AlertDialog(
+            onDismissRequest = { section = null },
+            title = { Text(when (selected) { "health" -> "Password health"; "hibp" -> "Breach monitoring"; "import" -> "Import passwords"; "aliases" -> "Email aliases"; "emergency" -> "Emergency access"; "travel" -> "Travel Mode"; "family" -> "Family sharing"; else -> "About CipherKeep" }) },
+            text = {
+                Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    when (selected) {
+                        "health" -> HealthSection(controller)
+                        "hibp" -> HibpSection(context, controller)
+                        "import" -> ImportSection(context, controller)
+                        "aliases" -> AliasSection(context, controller)
+                        "emergency" -> EmergencySection(context, controller)
+                        "travel" -> TravelModeSection(controller)
+                        "family" -> FamilySection(context, controller)
+                        else -> AboutSection(context)
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { section = null }) { Text("Close") } },
+        )
+    }
+}
+
+@Composable
+private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
+        shadowElevation = 1.dp,
+    ) {
+        Row(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalAlignment = Alignment.CenterVertically) {
+            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(42.dp)) {
+                Box(contentAlignment = Alignment.Center) { Text(glyph, color = MaterialTheme.colorScheme.onPrimaryContainer) }
+            }
+            Spacer(Modifier.width(CKDimens.Space3))
+            Column(Modifier.weight(1f)) {
+                Text(title, style = MaterialTheme.typography.titleMedium)
+                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -379,6 +379,7 @@ class SessionController(context: Context) {
         tags: String = "",
         favorite: Boolean = false,
         autofillAllowed: Boolean = false,
+        totpUri: String = "",
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -407,6 +408,7 @@ class SessionController(context: Context) {
                     )
                     .put("favorite", favorite)
                     .put("autofillAllowed", autofillAllowed)
+                    .put("totpUri", totpUri)
                     .toString()
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)
