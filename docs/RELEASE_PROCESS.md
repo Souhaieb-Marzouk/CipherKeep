@@ -104,11 +104,12 @@ The process is tested by walking through:
 | Leaked AMO key | revoke, new key, audit signed versions | no new AMO signatures |
 | Leaked Android key | new package identity/migration | old key untrusted |
 
-## First beta status
+## First release status
 
-The first signed beta is not produced by this repository alone:
+The first official release is prepared by the protected workflow, but it is not
+published automatically:
 
-- the production Android keystore is not in CI
-- AMO production credentials are not configured
+- the production Android keystore is supplied only as an environment secret
+- AMO credentials are environment secrets
 - the maintainer must approve the protected environment
-- the maintainer must publish the draft manually
+- the maintainer must review the draft and publish it manually

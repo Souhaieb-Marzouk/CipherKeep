@@ -34,11 +34,10 @@ published public key, and deletes the temporary key.
 
 ## APK certificate fingerprint
 
-The production signing certificate is not published yet because no signed public
-beta exists. Before the first beta, record its SHA-256 here and in
-`CIPHERKEEP_CERT_SHA256`.
+The production signing certificate is recorded with each official signed
+release. Compare it with `CIPHERKEEP_CERT_SHA256` when reviewing the release.
 
-Until then, verify any provided APK with:
+For any downloaded APK, verify with:
 
 ```bash
 apksigner verify --print-certs app-release.apk

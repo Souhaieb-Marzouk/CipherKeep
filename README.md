@@ -23,89 +23,145 @@
 
 CipherKeep is a free, local-first password manager. Your vault stays on your own devices, protected by one master password. There is no CipherKeep account, no subscription, no advertising, and no analytics.
 
-The project is built for two places where people need their credentials most:
+- **Android 8.0+** — mobile vault, autofill, biometric unlock and optional passkeys.
+- **Firefox 142+** — browser companion for quick access while you work.
 
-- **Android 8.0+** — a mobile vault for everyday use.
-- **Firefox 142+** — a browser companion for quick access while you work.
-
-> **Project status:** early development. There is no public signed release yet, and the code has not been independently audited. Do not use current development builds for real credentials.
+> **Project status:** 1.0.0 official release. The code has not been independently audited. Keep tested backups and do not make it the only copy of irreplaceable credentials.
 
 ---
 
 ## Features
 
-### Available in development builds
+### Vault and account
 
-- **Local vault** — create a vault protected by a master password.
-- **Recovery shares** — three shares are created at setup; any two can restore access if the master password is lost.
-- **Lock and unlock** — lock the vault manually, or let the inactivity timer lock it for you.
-- **Android biometric unlock** — use an enrolled fingerprint on supported devices, with the master password as fallback.
-- **Password items** — store a title, username, and password for each login.
-- **Sensitive clipboard** — copied passwords are marked sensitive where supported and are cleared automatically after a short timeout.
-- **Encrypted local storage** — vault data is stored encrypted on the device.
-- **Firefox popup** — create, unlock, lock, and manage items from the extension popup.
-- **Update checks** — check GitHub Releases manually for a newer version; optional daily checks can be enabled. Nothing is installed silently.
-- **Android autofill** — fill saved logins after unlocking, with phishing warnings.
-- **Email aliases** — optional SimpleLogin/Addy.io alias creation.
-- **Emergency access** — optional cron-delivered 2-of-3 recovery shares.
-- **Travel Mode** — a local decoy vault for border or coercion situations.
-- **Phishing, HIBP and password-health checks** — local analysis, opt-in HIBP prefix checks and a local health dashboard.
-- **Family sharing** — X25519-wrapped vault keys with owner/editor/viewer roles.
+- **Local vault** — create a vault protected by one master password.
+- **Recovery shares** — three shares are created at setup; any two restore access if the master password is lost.
+- **No account** — there is no CipherKeep login, subscription or hosted vault.
+- **Manual lock and auto-lock** — lock the vault yourself, or let the inactivity timer do it.
+- **Encrypted local storage** — vault data is encrypted before it is written to disk.
+
+### Items and everyday use
+
+- **Item types** — logins, TOTP entries, secure notes, payment cards, identities and SSH keys.
+- **Search, folders, tags and favorites** — organise and find items quickly.
+- **Password generator** — random passwords and passphrases.
+- **TOTP codes** — store and generate time-based one-time passwords.
+- **Import and export** — encrypted backup export and restore, plus CSV/Bitwarden import.
+- **Sensitive clipboard** — copied secrets are cleared automatically after a short timeout and marked sensitive where the platform supports it.
+
+### Android
+
+- **Biometric unlock** — fingerprint/device credential with master-password fallback.
+- **Autofill** — fill saved logins after unlocking. Autofill is opt-in per item and warned on suspicious origins.
+- **Phishing warnings** — local analysis of the origin before filling.
+- **Passkey provider** — experimental. Requires Android 14+ and may not be offered by every OEM. The passkey provider does not replace the master password or recovery shares.
 - **WebAuthn PRF unlock** — experimental hardware-key unlock with password fallback.
-- **Android passkey provider** — experimental; build-verified, not hardware-verified.
+
+### Firefox
+
+- **Popup vault** — create, unlock, lock and manage items.
+- **Options page** — settings, import/export, sync, aliases, emergency access, Travel Mode and diagnostics.
+- **AMO-signed XPI** — install the signed release from GitHub, or use the unlisted AMO channel.
+
+### Optional network features
+
+These are off unless you configure or trigger them:
+
+- **Encrypted sync** — optional opaque relay sync with manual conflict resolution.
+- **Email aliases** — optional SimpleLogin or Addy.io alias creation.
+- **Emergency access** — optional cron-delivered recovery shares.
+- **HIBP checks** — opt-in k-anonymity prefix checks for breached passwords.
+- **Update checks** — manual or optional daily GitHub release checks.
+- **Family sharing** — manual QR/text invitations; no family server.
+
+### Local-only features
+
+- **Password health** — weakness, reuse, age and breach flags in a local dashboard.
+- **Travel Mode** — a local decoy vault for border or coercion situations. It is not plausible deniability.
+- **Phishing analysis** — local lookalike and mixed-script detection.
 
 ### Planned
 
 - Firefox browser autofill.
-- Richer item types, including secure notes.
-- Independent security review before a stable release.
+- Independent security audit.
 - Accessibility review with screen-reader users.
-- First signed public beta.
-
-Features and availability may change during development.
+- Store distribution.
 
 ---
 
-## How to use CipherKeep
+## Install and use
 
-CipherKeep is not yet available as a public download. The first-use flow will be:
+Official signed releases are published through GitHub Releases.
+
+```text
+https://github.com/Souhaieb-Marzouk/CipherKeep/releases
+```
 
 ### Android
 
-1. Install the signed APK from the official release page.
-2. Create a vault with a strong master password.
-3. Save the three recovery shares separately and offline.
-4. Add your logins from the vault screen.
-5. Unlock with your master password or enrolled biometrics.
+1. Download the signed APK from the release.
+2. Verify the release using [docs/VERIFY.md](docs/VERIFY.md).
+3. Install it. Android may ask you to allow installation from your browser or file manager.
+4. Create a vault with a strong master password.
+5. Save the three recovery shares separately and offline.
+6. Enable autofill in Android settings if you want it.
 
 ### Firefox
 
-1. Install CipherKeep from the official Firefox add-on listing.
-2. Create a vault or unlock an existing one from the popup.
-3. Add and review your logins in the popup.
-4. Lock the vault when you are finished.
+1. Download `cipherkeep-<version>.xpi` from the release.
+2. Open `about:addons`.
+3. Use the gear menu → **Install Add-on From File…**.
+4. Select the XPI.
 
-### Good to know
+Unlisted AMO builds update through AMO. The XPI is not a temporary `about:debugging` add-on.
+
+### Recovery and backups
+
+- Recovery needs any two of your three shares.
+- Losing the device and fewer than two shares means the vault cannot be recovered.
+- Export an encrypted backup regularly and store it offline.
+- The backup password is separate from the master password. Losing it makes the backup unreadable.
+
+### Sync
+
+Sync is optional. Use a test vault until you are comfortable with conflict handling. Conflicts are shown in the UI and resolved per field.
+
+### Travel Mode
+
+Travel Mode hides the real vault behind a local decoy. It does not make the real vault deniable under forensic examination.
+
+### Passkeys and hardware unlock
+
+These are experimental:
+
+- Android passkeys require Android 14+ and an OEM that exposes third-party passkey providers.
+- WebAuthn PRF hardware unlock depends on authenticator support.
+- Password and recovery shares remain the fallback.
+
+---
+
+## Good to know
 
 - Your master password is never stored.
-- Recovery requires any two of your three shares. Lose the device and fewer than two shares, and the vault cannot be recovered.
-- The vault locks after a period of inactivity.
-- CipherKeep never asks for your master password by email, chat, or support message.
+- CipherKeep never asks for your master password by email, chat or support message.
+- The vault locks after inactivity; unlock again before copying secrets or using autofill.
+- Optional providers receive only what their feature needs. See [docs/PRIVACY.md](docs/PRIVACY.md).
+- A compromised operating system, keylogger or malicious browser extension can still capture what you type or see.
 
 ---
 
 ## Privacy and security
 
 - **Local-first:** no CipherKeep account or hosted vault.
-- **No tracking:** no analytics, advertising, telemetry, or crash-reporting SDKs.
+- **No tracking:** no analytics, advertising, telemetry or crash-reporting SDKs.
 - **No subscription:** all features are intended to remain free.
-- **Minimal network access:** no network call is made unless you enable or trigger an optional feature. Update checks, sync, emergency access, aliases, HIBP and family sharing are documented in [docs/PRIVACY.md](docs/PRIVACY.md).
+- **Minimal network access:** no network call is made unless you enable or trigger an optional feature.
 - **Encrypted at rest:** vault data is encrypted before it is written to local storage.
-- **Open source:** the code is available for review under AGPL-3.0.
+- **Open source:** AGPL-3.0.
 
-CipherKeep cannot protect you from a compromised operating system, a keylogger, or a malicious browser extension. As with any password manager, use a strong, unique master password and keep your recovery shares safe.
+CipherKeep cannot protect you from a compromised device, a keylogger or a malicious extension. Use a strong, unique master password and keep recovery shares and backups safe.
 
-For security reports, please read [SECURITY.md](SECURITY.md). Do not disclose vulnerabilities in a public issue.
+For security reports, read [SECURITY.md](SECURITY.md). Do not disclose vulnerabilities in a public issue.
 
 Verification and signing:
 
@@ -119,7 +175,7 @@ Verification and signing:
 
 ## Support the project
 
-CipherKeep is free and has no paid tier. If you find it useful and would like to support its development, you can use either link below. Support is entirely optional and does not unlock features.
+CipherKeep is free and has no paid tier. Support is optional and does not unlock features.
 
 <div align="center">
 

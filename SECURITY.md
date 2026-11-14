@@ -3,16 +3,16 @@
 CipherKeep is a password manager. Security reports are treated as the
 highest-priority work.
 
-**Status:** pre-release. No build is approved for production credentials.
+**Status:** 1.0.0 official release. The code has not been independently audited; keep tested backups for critical accounts.
 
 ## Supported versions
 
 | Version | Supported | Notes |
 |---|---|---|
-| `0.1.x` | Development only | No public signed release yet |
+| `1.0.x` | Yes | First official signed release |
 | older | No | Pre-release development builds |
 
-The supported-version table is updated when the first signed beta is published.
+The supported-version table is updated when a new official release is published.
 
 ## Reporting a vulnerability
 
@@ -129,8 +129,8 @@ These are known and must not be described as solved:
 - **HIBP scans reveal password count and hash prefixes** to the HIBP endpoint.
 - **Rotation journals can roll back a completed rotation** if journal deletion
   fails after both stores commit.
-- **No public signed release exists yet.** The signing and integrity pipelines
-  are implemented but have not produced a public beta.
+- **No independent audit exists yet.** The 1.0.0 build is signed and published
+  through the release pipeline, but independent review is still outstanding.
 - **No reproducible Android unsigned-artifact diff in CI.** Firefox is diffed;
   Android is documented and manually compared.
 
@@ -147,11 +147,11 @@ support and limitations.
 ## Threat-model review sign-off
 
 ```text
-Version:   0.1.0 pre-release
+Version:   1.0.0
 Date:      2026-11-14
 Reviewer:  CipherKeep maintainer
 Scope:     core, Android, Firefox, workers, release pipeline
-Result:    accepted for pre-release; residual risks above
+Result:    accepted for 1.0.0; residual risks above
 Next:      independent review before stable release
 ```
 
