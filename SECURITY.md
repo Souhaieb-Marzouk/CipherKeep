@@ -115,6 +115,10 @@ These are known and must not be described as solved:
   Digital Asset Links itself.
 - **Emergency cron shares are base64 recovery shares**, not encrypted to the
   contact. One share remains below the 2-of-3 threshold.
+- **Some OEM clipboard services strip the `IS_SENSITIVE` extra.** CipherKeep
+  still clears its own clip using a label/ownership fallback, but the
+  “sensitive” marker is not guaranteed on every Android build. This was
+  observed on the OPPO CPH2173 test device.
 - **Travel Mode is not a forensic control.** Its local flag is not
   integrity-protected.
 - **Firefox provider/cron tokens and WebAuthn metadata live in
