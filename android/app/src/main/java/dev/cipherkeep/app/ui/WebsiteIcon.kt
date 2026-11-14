@@ -44,18 +44,24 @@ private suspend fun loadWebsiteIcon(context: Context, url: String): Bitmap? = wi
             BitmapFactory.decodeFile(file.path)?.let { return@runCatching it }
         }
         val candidates = listOf(
-            "https://$host/favicon.ico",
+            "https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://$host&size=64",
+            "https://www.google.com/s2/favicons?domain=$host&sz=128",
             "https://icons.duckduckgo.com/ip3/$host.ico",
+            "https://$host/favicon.ico",
         )
         for (candidate in candidates) {
-            val request = Request.Builder().url(candidate).build()
+            val request = Request.Builder()
+                .url(candidate)
+                .header("User-Agent", "Mozilla/5.0 (Android) CipherKeep")
+                .build()
             faviconClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return@use
                 val body = response.body ?: return@use
                 if (body.contentLength() > 512 * 1024) return@use
                 val bytes = body.bytes()
                 if (bytes.size > 512 * 1024) return@use
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@use
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                if (bitmap == null) return@use
                 file.outputStream().use { it.write(bytes) }
                 return@runCatching bitmap
             }
@@ -76,7 +82,7 @@ fun WebsiteIcon(item: VaultItem, glyph: String, modifier: Modifier = Modifier) {
         if (image != null) {
             Image(
                 bitmap = image.asImageBitmap(),
-                contentDescription = null,
+                contentDescription = "Website icon for ${item.title}",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.size(24.dp),
             )

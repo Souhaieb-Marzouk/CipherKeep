@@ -1408,7 +1408,7 @@ private fun VaultScreen(
                             modifier = Modifier.size(46.dp),
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text(typeGlyph(item), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                WebsiteIcon(item, typeGlyph(item))
                             }
                         }
                         Spacer(Modifier.width(CKDimens.Space3))
