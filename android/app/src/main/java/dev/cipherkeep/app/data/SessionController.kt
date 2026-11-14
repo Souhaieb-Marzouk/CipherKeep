@@ -615,7 +615,7 @@ class SessionController(context: Context) {
                         title = title.take(512),
                         username = item.optString("username").take(4_096),
                         password = item.optString("password").take(65_536),
-                        url = item.optString("url").take(2_048),
+                        url = importUrl(item.optString("url")),
                         notes = item.optString("notes").take(65_536),
                         folder = item.optString("folder").take(64),
                     ).getOrThrow()
@@ -641,7 +641,7 @@ class SessionController(context: Context) {
                         title = title.take(512),
                         username = item.optString("username").take(4_096),
                         password = item.optString("password").take(65_536),
-                        url = item.optString("url").take(2_048),
+                        url = importUrl(item.optString("url")),
                         notes = item.optString("notes").take(65_536),
                         folder = item.optString("folder").take(64),
                     ).getOrThrow()
@@ -650,6 +650,12 @@ class SessionController(context: Context) {
                 imported
             }
         }
+
+    private fun importUrl(raw: String): String {
+        val candidate = raw.take(2_048).split(',', limit = 2).first().trim()
+        if (candidate.isEmpty()) return ""
+        return if (runCatching { java.net.URI(candidate).host }.getOrNull() != null) candidate else ""
+    }
 
     suspend fun saveTotpItem(title: String, account: String, uri: String): Result<Unit> =
         withContext(Dispatchers.IO) {
