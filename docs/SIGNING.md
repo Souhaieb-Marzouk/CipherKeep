@@ -83,31 +83,29 @@ Configure:
 The workflow is `workflow_dispatch` only. It has no PR trigger and no write
 permissions.
 
-## Run the release build
+## Run the release build manually
 
-GitHub Actions → `build-android` → Run workflow:
+There is no GitHub release workflow. Use a local keystore outside the repository:
 
-```text
-version: 0.1.0
+```bash
+export CIPHERKEEP_VERSION_NAME=2.0.0
+export CIPHERKEEP_KEYSTORE=/secure/path/cipherkeep-release.jks
+export CIPHERKEEP_KEYSTORE_PASSWORD=...
+export CIPHERKEEP_KEY_ALIAS=...
+export CIPHERKEEP_KEY_PASSWORD=...
+./gradlew :app:assembleRelease :app:bundleRelease
 ```
 
-The workflow:
+Then:
 
-1. decodes the keystore into `$RUNNER_TEMP`
-2. builds `:app:assembleRelease` and `:app:bundleRelease`
-3. checks R8 and resource shrinking ran
-4. rejects `application-debuggable`
-5. runs `apksigner verify --print-certs`
-6. compares the certificate to `CIPHERKEEP_CERT_SHA256`
-7. verifies the AAB with `jarsigner -verify` and requires `jar verified`
-8. writes `SHA256SUMS` and `certificate-sha256.txt`
-9. uploads APK/AAB and checksums
-10. deletes the decoded keystore
+```bash
+apksigner verify --print-certs app/build/outputs/apk/release/app-release.apk
+jarsigner -verify app/build/outputs/bundle/release/app-release.aab
+```
 
-`jarsigner -verify -strict` can return exit code 4 on an AGP-built AAB because
-of `signed in JarFile but not JarInputStream` entries. That is a strict-mode
-artifact, not an unsigned bundle. The workflow uses normal `jarsigner -verify`
-and requires `jar verified`.
+The APK and AAB are signed with the configured key. Record the certificate
+SHA-256, compute `SHA256SUMS`, and attach the artifacts to the release manually.
+Never commit the keystore or signed artifacts.
 
 ## Versioning
 

@@ -27,8 +27,8 @@ node scripts/check-docs.mjs
 
 ## Build and integrity
 
-- [ ] APK/AAB built with `build-android`.
-- [ ] XPI signed through AMO unlisted with `build-firefox`.
+- [ ] APK/AAB built and signed locally with the release keystore.
+- [ ] XPI signed locally through AMO unlisted.
 - [ ] `checksums.txt` covers every artifact.
 - [ ] `checksums.txt.minisig` verifies with `release/minisign.pub`.
 - [ ] SLSA provenance generated and verified.

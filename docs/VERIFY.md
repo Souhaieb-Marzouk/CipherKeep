@@ -167,19 +167,13 @@ If it is compromised:
 
 ## Release flow
 
-1. Build signed APK/AAB through `build-android`.
-2. Build signed XPI through `build-firefox`.
-3. Run `release-integrity` with:
-   - version
-   - tag
-   - the workflow run ID containing both `cipherkeep-*` artifacts
-4. The workflow:
-   - downloads every artifact
-   - writes `checksums.txt`
-   - signs it with Minisign
-   - creates a draft release
-   - generates SLSA provenance
-   - uploads all assets
-   - publishes the release
+Releases are built and signed locally, not by GitHub Actions.
 
-No artifact is published if any integrity step fails.
+1. Build and sign APK/AAB with the local keystore.
+2. Build and AMO-sign the XPI locally.
+3. Write `checksums.txt` covering every attached artifact.
+4. Sign `checksums.txt` with Minisign.
+5. Create the GitHub release manually and attach the artifacts.
+6. Optionally generate SLSA provenance locally or omit it from the release.
+
+No workflow publishes or signs releases automatically.

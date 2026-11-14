@@ -27,33 +27,23 @@ AMO_API_SECRET
 Use the protected `release` environment with required reviewers. Do not put the
 credentials in the repository, an artifact, or a workflow log.
 
-## Build and sign
+## Build and sign manually
 
-GitHub Actions → `build-firefox` → Run workflow:
+There is no GitHub release workflow. Build locally:
 
-```text
-version: 0.1.0
+```bash
+cd firefox
+npm run build
+node -e 'const fs=require("fs");const p="dist/manifest.json";const m=JSON.parse(fs.readFileSync(p));m.version=process.argv[1];fs.writeFileSync(p,JSON.stringify(m,null,2)+"\n")' <version>
+npx web-ext sign --source-dir dist --artifacts-dir ../release-artifacts/<version> --channel unlisted
 ```
 
-The workflow:
+Set the AMO API key and secret in your local environment or pass
+`--api-key`/`--api-secret`.
 
-1. sets `manifest.version`
-2. leaves `gecko.update_url` unset because AMO rejects it for hosted add-ons
-3. runs typecheck, tests, build and lint
-4. runs `web-ext lint`
-5. signs with:
-   ```text
-   web-ext sign --channel unlisted
-   ```
-
-The unlisted submission may wait for manual AMO reviewer approval. The
-workflow waits up to 30 minutes. Open the version URL printed by `web-ext`
-and approve it in the AMO developer hub while the job is waiting.
-6. renames the signed artifact to `cipherkeep-<version>.xpi`
-7. computes SHA-256 and writes `updates.json`
-8. copies it to the repository root and to `firefox-updates.json`
-9. verifies the hash against the actual XPI
-10. uploads the XPI, `updates.json`, `firefox-updates.json` and checksums
+The signed XPI is downloaded into the artifacts directory. Rename it to
+`cipherkeep-<version>.xpi`, compute SHA-256, and attach it to the release
+manually. Do not commit signed artifacts.
 
 ## updates.json
 

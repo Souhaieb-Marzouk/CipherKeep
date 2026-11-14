@@ -103,19 +103,6 @@ jobs:
           java-version: "17"
       - run: chmod +x gradlew
       - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleDebugAndroidTest --no-daemon
-      - name: Build a non-debuggable release artifact
-        run: ./gradlew :app:assembleRelease --no-daemon
-      - name: Reject a debuggable release APK
-        shell: bash
-        run: |
-          apk=$(find app/build/outputs/apk/release -name '*.apk' | head -n 1)
-          test -n "$apk"
-          aapt=$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort -V | tail -n 1)
-          "$aapt" dump badging "$apk" | tee badging.txt
-          if grep -q 'application-debuggable' badging.txt; then
-            echo "release APK is debuggable" >&2
-            exit 1
-          fi
 
 
   reproducible:

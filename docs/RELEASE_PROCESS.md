@@ -2,58 +2,34 @@
 
 ## Prerequisites
 
-Protected `release` environment secrets:
-
-```text
-CIPHERKEEP_KEYSTORE_BASE64
-CIPHERKEEP_KEYSTORE_PASSWORD
-CIPHERKEEP_KEY_ALIAS
-CIPHERKEEP_KEY_PASSWORD
-CIPHERKEEP_CERT_SHA256
-AMO_API_KEY
-AMO_API_SECRET
-MINISIGN_SECRET_KEY_BASE64
-MINISIGN_PASSWORD (only if the key has one)
-```
-
-Offline:
+Local, outside the repository:
 
 - production Android keystore and passwords
-- Minisign private key
-- backups of both
+- AMO API key and secret
+- Minisign private key and password
+- offline backups of all signing material
+
+There is no protected release environment and no release workflow.
 
 ## Protection
 
-The release workflow must be protected by:
-
-- a tag ruleset for `v*.*.*` that restricts creation/update/deletion
-- the `release` environment with required reviewers
-- no self-review
-- deployment branches limited to `main`
-- environment secrets only
-
-A local `workflow_dispatch` also requires the same environment approval.
+- keep the keystore, AMO credentials and Minisign key outside the repository
+- restrict who can create `v*.*.*` tags and publish releases
+- require review before publishing a release
+- never commit signed artifacts
 
 ## Run
 
 1. Confirm `docs/RELEASE_CHECKLIST.md`.
-2. Merge the reviewed release notes to `docs/release-notes/<version>.md`.
-3. Dispatch `release` with:
-   - `version`: `0.1.0`
-   - `tag`: `v0.1.0`
-   - `release_notes`: the reviewed notes
-4. Approve the `release` environment.
-5. The workflow:
-   - builds signed APK/AAB and signed XPI
-   - writes `checksums.txt`
-   - signs it with Minisign
-   - creates a draft release
-   - generates SLSA provenance
-   - uploads every artifact to the draft
-6. Download the draft assets and run `docs/VERIFY.md`.
-7. Install the APK and XPI on clean devices.
-8. Confirm `updates.json` points at the signed XPI and hash.
-9. **Publish manually** in GitHub Releases.
+2. Add the reviewed release notes at `docs/release-notes/<version>.md`.
+3. Build and sign the APK/AAB locally.
+4. Build and AMO-sign the XPI locally.
+5. Write and Minisign `checksums.txt`.
+6. Create a draft GitHub release manually.
+7. Attach the APK, AAB, XPI and checksums.
+8. Download the draft assets and run `docs/VERIFY.md`.
+9. Install the APK and XPI on clean devices.
+10. **Publish manually** in GitHub Releases.
 
 The agent must not create, push, tag, publish or release.
 
@@ -104,12 +80,8 @@ The process is tested by walking through:
 | Leaked AMO key | revoke, new key, audit signed versions | no new AMO signatures |
 | Leaked Android key | new package identity/migration | old key untrusted |
 
-## First release status
+## Current release status
 
-The first official release is prepared by the protected workflow, but it is not
-published automatically:
-
-- the production Android keystore is supplied only as an environment secret
-- AMO credentials are environment secrets
-- the maintainer must approve the protected environment
-- the maintainer must review the draft and publish it manually
+Releases are built and signed locally. The maintainer reviews the artifacts and
+publishes the GitHub release manually. No GitHub Actions workflow signs or
+publishes releases.
