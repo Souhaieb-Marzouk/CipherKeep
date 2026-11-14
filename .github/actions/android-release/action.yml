@@ -1,0 +1,115 @@
+name: Build signed Android release
+description: Build, sign and verify the Android APK/AAB in the current job environment.
+
+inputs:
+  version:
+    description: Semver version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9 # v4.8.0
+      with:
+        distribution: temurin
+        java-version: "17"
+
+    - name: Decode the protected keystore
+      shell: bash
+      env:
+        KEYSTORE_BASE64: ${{ env.CIPHERKEEP_KEYSTORE_BASE64 }}
+      run: |
+        set -euo pipefail
+        umask 077
+        test -n "${KEYSTORE_BASE64:-}" || { echo "missing keystore secret" >&2; exit 1; }
+        keystore="$RUNNER_TEMP/release.keystore"
+        printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
+        test -s "$keystore"
+        chmod 600 "$keystore"
+        echo "CIPHERKEEP_KEYSTORE=$keystore" >> "$GITHUB_ENV"
+
+    - name: Build release APK and AAB
+      shell: bash
+      working-directory: android
+      env:
+        CIPHERKEEP_VERSION_NAME: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        chmod +x gradlew
+        ./gradlew :app:assembleRelease :app:bundleRelease --no-daemon --stacktrace
+
+    - name: Verify APK signature, certificate, and debuggability
+      shell: bash
+      working-directory: android
+      env:
+        EXPECTED_CERT_SHA256: ${{ env.CIPHERKEEP_CERT_SHA256 }}
+      run: |
+        set -euo pipefail
+        apk=$(find app/build/outputs/apk/release -name '*.apk' -print -quit)
+        test -n "$apk"
+        build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)
+        aapt="$build_tools/aapt2"
+        apksigner="$build_tools/apksigner"
+
+        "$aapt" dump badging "$apk" > badging.txt
+        if grep -q 'application-debuggable' badging.txt; then
+          echo "release APK is debuggable" >&2
+          exit 1
+        fi
+
+        "$apksigner" verify --verbose --print-certs "$apk" | tee apksigner.txt
+        fingerprint=$("$apksigner" verify --print-certs "$apk" |
+          sed -nE 's/^(Signer #1|V2 Signer|V3 Signer|V3.1 Signer): certificate SHA-256 digest: //p' |
+          head -n 1)
+        test -n "$fingerprint"
+        echo "APK_SHA256=$fingerprint" >> "$GITHUB_STEP_SUMMARY"
+        echo "$fingerprint" > certificate-sha256.txt
+
+        if [ -n "${EXPECTED_CERT_SHA256:-}" ]; then
+          normalize() {
+            printf '%s' "$1" |
+              tr -d '[:space:]:' |
+              sed -E 's/^SHA256//I' |
+              tr '[:lower:]' '[:upper:]'
+          }
+          expected=$(normalize "$EXPECTED_CERT_SHA256")
+          actual=$(normalize "$fingerprint")
+          if [ "$actual" != "$expected" ]; then
+            echo "signing certificate does not match the published fingerprint" >&2
+            echo "actual:   $actual" >&2
+            echo "expected: $expected" >&2
+            exit 1
+          fi
+        else
+          echo "CIPHERKEEP_CERT_SHA256 is not set; recording the certificate only." >&2
+        fi
+
+        aab=$(find app/build/outputs/bundle/release -name '*.aab' -print -quit)
+        test -n "$aab"
+        jarsigner -verify "$aab" > jarsigner.txt 2>&1
+        cat jarsigner.txt
+        grep -q 'jar verified' jarsigner.txt || {
+          echo "AAB signature verification failed" >&2
+          exit 1
+        }
+
+        sha256sum "$apk" "$aab" > SHA256SUMS
+        cat SHA256SUMS
+
+    - name: Upload signed Android artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: cipherkeep-android-${{ inputs.version }}
+        if-no-files-found: error
+        retention-days: 14
+        path: |
+          android/app/build/outputs/apk/release/*.apk
+          android/app/build/outputs/bundle/release/*.aab
+          android/SHA256SUMS
+          android/certificate-sha256.txt
+          android/apksigner.txt
+
+    - name: Remove the decoded keystore
+      if: always()
+      shell: bash
+      run: rm -f "${CIPHERKEEP_KEYSTORE:-$RUNNER_TEMP/release.keystore}"

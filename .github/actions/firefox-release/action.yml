@@ -1,0 +1,92 @@
+name: Build signed Firefox XPI
+description: Build, sign through AMO unlisted and generate updates.json.
+
+inputs:
+  version:
+    description: Semver version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      with:
+        node-version: 22.22.0
+
+    - name: Install extension dependencies
+      shell: bash
+      working-directory: firefox
+      run: npm ci
+
+    - name: Set version
+      shell: bash
+      working-directory: firefox
+      run: node scripts/update-manifest.mjs --version "${{ inputs.version }}"
+
+    - name: Typecheck, test, build and lint
+      shell: bash
+      working-directory: firefox
+      run: npm run check
+
+    - name: Install pinned web-ext from lockfile
+      shell: bash
+      run: |
+        set -euo pipefail
+        npm ci --prefix "$GITHUB_WORKSPACE/tools/web-ext" --no-audit --no-fund
+        echo "$GITHUB_WORKSPACE/tools/web-ext/node_modules/.bin" >> "$GITHUB_PATH"
+
+    - name: Web-ext lint
+      shell: bash
+      working-directory: firefox
+      run: web-ext lint --source-dir dist
+
+    - name: Sign unlisted XPI through AMO
+      shell: bash
+      working-directory: firefox
+      env:
+        WEB_EXT_API_KEY: ${{ env.AMO_API_KEY }}
+        WEB_EXT_API_SECRET: ${{ env.AMO_API_SECRET }}
+      run: |
+        set -euo pipefail
+        test -n "${WEB_EXT_API_KEY:-}" || { echo "missing AMO API key" >&2; exit 1; }
+        test -n "${WEB_EXT_API_SECRET:-}" || { echo "missing AMO API secret" >&2; exit 1; }
+        web-ext sign \
+          --channel unlisted \
+          --source-dir dist \
+          --artifacts-dir web-ext-artifacts \
+          --timeout 1800000
+
+    - name: Normalize signed artifact and generate updates.json
+      shell: bash
+      working-directory: firefox
+      run: |
+        set -euo pipefail
+        signed=$(find web-ext-artifacts -name '*.xpi' -print -quit)
+        test -n "$signed"
+        cp "$signed" "cipherkeep-${{ inputs.version }}.xpi"
+        node scripts/updates-json.mjs \
+          --xpi "cipherkeep-${{ inputs.version }}.xpi" \
+          --version "${{ inputs.version }}" \
+          --url "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/download/v${{ inputs.version }}/cipherkeep-${{ inputs.version }}.xpi" \
+          --out updates.json
+        cp updates.json firefox-updates.json
+        cp updates.json ../updates.json
+        node scripts/verify-updates.mjs \
+          --updates updates.json \
+          --xpi "cipherkeep-${{ inputs.version }}.xpi" \
+          --version "${{ inputs.version }}"
+        sha256sum "cipherkeep-${{ inputs.version }}.xpi" updates.json > SHA256SUMS
+        cat SHA256SUMS
+
+    - name: Upload signed Firefox artifacts
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      with:
+        name: cipherkeep-firefox-${{ inputs.version }}
+        if-no-files-found: error
+        retention-days: 14
+        path: |
+          firefox/cipherkeep-${{ inputs.version }}.xpi
+          firefox/updates.json
+          firefox/firefox-updates.json
+          firefox/SHA256SUMS
+          updates.json

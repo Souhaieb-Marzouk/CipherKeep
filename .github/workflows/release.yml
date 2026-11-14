@@ -61,25 +61,41 @@ jobs:
   android:
     name: signed Android build
     needs: validate
-    uses: ./.github/workflows/build-android.yml
-    with:
-      version: ${{ needs.validate.outputs.version }}
-    secrets:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    env:
       CIPHERKEEP_KEYSTORE_BASE64: ${{ secrets.CIPHERKEEP_KEYSTORE_BASE64 }}
       CIPHERKEEP_KEYSTORE_PASSWORD: ${{ secrets.CIPHERKEEP_KEYSTORE_PASSWORD }}
       CIPHERKEEP_KEY_ALIAS: ${{ secrets.CIPHERKEEP_KEY_ALIAS }}
       CIPHERKEEP_KEY_PASSWORD: ${{ secrets.CIPHERKEEP_KEY_PASSWORD }}
       CIPHERKEEP_CERT_SHA256: ${{ secrets.CIPHERKEEP_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/android-release
+        with:
+          version: ${{ needs.validate.outputs.version }}
 
   firefox:
     name: signed Firefox build
     needs: [validate, android]
-    uses: ./.github/workflows/build-firefox.yml
-    with:
-      version: ${{ needs.validate.outputs.version }}
-    secrets:
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    env:
       AMO_API_KEY: ${{ secrets.AMO_API_KEY }}
       AMO_API_SECRET: ${{ secrets.AMO_API_SECRET }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/firefox-release
+        with:
+          version: ${{ needs.validate.outputs.version }}
 
   integrity:
     name: checksums, Minisign and draft
