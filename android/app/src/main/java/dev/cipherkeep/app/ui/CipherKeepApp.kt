@@ -205,9 +205,13 @@ fun CipherKeepApp() {
                 VaultUiState.LockWarning -> LockWarningScreen(controller)
                 is VaultUiState.StorageError -> StorageErrorScreen(controller, state.message)
                 VaultUiState.Unlocked -> {
-                    BackHandler(enabled = screen != "vault") {
-                        screen = "vault"
-                        selectedIndex = -1
+                    BackHandler(enabled = screen != "vault" || selectedIndex >= 0) {
+                        if (selectedIndex >= 0) {
+                            selectedIndex = -1
+                            screen = "vault"
+                        } else {
+                            screen = "vault"
+                        }
                     }
                     Scaffold(
                         contentWindowInsets = WindowInsets.safeDrawing,
@@ -868,11 +872,17 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
     fun saveLogin() {
         busy = true
         scope.launch {
-            val result = if (kind == "totp") {
-                controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
-            } else {
-                controller.saveItem(title.trim(), username.trim(), password, url.trim(), notes, folder.trim(), tags, favorite, false, totpUri.trim())
+            if (totpUri.isNotBlank() && runCatching {
+                    totpCode(totpUri, (System.currentTimeMillis() / 1000).toULong())
+                }.isFailure) {
+                busy = false
+                error = "Invalid TOTP URI."
+                return@launch
             }
+            val result = controller.saveItem(
+                title.trim(), username.trim(), password, url.trim(), notes,
+                folder.trim(), tags, favorite, false, totpUri.trim(),
+            )
             busy = false
             password = ""
             totpUri = ""
@@ -1048,8 +1058,10 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
             Text("Password health", style = MaterialTheme.typography.titleMedium)
+            HealthSection(controller)
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
             Text("Breach monitoring", style = MaterialTheme.typography.titleMedium)
+            HibpSection(context, controller)
         }
     }
 }
@@ -1070,9 +1082,7 @@ private fun itemSubtitle(item: VaultItem): String {
     "card" -> listOf("Card", item.cardholder).filter(String::isNotBlank).joinToString(" · ")
     "identity" -> listOf("Identity", item.fullName.ifBlank { item.email }).filter(String::isNotBlank).joinToString(" · ")
     "totp" -> listOf("TOTP", item.username).filter(String::isNotBlank).joinToString(" · ")
-        else -> listOf("Login", if (showUsername) item.username else "", item.url)
-            .filter(String::isNotBlank)
-            .joinToString(" · ")
+        else -> if (showUsername) item.username.ifBlank { "No username" } else ""
     }
 }
 
@@ -1586,7 +1596,7 @@ private fun ItemDetailScreen(
                 actions = {
                     TextButton(onClick = { menuOpen = true }) { Text("⋮") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                        DropdownMenuItem(text = { Text("Pin / unpin") }, onClick = {
+                        DropdownMenuItem(text = { Text(if (item.favorite) "Unpin" else "Pin") }, onClick = {
                             menuOpen = false
                             scope.launch { controller.setFavorite(item, !item.favorite).onSuccess { onStable(item.id) }.onFailure { actionError = "Could not update pin." } }
                         })

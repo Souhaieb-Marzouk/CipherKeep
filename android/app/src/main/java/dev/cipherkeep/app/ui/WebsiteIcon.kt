@@ -43,17 +43,24 @@ private suspend fun loadWebsiteIcon(context: Context, url: String): Bitmap? = wi
         if (file.exists()) {
             BitmapFactory.decodeFile(file.path)?.let { return@runCatching it }
         }
-        val request = Request.Builder().url("https://$host/favicon.ico").build()
-        faviconClient.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) return@runCatching null
-            val body = response.body ?: return@runCatching null
-            if (body.contentLength() > 512 * 1024) return@runCatching null
-            val bytes = body.bytes()
-            if (bytes.size > 512 * 1024) return@runCatching null
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@runCatching null
-            file.outputStream().use { it.write(bytes) }
-            bitmap
+        val candidates = listOf(
+            "https://$host/favicon.ico",
+            "https://icons.duckduckgo.com/ip3/$host.ico",
+        )
+        for (candidate in candidates) {
+            val request = Request.Builder().url(candidate).build()
+            faviconClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@use
+                val body = response.body ?: return@use
+                if (body.contentLength() > 512 * 1024) return@use
+                val bytes = body.bytes()
+                if (bytes.size > 512 * 1024) return@use
+                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@use
+                file.outputStream().use { it.write(bytes) }
+                return@runCatching bitmap
+            }
         }
+        null
     }.getOrNull()
 }
 
