@@ -19,12 +19,14 @@
         <activity
             android:name=".passkeys.PasskeyCreateActivity"
             android:exported="false"
-            android:theme="@style/Theme.CipherKeep" />
+            android:theme="@style/Theme.CipherKeep"
+            tools:targetApi="34" />
 
         <activity
             android:name=".passkeys.PasskeyGetActivity"
             android:exported="false"
-            android:theme="@style/Theme.CipherKeep" />
+            android:theme="@style/Theme.CipherKeep"
+            tools:targetApi="34" />
 
         <service
             android:name=".passkeys.CipherKeepCredentialProvider"
