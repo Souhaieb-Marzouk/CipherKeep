@@ -1002,40 +1002,46 @@ private fun itemSubtitle(item: VaultItem): String = when (item.type) {
 
 @Composable
 private fun AuroraNavBar(onAdd: () -> Unit, onSecurity: () -> Unit, onSettings: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = CKDimens.Space4, vertical = CKDimens.Space2),
-        shape = RoundedCornerShape(28.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        tonalElevation = 8.dp,
-        shadowElevation = 8.dp,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically,
+    Box(Modifier.fillMaxWidth().height(96.dp)) {
+        Surface(
+            modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = CKDimens.Space4).height(66.dp),
+            shape = RoundedCornerShape(26.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            shadowElevation = 10.dp,
         ) {
-            AuroraNavItem("⌂", "Vault", true, {})
-            AuroraNavItem("＋", "Add", false, onAdd)
-            AuroraNavItem("◈", "Security", false, onSecurity)
-            AuroraNavItem("⚙", "Settings", false, onSettings)
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                AuroraNavItem("⌂", "Vault", true, {})
+                AuroraNavItem("◈", "Security", false, onSecurity)
+                Spacer(Modifier.width(64.dp))
+                AuroraNavItem("⚙", "Settings", false, onSettings)
+            }
+        }
+        Surface(
+            modifier = Modifier.align(Alignment.TopCenter).size(62.dp).clickable(onClick = onAdd),
+            shape = RoundedCornerShape(50),
+            color = MaterialTheme.colorScheme.primary,
+            shadowElevation = 12.dp,
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary)
+            }
         }
     }
 }
 
 @Composable
 private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onClick: () -> Unit) {
-    Surface(
-        shape = RoundedCornerShape(22.dp),
-        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        modifier = Modifier.clickable(onClick = onClick),
+    Column(
+        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(glyph, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onPrimaryContainer)
-        }
+        Text(glyph, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -1110,66 +1116,78 @@ private fun VaultScreen(
         ) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(52.dp),
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("C", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimary)
-                        }
-                    }
-                    Spacer(Modifier.width(CKDimens.Space3))
                     Column(Modifier.weight(1f)) {
-                        Text("CipherKeep", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
-                        Text("Your private space", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("CIPHERKEEP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        Text("Your vault, quietly secure", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                     }
-                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.secondaryContainer) {
+                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
                         TextButton(onClick = onLock) { Text("Lock") }
                     }
                 }
-                Spacer(Modifier.height(CKDimens.Space4))
+                Spacer(Modifier.height(CKDimens.Space3))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary),
+                    shape = RoundedCornerShape(24.dp),
+                ) {
+                    Row(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("${items.size} ${if (items.size == 1) "item" else "items"}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary)
+                            Text(
+                                "${items.count { it.favorite }} favorites · ${items.map { it.folder }.filter { it.isNotBlank() }.distinct().size} folders",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
+                            )
+                        }
+                        Text("✦", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.secondary)
+                    }
+                }
+                Spacer(Modifier.height(CKDimens.Space3))
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search your vault") },
+                    placeholder = { Text("Search by name, user or website") },
                     leadingIcon = { Text("⌕", style = MaterialTheme.typography.titleLarge) },
                     singleLine = true,
-                    shape = RoundedCornerShape(50),
+                    shape = RoundedCornerShape(18.dp),
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                    TextButton(onClick = { favoritesOnly = false }) { Text("All") }
-                    TextButton(onClick = { favoritesOnly = true }) { Text("Favorites") }
-                    TextButton(onClick = { showFolders = true }) { Text("Folders") }
+                Spacer(Modifier.height(CKDimens.Space2))
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    listOf(false to "All", true to "Favorites").forEach { (fav, label) ->
+                        val active = favoritesOnly == fav
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.clickable { favoritesOnly = fav },
+                        ) { Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface) }
+                    }
+                    Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.clickable { showFolders = true }) {
+                        Text("Folders", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
+                    }
+                    Spacer(Modifier.weight(1f))
                     TextButton(onClick = { sortMode = (sortMode + 1) % 3 }) {
-                        Text(
-                            when (sortMode) {
-                                1 -> "Recent"
-                                2 -> "Folder"
-                                else -> "Title"
-                            },
-                        )
+                        Text(when (sortMode) { 1 -> "Recent"; 2 -> "Folder"; else -> "A–Z" })
                     }
                 }
                 OutlinedTextField(
                     value = filterText,
                     onValueChange = { filterText = it },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Filter folder or tag") },
+                    placeholder = { Text("Filter by folder or tag") },
                     singleLine = true,
-                    shape = MaterialTheme.shapes.small,
+                    shape = RoundedCornerShape(50),
                 )
                 Spacer(Modifier.height(CKDimens.Space2))
+                Text("${visibleItems.size} shown", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (visibleItems.isEmpty()) {
                     Card(
                         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(24.dp),
                     ) {
-                        Column(Modifier.fillMaxWidth().padding(CKDimens.Space4)) {
-                            Text(if (items.isEmpty()) "Your vault is empty" else "Nothing matches", style = MaterialTheme.typography.titleMedium)
+                        Column(Modifier.fillMaxWidth().padding(CKDimens.Space6)) {
+                            Text(if (items.isEmpty()) "A quiet vault" else "Nothing here yet", style = MaterialTheme.typography.titleLarge)
                             Text(
-                                if (items.isEmpty()) "Tap Add to create a login, card, note or identity." else "Try a different search or clear the folder filter.",
+                                if (items.isEmpty()) "Create your first login, card, note or identity with the Add button below." else "Try another search or clear the filter.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )

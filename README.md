@@ -26,7 +26,7 @@ CipherKeep is a free, local-first password manager. Your vault stays on your own
 - **Android 8.0+** — mobile vault, autofill, biometric unlock and optional passkeys.
 - **Firefox 142+** — browser companion for quick access while you work.
 
-> **Project status:** 2.0.2 official release. Android uses the new `dev.cipherkeep.app.v2` package because the original signing key was lost; see the migration note below. The code has not been independently audited. Keep tested backups and do not make it the only copy of irreplaceable credentials.
+> **Project status:** 2.0.3 official release. Android uses the new `dev.cipherkeep.app.v2` package because the original signing key was lost; see the migration note below. The code has not been independently audited. Keep tested backups and do not make it the only copy of irreplaceable credentials.
 
 ---
 
