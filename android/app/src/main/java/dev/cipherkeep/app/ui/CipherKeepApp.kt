@@ -2088,6 +2088,19 @@ private fun ImportSection(context: Context, controller: SessionController) {
                                     }
                                     null
                                 }
+                                (bytes.decodeToString().trimStart().startsWith("-----BEGIN PGP MESSAGE-----") ||
+                                    (bytes.isNotEmpty() && (bytes[0].toInt() and 0x80) != 0)) -> {
+                                    if (importPassword.isEmpty()) {
+                                        message = "Enter the Proton export passphrase."
+                                        null
+                                    } else {
+                                        runCatching {
+                                            dev.cipherkeep.core.decryptProtonPgp(bytes, importPassword)
+                                        }.onFailure {
+                                            message = "Proton PGP decryption failed. Check the passphrase."
+                                        }.getOrNull()
+                                    }
+                                }
                                 bytes.size >= 2 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() -> {
                                     val jsonEntry = extractZipEntry(bytes, "export.data")
                                     val pgpEntry = extractZipEntry(bytes, "data.pgp")

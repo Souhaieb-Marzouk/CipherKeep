@@ -182,7 +182,7 @@ pub fn detect_format(bytes: &[u8]) -> Option<ImportFormat> {
         if value.get("accounts").and_then(Value::as_array).is_some() {
             return Some(ImportFormat::OnePassword1pux);
         }
-        if value.get("vaults").and_then(Value::as_array).is_some() {
+        if value.get("vaults").is_some_and(|vaults| vaults.is_array() || vaults.is_object()) {
             return Some(ImportFormat::ProtonJson);
         }
         return Some(ImportFormat::BitwardenJson);
@@ -352,10 +352,16 @@ fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResul
         serde_json::from_str(text).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
     let vaults = value
         .get("vaults")
-        .and_then(Value::as_array)
         .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+    let vault_values: Vec<&Value> = if let Some(array) = vaults.as_array() {
+        array.iter().collect()
+    } else if let Some(map) = vaults.as_object() {
+        map.values().collect()
+    } else {
+        return Err(CoreError::new(ErrorCode::CorruptData));
+    };
     let mut states = ImportState::new(ImportFormat::ProtonJson);
-    for vault in vaults {
+    for vault in vault_values {
         let folder = string_field(vault, "name");
         let items = vault
             .get("items")
@@ -404,7 +410,24 @@ fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResul
                 )?;
                 continue;
             }
-            let username = string_field(content, "username");
+            let username = {
+                let primary = string_field(content, "itemUsername");
+                if primary.trim().is_empty() {
+                    let email = string_field(content, "itemEmail");
+                    if email.trim().is_empty() {
+                        let legacy = string_field(content, "username");
+                        if legacy.trim().is_empty() {
+                            string_field(content, "email")
+                        } else {
+                            legacy
+                        }
+                    } else {
+                        email
+                    }
+                } else {
+                    primary
+                }
+            };
             let password = string_field(content, "password");
             let url = content
                 .get("urls")
