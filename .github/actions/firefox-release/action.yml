@@ -21,7 +21,9 @@ runs:
     - name: Set version
       shell: bash
       working-directory: firefox
-      run: node scripts/update-manifest.mjs --version "${{ inputs.version }}"
+      env:
+        VERSION: ${{ inputs.version }}
+      run: node scripts/update-manifest.mjs --version "$VERSION"
 
     - name: Typecheck, test, build and lint
       shell: bash
@@ -33,12 +35,12 @@ runs:
       run: |
         set -euo pipefail
         npm ci --prefix "$GITHUB_WORKSPACE/tools/web-ext" --no-audit --no-fund
-        echo "$GITHUB_WORKSPACE/tools/web-ext/node_modules/.bin" >> "$GITHUB_PATH"
 
     - name: Web-ext lint
       shell: bash
       working-directory: firefox
-      run: web-ext lint --source-dir dist
+      run: |
+        "$GITHUB_WORKSPACE/tools/web-ext/node_modules/.bin/web-ext" lint --source-dir dist
 
     - name: Sign unlisted XPI through AMO
       shell: bash
@@ -50,7 +52,7 @@ runs:
         set -euo pipefail
         test -n "${WEB_EXT_API_KEY:-}" || { echo "missing AMO API key" >&2; exit 1; }
         test -n "${WEB_EXT_API_SECRET:-}" || { echo "missing AMO API secret" >&2; exit 1; }
-        web-ext sign \
+        "$GITHUB_WORKSPACE/tools/web-ext/node_modules/.bin/web-ext" sign \
           --channel unlisted \
           --source-dir dist \
           --artifacts-dir web-ext-artifacts \
@@ -59,23 +61,25 @@ runs:
     - name: Normalize signed artifact and generate updates.json
       shell: bash
       working-directory: firefox
+      env:
+        VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
         signed=$(find web-ext-artifacts -name '*.xpi' -print -quit)
         test -n "$signed"
-        cp "$signed" "cipherkeep-${{ inputs.version }}.xpi"
+        cp "$signed" "cipherkeep-$VERSION.xpi"
         node scripts/updates-json.mjs \
-          --xpi "cipherkeep-${{ inputs.version }}.xpi" \
-          --version "${{ inputs.version }}" \
-          --url "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/download/v${{ inputs.version }}/cipherkeep-${{ inputs.version }}.xpi" \
+          --xpi "cipherkeep-$VERSION.xpi" \
+          --version "$VERSION" \
+          --url "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/download/v$VERSION/cipherkeep-$VERSION.xpi" \
           --out updates.json
         cp updates.json firefox-updates.json
         cp updates.json ../updates.json
         node scripts/verify-updates.mjs \
           --updates updates.json \
-          --xpi "cipherkeep-${{ inputs.version }}.xpi" \
-          --version "${{ inputs.version }}"
-        sha256sum "cipherkeep-${{ inputs.version }}.xpi" updates.json > SHA256SUMS
+          --xpi "cipherkeep-$VERSION.xpi" \
+          --version "$VERSION"
+        sha256sum "cipherkeep-$VERSION.xpi" updates.json > SHA256SUMS
         cat SHA256SUMS
 
     - name: Upload signed Firefox artifacts

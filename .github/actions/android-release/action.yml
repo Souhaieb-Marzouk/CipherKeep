@@ -26,13 +26,13 @@ runs:
         printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$keystore"
         test -s "$keystore"
         chmod 600 "$keystore"
-        echo "CIPHERKEEP_KEYSTORE=$keystore" >> "$GITHUB_ENV"
 
     - name: Build release APK and AAB
       shell: bash
       working-directory: android
       env:
         CIPHERKEEP_VERSION_NAME: ${{ inputs.version }}
+        CIPHERKEEP_KEYSTORE: ${{ runner.temp }}/release.keystore
       run: |
         set -euo pipefail
         chmod +x gradlew
