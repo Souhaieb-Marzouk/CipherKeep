@@ -2,3 +2,5 @@ rules:
   self-repository:
     ignore:
       - release.yml
+      - build-android.yml
+      - build-firefox.yml
