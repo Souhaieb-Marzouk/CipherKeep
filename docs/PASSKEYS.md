@@ -49,7 +49,7 @@ assert passkeys.
 
 - RP: `https://souhaieb-marzouk.github.io/cipherkeep-passkey/`
 - Asset links: verified by Google Digital Asset Links API for
-  `dev.cipherkeep.app` and the debug SHA-256.
+  `dev.cipherkeep.app.v2` and the release SHA-256.
 - Chrome opened the page; RP ID showed `souhaieb-marzouk.github.io`.
 - Tapping **Register passkey** opened Android's system passkey UI for that RP.
 - The picker offered only Google Password Manager. CipherKeep was absent,

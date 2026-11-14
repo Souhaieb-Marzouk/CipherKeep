@@ -33,7 +33,7 @@ android {
     buildToolsVersion = "36.0.0"
 
     defaultConfig {
-        applicationId = "dev.cipherkeep.app"
+        applicationId = "dev.cipherkeep.app.v2"
         minSdk = 26
         targetSdk = 36
         versionCode = appVersionCode

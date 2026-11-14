@@ -3,7 +3,7 @@
 CipherKeep is a password manager. Security reports are treated as the
 highest-priority work.
 
-**Status:** 1.0.0 official release. The code has not been independently audited; keep tested backups for critical accounts.
+**Status:** 2.0.0 official release. Android uses a new signing identity (`dev.cipherkeep.app.v2`). The code has not been independently audited; keep tested backups for critical accounts.
 
 ## Supported versions
 
@@ -129,7 +129,7 @@ These are known and must not be described as solved:
 - **HIBP scans reveal password count and hash prefixes** to the HIBP endpoint.
 - **Rotation journals can roll back a completed rotation** if journal deletion
   fails after both stores commit.
-- **No independent audit exists yet.** The 1.0.0 build is signed and published
+- **No independent audit exists yet.** The 2.0.0 build is signed and published
   through the release pipeline, but independent review is still outstanding.
 - **No reproducible Android unsigned-artifact diff in CI.** Firefox is diffed;
   Android is documented and manually compared.
@@ -147,11 +147,11 @@ support and limitations.
 ## Threat-model review sign-off
 
 ```text
-Version:   1.0.0
+Version:   2.0.0
 Date:      2026-11-14
 Reviewer:  CipherKeep maintainer
 Scope:     core, Android, Firefox, workers, release pipeline
-Result:    accepted for 1.0.0; residual risks above
+Result:    accepted for 2.0.0; residual risks above
 Next:      independent review before stable release
 ```
 

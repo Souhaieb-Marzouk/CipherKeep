@@ -145,7 +145,7 @@ Install and launch:
 
 ```bash
 adb install -r app-release.apk
-adb shell am start -n dev.cipherkeep.app/.MainActivity
+adb shell am start -n dev.cipherkeep.app.v2/.MainActivity
 ```
 
 ## Rotation
