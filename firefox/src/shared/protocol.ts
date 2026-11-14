@@ -49,6 +49,7 @@ export type Request =
   | { type: "delete-folder"; name: string }
   | { type: "export-backup"; password: string }
   | { type: "import-backup"; password: string; data: string }
+  | { type: "import-plaintext"; data: string; mergeDuplicates?: boolean }
   | { type: "autofill-request"; id: string }
   | { type: "consume-autofill"; token: string }
   | { type: "inspect-autofill" }
@@ -216,6 +217,7 @@ function isRequestType(value: unknown): value is Request["type"] {
       "delete-folder",
       "export-backup",
       "import-backup",
+      "import-plaintext",
       "autofill-request",
       "consume-autofill",
       "inspect-autofill",
@@ -428,6 +430,9 @@ export function isRequest(value: unknown): value is Request {
       return typeof request.token === "string" && request.token.length <= 128;
     case "autofill-request":
       return typeof request.id === "string" && /^[0-9a-f]{32}$/i.test(request.id);
+    case "import-plaintext":
+      return typeof request.data === "string" && request.data.length <= 48_000_000 &&
+        (request.mergeDuplicates === undefined || typeof request.mergeDuplicates === "boolean");
     case "import-backup":
       return (
         isText(request.password, 1_024) &&

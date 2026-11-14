@@ -7,10 +7,13 @@ object BackupFileBridge {
     const val REQUEST_CODE = 1001
     const val IMPORT_REQUEST_CODE = 1002
     const val TREE_REQUEST_CODE = 1003
+    const val TEXT_IMPORT_REQUEST_CODE = 1004
     @Volatile
     var handler: ((Uri) -> Unit)? = null
     @Volatile
     var importHandler: ((Uri) -> Unit)? = null
     @Volatile
     var treeHandler: ((Uri) -> Unit)? = null
+    @Volatile
+    var textImportHandler: ((Uri) -> Unit)? = null
 }

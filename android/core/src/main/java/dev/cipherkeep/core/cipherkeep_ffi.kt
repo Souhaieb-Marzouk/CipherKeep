@@ -675,6 +675,8 @@ internal object IntegrityCheckingUniffiLib {
     }
 
     internal fun ensureInitialized() = Unit
+    external fun uniffi_cipherkeep_ffi_checksum_func_decrypt_proton_pgp(
+    ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_export_portable(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_family_identity(
@@ -688,6 +690,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_cipherkeep_ffi_checksum_func_generate_password(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_health_report(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_import_kdbx_json(
+    ): Int
+    external fun uniffi_cipherkeep_ffi_checksum_func_import_plaintext_json(
     ): Int
     external fun uniffi_cipherkeep_ffi_checksum_func_import_portable(
     ): Int
@@ -867,6 +873,8 @@ internal object UniffiLib {
     ): Unit
     external fun uniffi_cipherkeep_ffi_fn_method_ffivaultsession_webauthn_seal(`ptr`: Long,`prfOutput`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_decrypt_proton_pgp(`bytes`: RustBuffer.ByValue,`passphrase`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_export_portable(`itemsJson`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_family_identity(`id`: RustBuffer.ByValue,`role`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
@@ -880,6 +888,10 @@ internal object UniffiLib {
     external fun uniffi_cipherkeep_ffi_fn_func_generate_password(`policy`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_health_report(`itemsJson`: RustBuffer.ByValue,`now`: Long,`staleSecs`: Long,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_import_kdbx_json(`bytes`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
+    ): RustBuffer.ByValue
+    external fun uniffi_cipherkeep_ffi_fn_func_import_plaintext_json(`bytes`: RustBuffer.ByValue,`mergeDuplicates`: Byte,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
     external fun uniffi_cipherkeep_ffi_fn_func_import_portable(`bytes`: RustBuffer.ByValue,`password`: RustBuffer.ByValue,uniffi_out_err: UniffiRustCallStatus, 
     ): RustBuffer.ByValue
@@ -1010,6 +1022,9 @@ private fun uniffiCheckContractApiVersion(lib: IntegrityCheckingUniffiLib) {
 }
 @Suppress("UNUSED_PARAMETER")
 private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_decrypt_proton_pgp() and 0xFFFF) != 23462) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_export_portable() and 0xFFFF) != 46929) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -1031,7 +1046,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_health_report() and 0xFFFF) != 17880) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_portable() and 0xFFFF) != 4345) {
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_kdbx_json() and 0xFFFF) != 62246) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_plaintext_json() and 0xFFFF) != 22292) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if ((lib.uniffi_cipherkeep_ffi_checksum_func_import_portable() and 0xFFFF) != 57761) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if ((lib.uniffi_cipherkeep_ffi_checksum_func_merge_sync_records_v2() and 0xFFFF) != 46137) {
@@ -3548,6 +3569,22 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
     }
 }
         /**
+         * Decrypt a Proton Pass `data.pgp` payload with its export passphrase.
+         */
+    @Throws(FfiException::class) fun `decryptProtonPgp`(`bytes`: kotlin.ByteArray, `passphrase`: kotlin.String): kotlin.ByteArray {
+            return FfiConverterByteArray.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_decrypt_proton_pgp(
+    
+        
+        FfiConverterByteArray.lower(`bytes`),
+        FfiConverterString.lower(`passphrase`),_status)
+}
+    )
+    }
+    
+
+        /**
          * Encrypt portable item JSON with a separate export password.
          *
          * # Errors
@@ -3687,7 +3724,41 @@ public object FfiConverterSequenceTypeFfiSearchHit: FfiConverterRustBuffer<List<
          * # Errors
          *
          * Returns a redacted error for a wrong password, tamper or malformed header.
+         * Decrypt and parse a password-protected KeePass KDBX database.
          */
+    @Throws(FfiException::class) fun `importKdbxJson`(`bytes`: kotlin.ByteArray, `password`: kotlin.String): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_import_kdbx_json(
+    
+        
+        FfiConverterByteArray.lower(`bytes`),
+        FfiConverterString.lower(`password`),_status)
+}
+    )
+    }
+    
+
+        /**
+         * Parse a plaintext CSV/JSON password-manager export.
+         *
+         * Returns a preview and normalized items as JSON. The caller is responsible
+         * for writing the items into the unlocked vault and for treating the input
+         * as sensitive plaintext.
+         */
+    @Throws(FfiException::class) fun `importPlaintextJson`(`bytes`: kotlin.ByteArray, `mergeDuplicates`: kotlin.Boolean): kotlin.String {
+            return FfiConverterString.lift(
+    uniffiRustCallWithError(FfiException) { _status ->
+    UniffiLib.uniffi_cipherkeep_ffi_fn_func_import_plaintext_json(
+    
+        
+        FfiConverterByteArray.lower(`bytes`),
+        FfiConverterBoolean.lower(`mergeDuplicates`),_status)
+}
+    )
+    }
+    
+
     @Throws(FfiException::class) fun `importPortable`(`bytes`: kotlin.ByteArray, `password`: kotlin.String): kotlin.ByteArray {
             return FfiConverterByteArray.lift(
     uniffiRustCallWithError(FfiException) { _status ->

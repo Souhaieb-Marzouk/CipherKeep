@@ -163,7 +163,54 @@ pub fn import_portable(bytes: Vec<u8>, password: &str) -> Result<Vec<u8>, JsValu
         .map_err(js_error)
 }
 
-/// Return the shared core version.
+/// Decrypt a Proton Pass `data.pgp` payload with its export passphrase.
+#[wasm_bindgen]
+pub fn decrypt_proton_pgp(bytes: &[u8], passphrase: &str) -> Result<Vec<u8>, JsValue> {
+    cipherkeep_core::proton_pgp::decrypt_proton_pgp(bytes, passphrase).map_err(js_error)
+}
+
+/// Parse a plaintext password-manager export into normalized JSON.
+#[wasm_bindgen]
+pub fn import_plaintext_json(bytes: &[u8], merge_duplicates: bool) -> Result<String, JsValue> {
+    let policy = if merge_duplicates {
+        cipherkeep_core::DuplicatePolicy::Merge
+    } else {
+        cipherkeep_core::DuplicatePolicy::Skip
+    };
+    let result = cipherkeep_core::import(bytes, policy).map_err(js_error)?;
+    let items = result
+        .items
+        .iter()
+        .map(|item| match item.kind {
+            cipherkeep_core::ImportKind::Login => serde_json::json!({
+                "kind": "login",
+                "title": item.title,
+                "username": item.username,
+                "password": item.password,
+                "url": item.url,
+                "notes": item.notes,
+                "folder": item.folder,
+                "tags": item.tags,
+            }),
+            cipherkeep_core::ImportKind::Note => serde_json::json!({
+                "kind": "note",
+                "title": item.title,
+                "notes": item.notes,
+                "folder": item.folder,
+            }),
+        })
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "format": result.report.format.name(),
+        "imported": result.report.imported,
+        "skippedDuplicates": result.report.skipped_duplicates,
+        "failed": result.report.failed,
+        "items": items,
+    })
+    .to_string())
+}
+
+/// Return the shared core version./// Return the shared core version.
 #[must_use]
 pub fn core_version() -> String {
     cipherkeep_core::VERSION.to_string()

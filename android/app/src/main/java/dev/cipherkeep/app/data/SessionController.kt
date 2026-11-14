@@ -344,6 +344,16 @@ class SessionController(context: Context) {
                         totpUri = json.optString("totpUri"),
                         url = json.optString("url"),
                         notes = json.optString("notes"),
+                        cardholder = json.optString("cardholder"),
+                        cardNumber = json.optString("cardNumber"),
+                        cardExpiry = json.optString("cardExpiry"),
+                        cardCvv = json.optString("cardCvv"),
+                        fullName = json.optString("fullName"),
+                        email = json.optString("email"),
+                        phone = json.optString("phone"),
+                        address = json.optString("address"),
+                        company = json.optString("company"),
+                        jobTitle = json.optString("jobTitle"),
                         folder = json.optString("folder"),
                         tags = json.optJSONArray("tags")?.let { array ->
                             (0 until array.length()).mapNotNull { index ->
@@ -401,6 +411,49 @@ class SessionController(context: Context) {
                     .encodeToByteArray()
                 val ciphertext = active.encryptItem(id, payload)
                 payload.fill(0)
+                repo.save(
+                    itemId = id,
+                    ciphertext = ciphertext,
+                    lamport = 1,
+                    tombstone = false,
+                    schemaVersion = 1,
+                    updatedAt = System.currentTimeMillis(),
+                )
+                loadItems()
+            }
+        }
+
+    suspend fun saveTypedItem(
+        type: String,
+        title: String,
+        fields: Map<String, String>,
+        folder: String = "",
+        tags: String = "",
+        favorite: Boolean = false,
+    ): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                require(title.isNotBlank())
+                require(type in setOf("note", "card", "identity", "login"))
+                val active = session ?: error("vault is locked")
+                val repo = repository ?: error("storage is unavailable")
+                val id = ByteArray(16).also { SecureRandom().nextBytes(it) }
+                val payload = JSONObject()
+                    .put("v", 1)
+                    .put("type", type)
+                    .put("title", title)
+                    .put("username", "")
+                    .put("password", "")
+                    .put("url", "")
+                    .put("notes", fields["notes"].orEmpty())
+                    .put("folder", folder)
+                    .put("tags", org.json.JSONArray(tags.split(',').map(String::trim).filter(String::isNotEmpty)))
+                    .put("favorite", favorite)
+                    .put("autofillAllowed", false)
+                fields.forEach { (key, value) -> payload.put(key, value) }
+                val bytes = payload.toString().encodeToByteArray()
+                val ciphertext = active.encryptItem(id, bytes)
+                bytes.fill(0)
                 repo.save(
                     itemId = id,
                     ciphertext = ciphertext,
@@ -543,6 +596,58 @@ class SessionController(context: Context) {
             .put("tags", JSONArray())
             .put("favorite", false)
             .toString()
+
+    suspend fun importPlaintext(bytes: ByteArray, mergeDuplicates: Boolean = false): Result<Int> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                if (active.isLocked()) error("vault is locked")
+                val report = JSONObject(dev.cipherkeep.core.importPlaintextJson(bytes, mergeDuplicates))
+                val items = report.getJSONArray("items")
+                var imported = 0
+                for (index in 0 until items.length()) {
+                    val item = items.getJSONObject(index)
+                    val title = item.optString("title").trim()
+                    if (title.isEmpty()) continue
+                    saveItem(
+                        title = title.take(512),
+                        username = item.optString("username").take(4_096),
+                        password = item.optString("password").take(65_536),
+                        url = item.optString("url").take(2_048),
+                        notes = item.optString("notes").take(65_536),
+                        folder = item.optString("folder").take(64),
+                    ).getOrThrow()
+                    imported += 1
+                }
+                imported
+            }
+        }
+
+    suspend fun importKdbx(bytes: ByteArray, password: String): Result<Int> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val active = session ?: error("vault is locked")
+                if (active.isLocked()) error("vault is locked")
+                val report = JSONObject(dev.cipherkeep.core.importKdbxJson(bytes, password))
+                val items = report.getJSONArray("items")
+                var imported = 0
+                for (index in 0 until items.length()) {
+                    val item = items.getJSONObject(index)
+                    val title = item.optString("title").trim()
+                    if (title.isEmpty()) continue
+                    saveItem(
+                        title = title.take(512),
+                        username = item.optString("username").take(4_096),
+                        password = item.optString("password").take(65_536),
+                        url = item.optString("url").take(2_048),
+                        notes = item.optString("notes").take(65_536),
+                        folder = item.optString("folder").take(64),
+                    ).getOrThrow()
+                    imported += 1
+                }
+                imported
+            }
+        }
 
     suspend fun saveTotpItem(title: String, account: String, uri: String): Result<Unit> =
         withContext(Dispatchers.IO) {
@@ -1206,6 +1311,7 @@ class SessionController(context: Context) {
     }
 
     fun lock(message: String? = null) {
+        if (blob == null || state == VaultUiState.Setup) return
         autoLockJob?.cancel()
         autoLockJob = null
         session?.lock()
@@ -1228,6 +1334,7 @@ class SessionController(context: Context) {
 
     /** Called from the lifecycle observer when the activity stops. */
     fun onBackground(now: Long = SystemClock.elapsedRealtime()) {
+        if (state != VaultUiState.Unlocked && state != VaultUiState.LockWarning) return
         backgroundedAt = now
         autoLockJob?.cancel()
         autoLockJob = scope.launch {

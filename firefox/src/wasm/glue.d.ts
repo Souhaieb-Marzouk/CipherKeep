@@ -35,6 +35,8 @@ declare function totp_code(uri: string, unixSecs: number): WasmTotpCode;
 
 declare function export_portable(itemsJson: Uint8Array, password: string): Uint8Array;
 declare function import_portable(bytes: Uint8Array, password: string): Uint8Array;
+declare function import_plaintext_json(bytes: Uint8Array, mergeDuplicates: boolean): string;
+declare function decrypt_proton_pgp(bytes: Uint8Array, passphrase: string): Uint8Array;
 
 declare class WasmSearchIndex {
   constructor();

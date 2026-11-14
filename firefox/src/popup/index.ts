@@ -493,6 +493,76 @@ element<HTMLButtonElement>("importBackup").addEventListener("click", () => {
   element<HTMLInputElement>("backupFile").click();
 });
 
+async function extractZipEntry(bytes: Uint8Array, wanted: string): Promise<Uint8Array> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  for (let index = 0; index + 30 < bytes.length; index += 1) {
+    if (view.getUint32(index, true) !== 0x04034b50) continue;
+    const method = view.getUint16(index + 8, true);
+    const compressedSize = view.getUint32(index + 18, true);
+    const nameLength = view.getUint16(index + 26, true);
+    const extraLength = view.getUint16(index + 28, true);
+    const nameStart = index + 30;
+    const name = new TextDecoder().decode(bytes.subarray(nameStart, nameStart + nameLength));
+    if (name !== wanted) continue;
+    const dataStart = nameStart + nameLength + extraLength;
+    const data = bytes.subarray(dataStart, dataStart + compressedSize);
+    if (method === 0) return data;
+    if (method === 8) {
+      const stream = new Blob([data.slice().buffer]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+    throw new Error("unsupported 1PUX compression");
+  }
+  throw new Error(`${wanted} missing`);
+}
+
+element<HTMLButtonElement>("importPlain").addEventListener("click", () => {
+  element<HTMLInputElement>("plainFile").click();
+});
+
+element<HTMLInputElement>("plainFile").addEventListener("change", async () => {
+  const input = element<HTMLInputElement>("plainFile");
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const raw = new Uint8Array(await file.arrayBuffer());
+  let bytes: Uint8Array = raw;
+  if (raw.length >= 2 && raw[0] === 0x50 && raw[1] === 0x4b) {
+    const json = await extractZipEntry(raw, "export.data").catch(() => null);
+    if (json !== null) {
+      bytes = json;
+    } else {
+      const pgp = await extractZipEntry(raw, "data.pgp").catch(() => null);
+      if (pgp === null) {
+        showMessage("ZIP does not contain export.data or data.pgp.");
+        return;
+      }
+      const passphrase = element<HTMLInputElement>("protonPassphrase").value;
+      if (passphrase.length === 0) {
+        showMessage("Enter the Proton export passphrase.");
+        return;
+      }
+      try {
+        bytes = decrypt_proton_pgp(pgp, passphrase);
+      } catch {
+        showMessage("Proton PGP decryption failed. Check the passphrase.");
+        return;
+      }
+      element<HTMLInputElement>("protonPassphrase").value = "";
+    }
+  }
+  const reply = await send({
+    type: "import-plaintext",
+    data: bytesToBase64(bytes),
+  });
+  if (!reply.ok || reply.kind !== "ok") {
+    showMessage(reply.ok ? "Unexpected import response." : reply.error);
+    return;
+  }
+  await loadItems();
+  showMessage(`Imported ${reply.imported ?? 0} items.`, true);
+});
+
 element<HTMLInputElement>("backupFile").addEventListener("change", async () => {
   const input = element<HTMLInputElement>("backupFile");
   const file = input.files?.[0];

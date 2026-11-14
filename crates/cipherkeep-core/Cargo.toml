@@ -28,4 +28,6 @@ ed25519-dalek.workspace = true
 sha2.workspace = true
 subtle.workspace = true
 zeroize.workspace = true
+keepass.workspace = true
+pgp.workspace = true
 x25519-dalek = { version = "2", features = ["static_secrets"] }

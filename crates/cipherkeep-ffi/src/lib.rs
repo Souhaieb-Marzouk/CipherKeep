@@ -314,6 +314,89 @@ pub fn export_portable(items_json: Vec<u8>, password: String) -> Result<Vec<u8>,
 ///
 /// Returns a redacted error for a wrong password, tamper or malformed header.
 #[uniffi::export]
+/// Decrypt and parse a password-protected KeePass KDBX database.
+pub fn import_kdbx_json(bytes: Vec<u8>, password: String) -> Result<String, FfiError> {
+    let result = cipherkeep_core::keepass_import::import_kdbx(
+        &bytes,
+        &password,
+        cipherkeep_core::DuplicatePolicy::Skip,
+    )?;
+    let items = result
+        .items
+        .iter()
+        .map(|item| serde_json::json!({
+            "kind": "login",
+            "title": item.title,
+            "username": item.username,
+            "password": item.password,
+            "url": item.url,
+            "notes": item.notes,
+            "folder": item.folder,
+            "tags": item.tags,
+        }))
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "format": result.report.format.name(),
+        "imported": result.report.imported,
+        "skippedDuplicates": result.report.skipped_duplicates,
+        "failed": result.report.failed,
+        "items": items,
+    })
+    .to_string())
+}
+
+#[uniffi::export]
+/// Decrypt a Proton Pass `data.pgp` payload with its export passphrase.
+pub fn decrypt_proton_pgp(bytes: Vec<u8>, passphrase: String) -> Result<Vec<u8>, FfiError> {
+    cipherkeep_core::proton_pgp::decrypt_proton_pgp(&bytes, &passphrase).map_err(FfiError::from)
+}
+
+#[uniffi::export]
+/// Parse a plaintext CSV/JSON password-manager export.
+///
+/// Returns a preview and normalized items as JSON. The caller is responsible
+/// for writing the items into the unlocked vault and for treating the input
+/// as sensitive plaintext.
+pub fn import_plaintext_json(bytes: Vec<u8>, merge_duplicates: bool) -> Result<String, FfiError> {
+    let policy = if merge_duplicates {
+        cipherkeep_core::DuplicatePolicy::Merge
+    } else {
+        cipherkeep_core::DuplicatePolicy::Skip
+    };
+    let result = cipherkeep_core::import(&bytes, policy)?;
+    let items = result
+        .items
+        .iter()
+        .map(|item| match item.kind {
+            cipherkeep_core::ImportKind::Login => serde_json::json!({
+                "kind": "login",
+                "title": item.title,
+                "username": item.username,
+                "password": item.password,
+                "url": item.url,
+                "notes": item.notes,
+                "folder": item.folder,
+                "tags": item.tags,
+            }),
+            cipherkeep_core::ImportKind::Note => serde_json::json!({
+                "kind": "note",
+                "title": item.title,
+                "notes": item.notes,
+                "folder": item.folder,
+            }),
+        })
+        .collect::<Vec<_>>();
+    Ok(serde_json::json!({
+        "format": result.report.format.name(),
+        "imported": result.report.imported,
+        "skippedDuplicates": result.report.skipped_duplicates,
+        "failed": result.report.failed,
+        "items": items,
+    })
+    .to_string())
+}
+
+#[uniffi::export]
 pub fn import_portable(bytes: Vec<u8>, password: String) -> Result<Vec<u8>, FfiError> {
     import_backup(&bytes, &password)
         .map(|plaintext| plaintext.expose_secret().to_vec())

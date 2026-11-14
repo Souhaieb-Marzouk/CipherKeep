@@ -37,6 +37,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -210,6 +212,7 @@ fun CipherKeepApp() {
                                 onOpen = { index -> selectedIndex = index },
                                 onAdd = { screen = "add" },
                                 onSettings = { screen = "settings" },
+                                onSecurity = { screen = "security" },
                                 onLock = {
                                     selectedIndex = -1
                                     SecretInputRegistry.clearAll()
@@ -218,6 +221,11 @@ fun CipherKeepApp() {
                             )
                         }
                         "add" -> AddItemScreen(
+                            controller = controller,
+                            onBack = { screen = "vault" },
+                        )
+                        "security" -> SecurityHubScreen(
+                            context = context,
                             controller = controller,
                             onBack = { screen = "vault" },
                         )
@@ -318,9 +326,9 @@ private fun SetupScreen(controller: SessionController) {
             )
             Spacer(Modifier.height(CKDimens.Space4))
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(20.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
             ) {
                 Column(modifier = Modifier.padding(CKDimens.Space4)) {
                     Text("First steps", style = MaterialTheme.typography.titleMedium)
@@ -752,59 +760,86 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
+    var kind by remember { mutableStateOf("login") }
     var title by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var isTotp by remember { mutableStateOf(false) }
-    var totpUri by remember { mutableStateOf("") }
-    var url by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var folder by remember { mutableStateOf("") }
     var tags by remember { mutableStateOf("") }
     var favorite by remember { mutableStateOf(false) }
-    DisposableEffect(Unit) {
-        val reset = {
-            password = ""
-            totpUri = ""
-            url = ""
-            notes = ""
-            folder = ""
-            tags = ""
-            favorite = false
-        }
-        SecretInputRegistry.register(reset)
-        onDispose { SecretInputRegistry.unregister(reset) }
-    }
+    var username by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var url by remember { mutableStateOf("") }
+    var totpUri by remember { mutableStateOf("") }
+    var cardholder by remember { mutableStateOf("") }
+    var cardNumber by remember { mutableStateOf("") }
+    var cardExpiry by remember { mutableStateOf("") }
+    var cardCvv by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var address by remember { mutableStateOf("") }
+    var company by remember { mutableStateOf("") }
+    var jobTitle by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    var showGenerator by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    fun saveLogin() {
+        busy = true
+        scope.launch {
+            val result = if (kind == "totp") {
+                controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
+            } else {
+                controller.saveItem(title.trim(), username.trim(), password, url.trim(), notes, folder.trim(), tags, favorite)
+            }
+            busy = false
+            password = ""
+            totpUri = ""
+            if (result.isSuccess) onBack() else error = "Item could not be saved."
+        }
+    }
+
+    fun saveTyped() {
+        busy = true
+        scope.launch {
+            val fields = when (kind) {
+                "card" -> mapOf(
+                    "notes" to notes, "cardholder" to cardholder.trim(), "cardNumber" to cardNumber.trim(),
+                    "cardExpiry" to cardExpiry.trim(), "cardCvv" to cardCvv.trim(),
+                )
+                "identity" -> mapOf(
+                    "notes" to notes, "fullName" to fullName.trim(), "email" to email.trim(),
+                    "phone" to phone.trim(), "address" to address.trim(), "company" to company.trim(),
+                    "jobTitle" to jobTitle.trim(),
+                )
+                else -> mapOf("notes" to notes)
+            }
+            val result = controller.saveTypedItem(kind, title.trim(), fields, folder.trim(), tags, favorite)
+            busy = false
+            if (result.isSuccess) onBack() else error = "Item could not be saved."
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             TopAppBar(
                 title = { Text("New item") },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Back") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
             )
         },
-    ) { innerPadding ->
+    ) { padding ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .padding(CKDimens.Space4)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(CKDimens.Space4),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                TextButton(onClick = { isTotp = false }) { Text("Login") }
-                TextButton(onClick = { isTotp = true }) { Text("TOTP") }
+            Text("What are you adding?", style = MaterialTheme.typography.titleMedium)
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space1)) {
+                listOf("login" to "Login", "totp" to "TOTP", "note" to "Note", "card" to "Card", "identity" to "Identity").forEach { (value, label) ->
+                    TextButton(onClick = { kind = value }) {
+                        Text(if (kind == value) "• $label" else label)
+                    }
+                }
             }
             OutlinedTextField(
                 value = title,
@@ -814,277 +849,48 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 singleLine = true,
                 shape = MaterialTheme.shapes.small,
             )
-            OutlinedTextField(
-                value = username,
-                onValueChange = { username = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text(if (isTotp) "Account" else "Username") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.small,
-            )
-            if (!isTotp) {
-                OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("URL (optional)") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.small,
-                )
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = { notes = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Notes (optional)") },
-                    minLines = 2,
-                    maxLines = 4,
-                    shape = MaterialTheme.shapes.small,
-                )
-                OutlinedTextField(
-                    value = folder,
-                    onValueChange = { folder = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Folder (optional)") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.small,
-                )
-                OutlinedTextField(
-                    value = tags,
-                    onValueChange = { tags = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Tags (comma separated)") },
-                    singleLine = true,
-                    shape = MaterialTheme.shapes.small,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { favorite = !favorite },
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = favorite, onCheckedChange = { favorite = it })
-                    Text("Favorite")
+            when (kind) {
+                "login" -> {
+                    OutlinedTextField(username, { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Username") }, singleLine = true)
+                    OutlinedTextField(password, { password = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Password") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password))
+                    OutlinedTextField(url, { url = it }, modifier = Modifier.fillMaxWidth(), label = { Text("URL (optional)") }, singleLine = true)
                 }
-            }
-            if (isTotp) {
-                OutlinedTextField(
-                    value = totpUri,
-                    onValueChange = { totpUri = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("TOTP otpauth URI") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    shape = MaterialTheme.shapes.small,
-                )
-            } else {
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    shape = MaterialTheme.shapes.small,
-                )
-                TextButton(onClick = { showGenerator = true }) {
-                    Text("Generate password")
+                "totp" -> {
+                    OutlinedTextField(username, { username = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Account") }, singleLine = true)
+                    OutlinedTextField(totpUri, { totpUri = it }, modifier = Modifier.fillMaxWidth(), label = { Text("TOTP otpauth URI") }, singleLine = true, visualTransformation = PasswordVisualTransformation())
                 }
-            }
-            if (error != null) {
-                Text(
-                    text = error.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-            Button(
-                onClick = {
-                    busy = true
-                    error = null
-                    scope.launch {
-                        val result = if (isTotp) {
-                            controller.saveTotpItem(title.trim(), username.trim(), totpUri.trim())
-                        } else {
-                            controller.saveItem(
-                                title.trim(),
-                                username.trim(),
-                                password,
-                                url.trim(),
-                                notes,
-                                folder.trim(),
-                                tags,
-                                favorite,
-                            )
-                        }
-                        busy = false
-                        password = ""
-                        totpUri = ""
-                        url = ""
-                        notes = ""
-                        folder = ""
-                        tags = ""
-                        favorite = false
-                        if (result.isSuccess) {
-                            onBack()
-                        } else {
-                            error = "Item could not be saved."
-                        }
+                "card" -> {
+                    OutlinedTextField(cardholder, { cardholder = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Cardholder name") }, singleLine = true)
+                    OutlinedTextField(cardNumber, { cardNumber = it.filter { ch -> ch.isDigit() || ch == ' ' }.take(23) }, modifier = Modifier.fillMaxWidth(), label = { Text("Card number") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                        OutlinedTextField(cardExpiry, { cardExpiry = it.take(5) }, modifier = Modifier.weight(1f), label = { Text("MM/YY") }, singleLine = true)
+                        OutlinedTextField(cardCvv, { cardCvv = it.filter(Char::isDigit).take(4) }, modifier = Modifier.weight(1f), label = { Text("CVV") }, singleLine = true, visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
                     }
-                },
-                enabled = !busy && title.isNotBlank() &&
-                    (if (isTotp) totpUri.trim().startsWith("otpauth://totp/") else password.isNotEmpty()),
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-            ) {
-                Text(if (busy) "Saving…" else "Save item")
+                }
+                "identity" -> {
+                    OutlinedTextField(fullName, { fullName = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Full name") }, singleLine = true)
+                    OutlinedTextField(email, { email = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Email") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email))
+                    OutlinedTextField(phone, { phone = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Phone") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+                    OutlinedTextField(address, { address = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Address") }, minLines = 2)
+                    OutlinedTextField(company, { company = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Company") }, singleLine = true)
+                    OutlinedTextField(jobTitle, { jobTitle = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Job title") }, singleLine = true)
+                }
             }
+            OutlinedTextField(notes, { notes = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Notes (optional)") }, minLines = 2, maxLines = 4)
+            OutlinedTextField(folder, { folder = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Folder (optional)") }, singleLine = true)
+            OutlinedTextField(tags, { tags = it }, modifier = Modifier.fillMaxWidth(), label = { Text("Tags (comma separated)") }, singleLine = true)
+            Row(modifier = Modifier.fillMaxWidth().clickable { favorite = !favorite }, verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(checked = favorite, onCheckedChange = { favorite = it })
+                Text("Favorite")
+            }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                onClick = { if (kind == "login" || kind == "totp") saveLogin() else saveTyped() },
+                enabled = !busy && title.isNotBlank() && (kind != "login" || password.isNotEmpty()) && (kind != "totp" || totpUri.isNotBlank()),
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (busy) "Saving…" else "Save ${kind.replaceFirstChar(Char::uppercase)}") }
         }
     }
-    if (showGenerator) {
-        GeneratorDialog(
-            onDismiss = { showGenerator = false },
-            onUse = {
-                password = it
-                showGenerator = false
-            },
-        )
-    }
-}
-
-@Composable
-private fun GeneratorDialog(onDismiss: () -> Unit, onUse: (String) -> Unit) {
-    var mode by rememberSaveable { mutableIntStateOf(0) }
-    var lengthText by rememberSaveable { mutableStateOf("20") }
-    var lowercase by rememberSaveable { mutableStateOf(true) }
-    var uppercase by rememberSaveable { mutableStateOf(true) }
-    var digits by rememberSaveable { mutableStateOf(true) }
-    var symbols by rememberSaveable { mutableStateOf(true) }
-    var excludeAmbiguous by rememberSaveable { mutableStateOf(false) }
-    var wordsText by rememberSaveable { mutableStateOf("6") }
-    var separator by rememberSaveable { mutableStateOf("-") }
-    var generated by remember { mutableStateOf<dev.cipherkeep.core.FfiGeneratedSecret?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val clipboard = remember { SensitiveClipboard(context, scope) }
-
-    DisposableEffect(Unit) {
-        val clear = { generated = null }
-        SecretInputRegistry.register(clear)
-        onDispose { SecretInputRegistry.unregister(clear) }
-    }
-
-    AlertDialog(
-        onDismissRequest = {
-            generated = null
-            onDismiss()
-        },
-        title = { Text("Generate") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                    TextButton(onClick = { mode = 0; generated = null }) { Text("Password") }
-                    TextButton(onClick = { mode = 1; generated = null }) { Text("Passphrase") }
-                }
-                if (mode == 0) {
-                    OutlinedTextField(
-                        value = lengthText,
-                        onValueChange = { lengthText = it.filter(Char::isDigit).take(3) },
-                        label = { Text("Length (8-128)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    GeneratorCheck("Lowercase", lowercase) { lowercase = it }
-                    GeneratorCheck("Uppercase", uppercase) { uppercase = it }
-                    GeneratorCheck("Digits", digits) { digits = it }
-                    GeneratorCheck("Symbols", symbols) { symbols = it }
-                    GeneratorCheck("Exclude ambiguous", excludeAmbiguous) { excludeAmbiguous = it }
-                } else {
-                    OutlinedTextField(
-                        value = wordsText,
-                        onValueChange = { wordsText = it.filter(Char::isDigit).take(2) },
-                        label = { Text("Words (3-12)") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    )
-                    OutlinedTextField(
-                        value = separator,
-                        onValueChange = { if (it.length <= 1) separator = it },
-                        label = { Text("Separator") },
-                        singleLine = true,
-                    )
-                }
-                if (generated != null) {
-                    Text(
-                        text = generated?.value.orEmpty(),
-                        fontFamily = FontFamily.Monospace,
-                        style = MaterialTheme.typography.bodyLarge,
-                    )
-                    Text(
-                        text = "${generated?.entropyBits?.toInt()} bits · ${generated?.strength}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                        OutlinedButton(onClick = {
-                            generated?.let {
-                                clipboard.copy("CipherKeep generated secret", it.value)
-                            }
-                        }) { Text("Copy") }
-                        Button(onClick = {
-                            generated?.let {
-                                onUse(it.value)
-                                generated = null
-                            }
-                        }) { Text("Use") }
-                    }
-                }
-                if (error != null) {
-                    Text(
-                        text = error.orEmpty(),
-                        color = MaterialTheme.colorScheme.error,
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                error = null
-                generated = try {
-                    if (mode == 0) {
-                        generatePassword(
-                            FfiPasswordPolicy(
-                                length = (lengthText.toIntOrNull() ?: 20).toUInt(),
-                                lowercase = lowercase,
-                                uppercase = uppercase,
-                                digits = digits,
-                                symbols = symbols,
-                                excludeAmbiguous = excludeAmbiguous,
-                            ),
-                        )
-                    } else {
-                        generatePassphrase(
-                            FfiPassphrasePolicy(
-                                words = (wordsText.toIntOrNull() ?: 6).toUInt(),
-                                separator = separator,
-                            ),
-                        )
-                    }
-                } catch (_: Exception) {
-                    error = "Could not generate a value for this policy."
-                    null
-                }
-            }) { Text("Generate") }
-        },
-        dismissButton = {
-            TextButton(onClick = {
-                generated = null
-                onDismiss()
-            }) { Text("Close") }
-        },
-    )
 }
 
 @Composable
@@ -1124,12 +930,57 @@ private fun BrandMark() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+private fun SecurityHubScreen(context: Context, controller: SessionController, onBack: () -> Unit) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Security") },
+                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
+            )
+        },
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState())
+                .padding(CKDimens.Space4),
+            verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
+        ) {
+            Text("Password health", style = MaterialTheme.typography.titleMedium)
+            HealthSection(controller)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
+            Text("Breach monitoring", style = MaterialTheme.typography.titleMedium)
+            HibpSection(context, controller)
+        }
+    }
+}
+
+private fun typeGlyph(item: VaultItem): String = when (item.type) {
+    "note" -> "N"
+    "card" -> "C"
+    "identity" -> "I"
+    "totp" -> "T"
+    else -> "L"
+}
+
+private fun itemSubtitle(item: VaultItem): String = when (item.type) {
+    "note" -> "Secure note"
+    "card" -> listOf("Card", item.cardholder).filter(String::isNotBlank).joinToString(" · ")
+    "identity" -> listOf("Identity", item.fullName.ifBlank { item.email }).filter(String::isNotBlank).joinToString(" · ")
+    "totp" -> listOf("TOTP", item.username).filter(String::isNotBlank).joinToString(" · ")
+    else -> listOf("Login", item.username, item.url).filter(String::isNotBlank).joinToString(" · ")
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 private fun VaultScreen(
     controller: SessionController,
     items: List<VaultItem>,
     onOpen: (Int) -> Unit,
     onAdd: () -> Unit,
     onSettings: () -> Unit,
+    onSecurity: () -> Unit,
     onLock: () -> Unit,
 ) {
     var searchQuery by rememberSaveable { mutableStateOf("") }
@@ -1181,6 +1032,14 @@ private fun VaultScreen(
     }
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(selected = true, onClick = {}, icon = { Text("V") }, label = { Text("Vault") })
+                NavigationBarItem(selected = false, onClick = onAdd, icon = { Text("+") }, label = { Text("Add") })
+                NavigationBarItem(selected = false, onClick = onSecurity, icon = { Text("S") }, label = { Text("Security") })
+                NavigationBarItem(selected = false, onClick = onSettings, icon = { Text("G") }, label = { Text("Settings") })
+            }
+        },
         topBar = {
             TopAppBar(
                 title = { Text("Vault") },
@@ -1247,45 +1106,52 @@ private fun VaultScreen(
                 )
                 Spacer(Modifier.height(CKDimens.Space2))
                 if (visibleItems.isEmpty()) {
-                    Text(
-                        text = if (items.isEmpty()) "No items yet. Use Add to create the first one." else "No items match these filters.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                        shape = RoundedCornerShape(20.dp),
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(CKDimens.Space4)) {
+                            Text(if (items.isEmpty()) "Your vault is empty" else "Nothing matches", style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                if (items.isEmpty()) "Tap Add to create a login, card, note or identity." else "Try a different search or clear the folder filter.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
                 }
             }
             items(visibleItems) { item ->
                 val index = items.indexOf(item)
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClickLabel = "Open ${item.title}") { onOpen(index) },
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
+                    modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${item.title}") { onOpen(index) },
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 ) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(CKDimens.Space4),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = CKDimens.Space4, vertical = CKDimens.Space3),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = item.title,
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                text = if (item.totpUri.isNotEmpty()) "TOTP · ${item.username}" else item.username,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            modifier = Modifier.size(46.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text(typeGlyph(item), style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                            }
                         }
-                        Text(
-                            text = "Open",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary,
-                        )
+                        Spacer(Modifier.width(CKDimens.Space3))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(item.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                                if (item.favorite) Text("★", color = MaterialTheme.colorScheme.primary)
+                            }
+                            Text(itemSubtitle(item), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            if (item.folder.isNotBlank()) Text(item.folder, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                        }
+                        Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1471,18 +1337,33 @@ private fun ItemDetailScreen(
                 .padding(CKDimens.Space4)
                 .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = if (item.totpUri.isNotEmpty()) "TOTP" else "Login",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = item.title,
-                style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier
-                    .padding(top = CKDimens.Space2)
-                    .semantics { heading() },
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(58.dp),
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(typeGlyph(item), style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                    }
+                }
+                Spacer(Modifier.width(CKDimens.Space3))
+                Column {
+                    Text(
+                        text = itemSubtitle(item).substringBefore(" · "),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.headlineSmall,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                    if (item.folder.isNotBlank()) {
+                        Text(item.folder, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
             Spacer(Modifier.height(CKDimens.Space4))
             if (item.totpUri.isNotEmpty()) {
                 Card(
@@ -1550,6 +1431,27 @@ private fun ItemDetailScreen(
                         label = "Password",
                         value = if (revealed) item.password else if (item.password.isEmpty()) "" else "\u2022".repeat(item.password.length.coerceAtMost(32)),
                     )
+                    if (item.type == "card") {
+                        if (item.cardholder.isNotBlank()) DetailRow("Cardholder", item.cardholder)
+                        if (item.cardNumber.isNotBlank()) {
+                            DetailRow(
+                                "Card number",
+                                if (revealed) item.cardNumber else "•••• " + item.cardNumber.takeLast(4),
+                            )
+                        }
+                        if (item.cardExpiry.isNotBlank()) DetailRow("Expiry", item.cardExpiry)
+                        if (item.cardCvv.isNotBlank()) {
+                            DetailRow("CVV", if (revealed) item.cardCvv else "•••")
+                        }
+                    }
+                    if (item.type == "identity") {
+                        if (item.fullName.isNotBlank()) DetailRow("Full name", item.fullName)
+                        if (item.email.isNotBlank()) DetailRow("Email", item.email)
+                        if (item.phone.isNotBlank()) DetailRow("Phone", item.phone)
+                        if (item.address.isNotBlank()) DetailRow("Address", item.address)
+                        if (item.company.isNotBlank()) DetailRow("Company", item.company)
+                        if (item.jobTitle.isNotBlank()) DetailRow("Job title", item.jobTitle)
+                    }
                     if (item.notes.isNotBlank()) {
                         DetailRow("Notes", item.notes)
                     }
@@ -1709,6 +1611,139 @@ private fun DetailRow(label: String, value: String) {
     }
 }
 
+
+private fun extractOnePuxExportData(bytes: ByteArray): ByteArray? =
+    extractZipEntry(bytes, "export.data")
+
+private fun extractZipEntry(bytes: ByteArray, wanted: String): ByteArray? = runCatching {
+    java.util.zip.ZipInputStream(bytes.inputStream()).use { zip ->
+        val buffer = ByteArray(16 * 1024)
+        while (true) {
+            val entry = zip.nextEntry ?: return null
+            if (entry.name == wanted) {
+                val output = java.io.ByteArrayOutputStream()
+                var total = 0
+                while (true) {
+                    val read = zip.read(buffer)
+                    if (read < 0) break
+                    total += read
+                    if (total > 48_000_000) return null
+                    output.write(buffer, 0, read)
+                }
+                return output.toByteArray()
+            }
+        }
+        null
+    }
+}.getOrNull()
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ImportSection(context: Context, controller: SessionController) {
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    var importPassword by remember { mutableStateOf("") }
+    Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+        Text("Import passwords", style = MaterialTheme.typography.titleMedium)
+        Text(
+            "Supports plaintext CSV/JSON exports from Proton Pass, Bitwarden, 1Password and KeePass. Encrypted exports are not supported.",
+            style = MaterialTheme.typography.labelSmall,
+        )
+        OutlinedTextField(
+            value = importPassword,
+            onValueChange = { importPassword = it },
+            label = { Text("Bitwarden export password (only for encrypted JSON)") },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        OutlinedButton(
+            onClick = {
+                val activity = context as? FragmentActivity
+                if (activity == null) {
+                    message = "File picker unavailable."
+                    return@OutlinedButton
+                }
+                BackupFileBridge.textImportHandler = { uri ->
+                    scope.launch {
+                        val bytes = runCatching {
+                            context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                        }.getOrNull()
+                        if (bytes == null) {
+                            message = "Could not read the selected file."
+                        } else {
+                            val payload = when {
+                                dev.cipherkeep.app.data.BitwardenEncryptedImporter.looksEncrypted(bytes) -> {
+                                    if (importPassword.isEmpty()) {
+                                        message = "Enter the Bitwarden export password."
+                                        null
+                                    } else {
+                                        runCatching {
+                                            dev.cipherkeep.app.data.BitwardenEncryptedImporter
+                                                .decrypt(bytes, importPassword)
+                                        }.onFailure {
+                                            message = "Bitwarden decryption failed. Argon2id exports are not supported."
+                                        }.getOrNull()
+                                    }
+                                }
+                                bytes.size >= 4 && bytes[0] == 0x03.toByte() && bytes[1] == 0xD9.toByte() &&
+                                    bytes[2] == 0xA2.toByte() && bytes[3] == 0x9A.toByte() -> {
+                                    if (importPassword.isEmpty()) {
+                                        message = "Enter the KeePass database password."
+                                    } else {
+                                        controller.importKdbx(bytes, importPassword)
+                                            .onSuccess { message = "$it items imported." }
+                                            .onFailure { message = "KeePass import failed. Check the password." }
+                                    }
+                                    null
+                                }
+                                bytes.size >= 2 && bytes[0] == 'P'.code.toByte() && bytes[1] == 'K'.code.toByte() -> {
+                                    val jsonEntry = extractZipEntry(bytes, "export.data")
+                                    val pgpEntry = extractZipEntry(bytes, "data.pgp")
+                                    when {
+                                        jsonEntry != null -> jsonEntry
+                                        pgpEntry != null -> {
+                                            if (importPassword.isEmpty()) {
+                                                message = "Enter the Proton export passphrase."
+                                                null
+                                            } else {
+                                                runCatching {
+                                                    dev.cipherkeep.core.decryptProtonPgp(pgpEntry, importPassword)
+                                                }.onFailure {
+                                                    message = "Proton PGP decryption failed. Check the passphrase."
+                                                }.getOrNull()
+                                            }
+                                        }
+                                        else -> {
+                                            message = "The ZIP archive does not contain export.data or data.pgp."
+                                            null
+                                        }
+                                    }
+                                }
+                                else -> bytes
+                            }
+                            if (payload != null) {
+                                controller.importPlaintext(payload)
+                                    .onSuccess { message = "$it items imported." }
+                                    .onFailure { message = "Import failed. Check the format." }
+                            }
+                        }
+                    }
+                }
+                activity.startActivityForResult(
+                    Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                        addCategory(Intent.CATEGORY_OPENABLE)
+                        type = "*/*"
+                    },
+                    BackupFileBridge.TEXT_IMPORT_REQUEST_CODE,
+                )
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Import from a password manager") }
+        message?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
@@ -1800,9 +1835,37 @@ private fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space4),
         ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                shape = RoundedCornerShape(24.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(CKDimens.Space4),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(18.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(56.dp),
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text("C", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onPrimary)
+                        }
+                    }
+                    Spacer(Modifier.width(CKDimens.Space3))
+                    Column {
+                        Text("CipherKeep", style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                        Text(
+                            "Local vault, security and sync settings",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        )
+                    }
+                }
+            }
             Text(
                 text = "Appearance",
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.semantics { heading() },
             )
             Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
@@ -1828,9 +1891,8 @@ private fun SettingsScreen(
                 modifier = Modifier.semantics { heading() },
             )
             Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(20.dp),
             ) {
                 Column(modifier = Modifier.padding(CKDimens.Space4)) {
                     Text("Screenshots blocked (FLAG_SECURE)", style = MaterialTheme.typography.bodyLarge)
@@ -2080,6 +2142,7 @@ private fun SettingsScreen(
             FamilySection(context, controller)
             WebAuthnSection(context, controller)
             PasskeyProviderSection(context)
+            ImportSection(context, controller)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

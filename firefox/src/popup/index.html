@@ -172,8 +172,12 @@
         <div class="row">
           <button id="exportBackup" class="secondary">Export</button>
           <button id="importBackup" class="secondary">Restore</button>
+          <button id="importPlain" class="secondary">Import passwords</button>
         </div>
         <input id="backupFile" type="file" accept=".ckexp,application/octet-stream" hidden />
+        <input id="plainFile" type="file" accept=".csv,.json,.zip,.pgp,.asc,text/csv,application/json,application/zip" hidden />
+        <label for="protonPassphrase">Proton export passphrase (PGP/ZIP only)</label>
+        <input id="protonPassphrase" type="password" autocomplete="off" />
 
         <h2 style="font-size:16px;margin:18px 0 0">Autofill Inspector</h2>
         <button id="inspectAutofill" class="secondary">Inspect this page</button>

@@ -26,7 +26,7 @@ CipherKeep is a free, local-first password manager. Your vault stays on your own
 - **Android 8.0+** — mobile vault, autofill, biometric unlock and optional passkeys.
 - **Firefox 142+** — browser companion for quick access while you work.
 
-> **Project status:** 1.0.0 official release. The code has not been independently audited. Keep tested backups and do not make it the only copy of irreplaceable credentials.
+> **Project status:** 1.1.0 official release. The code has not been independently audited. Keep tested backups and do not make it the only copy of irreplaceable credentials.
 
 ---
 
@@ -46,7 +46,8 @@ CipherKeep is a free, local-first password manager. Your vault stays on your own
 - **Search, folders, tags and favorites** — organise and find items quickly.
 - **Password generator** — random passwords and passphrases.
 - **TOTP codes** — store and generate time-based one-time passwords.
-- **Import and export** — encrypted backup export and restore, plus CSV/Bitwarden import.
+- **Backup and restore** — encrypted CipherKeep backup export and restore.
+- **Password-manager import** — Android and Firefox import plaintext Proton Pass, Bitwarden, 1Password and KeePass exports. Android also supports 1Password `.1pux`, password-protected Bitwarden JSON (PBKDF2), KeePass `.kdbx`, and Proton PGP-encrypted ZIP exports.
 - **Sensitive clipboard** — copied secrets are cleared automatically after a short timeout and marked sensitive where the platform supports it.
 
 ### Android
@@ -60,7 +61,7 @@ CipherKeep is a free, local-first password manager. Your vault stays on your own
 ### Firefox
 
 - **Popup vault** — create, unlock, lock and manage items.
-- **Options page** — settings, import/export, sync, aliases, emergency access, Travel Mode and diagnostics.
+- **Options page** — settings, encrypted backup/restore, sync, aliases, emergency access, Travel Mode and diagnostics.
 - **AMO-signed XPI** — install the signed release from GitHub, or use the unlisted AMO channel.
 
 ### Optional network features

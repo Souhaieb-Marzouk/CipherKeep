@@ -34,6 +34,8 @@ pub mod header;
 pub mod health;
 pub mod hibp;
 pub mod import;
+pub mod keepass_import;
+pub mod proton_pgp;
 pub mod item;
 pub mod item_store;
 pub mod kdf;

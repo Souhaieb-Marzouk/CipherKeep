@@ -1088,6 +1088,48 @@ async function handle(request: Request): Promise<Response> {
           }),
         };
       }
+      case "import-plaintext": {
+        const active = requireSession();
+        await ensureItemStore();
+        const bytes = base64ToBytes(request.data);
+        const report = JSON.parse(
+          import_plaintext_json(bytes, request.mergeDuplicates === true),
+        ) as { items?: unknown };
+        const items = Array.isArray(report.items) ? report.items : [];
+        let imported = 0;
+        for (const raw of items) {
+          if (typeof raw !== "object" || raw === null) continue;
+          const item = raw as Record<string, unknown>;
+          const text = (value: unknown, max: number): string =>
+            typeof value === "string" && value.length <= max ? value : "";
+          const title = text(item.title, 512);
+          if (title.length === 0) continue;
+          const idBytes = crypto.getRandomValues(new Uint8Array(16));
+          const payload = new TextEncoder().encode(
+            JSON.stringify({
+              v: 1,
+              type: "login",
+              title,
+              username: text(item.username, 4_096),
+              password: text(item.password, 65_536),
+              url: text(item.url, 2_048),
+              notes: text(item.notes, 65_536),
+              folder: text(item.folder, 64),
+              tags: Array.isArray(item.tags)
+                ? item.tags.filter((tag): tag is string => typeof tag === "string" && tag.length <= 64).slice(0, 64)
+                : [],
+              favorite: false,
+              autofillAllowed: false,
+              totpUri: "",
+            }),
+          );
+          const ciphertext = active.encrypt_item(idBytes, payload);
+          payload.fill(0);
+          await itemStore.put({ id: bytesToHex(idBytes), ciphertext, updatedAt: Date.now() });
+          imported += 1;
+        }
+        return { ok: true, kind: "ok", imported };
+      }
       case "import-backup": {
         const active = requireSession();
         await ensureItemStore();

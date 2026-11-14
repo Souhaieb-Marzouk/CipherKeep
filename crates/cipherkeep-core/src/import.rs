@@ -34,6 +34,14 @@ pub enum ImportFormat {
     KeePassCsv = 4,
     /// Generic CSV with aliases.
     GenericCsv = 5,
+    /// Proton Pass CSV export.
+    ProtonCsv = 6,
+    /// 1Password 1PUX JSON payload.
+    OnePassword1pux = 7,
+    /// KeePass KDBX database.
+    KeePassKdbx = 8,
+    /// Proton Pass JSON export.
+    ProtonJson = 9,
 }
 
 impl ImportFormat {
@@ -46,6 +54,10 @@ impl ImportFormat {
             Self::OnePasswordCsv => "1Password CSV",
             Self::KeePassCsv => "KeePass CSV",
             Self::GenericCsv => "Generic CSV",
+            Self::ProtonCsv => "Proton Pass CSV",
+            Self::OnePassword1pux => "1Password 1PUX",
+            Self::KeePassKdbx => "KeePass KDBX",
+            Self::ProtonJson => "Proton Pass JSON",
         }
     }
 }
@@ -166,6 +178,13 @@ pub fn detect_format(bytes: &[u8]) -> Option<ImportFormat> {
     let text = decode_text(bytes).ok()?;
     let trimmed = text.trim_start();
     if trimmed.starts_with('{') || trimmed.starts_with('[') {
+        let value: Value = serde_json::from_str(trimmed).ok()?;
+        if value.get("accounts").and_then(Value::as_array).is_some() {
+            return Some(ImportFormat::OnePassword1pux);
+        }
+        if value.get("vaults").and_then(Value::as_array).is_some() {
+            return Some(ImportFormat::ProtonJson);
+        }
         return Some(ImportFormat::BitwardenJson);
     }
     let header = trimmed.lines().next()?.to_ascii_lowercase();
@@ -175,6 +194,8 @@ pub fn detect_format(bytes: &[u8]) -> Option<ImportFormat> {
         Some(ImportFormat::KeePassCsv)
     } else if header.contains("title") && header.contains("url") && header.contains("password") {
         Some(ImportFormat::OnePasswordCsv)
+    } else if header.contains("autofillurls") || (header.contains("type") && header.contains("name") && header.contains("totp")) {
+        Some(ImportFormat::ProtonCsv)
     } else if header.contains("name") || header.contains("password") {
         Some(ImportFormat::GenericCsv)
     } else {
@@ -226,6 +247,10 @@ pub fn import_with_format(
         | ImportFormat::OnePasswordCsv
         | ImportFormat::KeePassCsv
         | ImportFormat::GenericCsv => import_csv(&text, format, policy),
+        ImportFormat::ProtonCsv => import_proton_csv(&text, policy),
+        ImportFormat::OnePassword1pux => import_onepux_json(&text, policy),
+        ImportFormat::KeePassKdbx => Err(CoreError::new(ErrorCode::InvalidArgument)),
+        ImportFormat::ProtonJson => import_proton_json(&text, policy),
     }
 }
 
@@ -316,6 +341,259 @@ fn import_bitwarden_json(
         } else {
             states.failed += 1;
         }
+    }
+    states.finish()
+}
+
+
+
+
+fn import_proton_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResult> {
+    let value: Value =
+        serde_json::from_str(text).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+    let vaults = value
+        .get("vaults")
+        .and_then(Value::as_array)
+        .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+    let mut states = ImportState::new(ImportFormat::ProtonJson);
+    for vault in vaults {
+        let folder = string_field(vault, "name");
+        let items = vault
+            .get("items")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        if items.len() > MAX_IMPORT_ITEMS {
+            return Err(CoreError::new(ErrorCode::LimitExceeded));
+        }
+        for wrapper in &items {
+            let data = wrapper.get("data").unwrap_or(wrapper);
+            let metadata = data.get("metadata").unwrap_or(data);
+            let title = string_field(metadata, "name");
+            if title.trim().is_empty() {
+                states.failed += 1;
+                continue;
+            }
+            let mut notes = string_field(metadata, "note");
+            let content = data.get("content");
+            if let Some(content) = content {
+                if let Some(text) = content.as_str() {
+                    if !text.trim().is_empty() {
+                        if !notes.is_empty() { notes.push('\n'); }
+                        notes.push_str(text);
+                    }
+                }
+            }
+            let kind_name = string_field(data, "type").to_ascii_lowercase();
+            let content_value = content.cloned().unwrap_or(Value::Null);
+            let content = &content_value;
+            if kind_name == "note" {
+                states.push(
+                    ImportedItem {
+                        kind: ImportKind::Note,
+                        title,
+                        username: String::new(),
+                        password: String::new(),
+                        url: String::new(),
+                        notes,
+                        folder: folder.clone(),
+                        tags: Vec::new(),
+                    },
+                    policy,
+                )?;
+                continue;
+            }
+            let username = string_field(content, "username");
+            let password = string_field(content, "password");
+            let url = content
+                .get("urls")
+                .and_then(Value::as_array)
+                .and_then(|urls| urls.first())
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let totp = string_field(content, "totpUri");
+            if !totp.trim().is_empty() {
+                if !notes.is_empty() { notes.push('\n'); }
+                notes.push_str("TOTP: ");
+                notes.push_str(totp.trim());
+            }
+            if kind_name == "login" && username.is_empty() && password.is_empty() && notes.is_empty() {
+                states.failed += 1;
+                continue;
+            }
+            states.push(
+                ImportedItem {
+                    kind: ImportKind::Login,
+                    title,
+                    username,
+                    password,
+                    url,
+                    notes,
+                    folder: folder.clone(),
+                    tags: Vec::new(),
+                },
+                policy,
+            )?;
+        }
+    }
+    states.finish()
+}
+fn import_onepux_json(text: &str, policy: DuplicatePolicy) -> Result<ImportResult> {
+    let value: Value =
+        serde_json::from_str(text).map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+    let accounts = value
+        .get("accounts")
+        .and_then(Value::as_array)
+        .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+    let mut states = ImportState::new(ImportFormat::OnePassword1pux);
+    for account in accounts {
+        let vaults = account
+            .get("vaults")
+            .and_then(Value::as_array)
+            .ok_or_else(|| CoreError::new(ErrorCode::CorruptData))?;
+        for vault in vaults {
+            let folder = string_field(vault, "name");
+            let items = vault
+                .get("items")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if items.len() > MAX_IMPORT_ITEMS {
+                return Err(CoreError::new(ErrorCode::LimitExceeded));
+            }
+            for wrapper in &items {
+                let item = wrapper.get("item").unwrap_or(wrapper);
+                let title = string_field(item, "title");
+                if title.trim().is_empty() {
+                    states.failed += 1;
+                    continue;
+                }
+                let category = string_field(item, "categoryUuid");
+                let details = item.get("details");
+                let notes = details.map_or_else(String::new, |d| string_field(d, "notes"));
+                let mut username = String::new();
+                let mut password = String::new();
+                if let Some(fields) = details
+                    .and_then(|d| d.get("loginFields"))
+                    .and_then(Value::as_array)
+                {
+                    for field in fields {
+                        let designation = string_field(field, "designation").to_ascii_lowercase();
+                        let value = string_field(field, "value");
+                        if designation.contains("username") || designation == "email" {
+                            username = value;
+                        } else if designation.contains("password") {
+                            password = value;
+                        }
+                    }
+                }
+                let url = item
+                    .get("urls")
+                    .and_then(Value::as_array)
+                    .and_then(|urls| urls.first())
+                    .map_or_else(String::new, |u| string_field(u, "url"));
+                let kind = if category.starts_with("003") {
+                    ImportKind::Note
+                } else {
+                    ImportKind::Login
+                };
+                if kind == ImportKind::Login && password.is_empty() && username.is_empty() && notes.is_empty() {
+                    states.failed += 1;
+                    continue;
+                }
+                states.push(
+                    ImportedItem {
+                        kind,
+                        title,
+                        username,
+                        password,
+                        url,
+                        notes,
+                        folder: folder.clone(),
+                        tags: Vec::new(),
+                    },
+                    policy,
+                )?;
+            }
+        }
+    }
+    states.finish()
+}
+fn import_proton_csv(text: &str, policy: DuplicatePolicy) -> Result<ImportResult> {
+    let mut reader = csv::ReaderBuilder::new()
+        .flexible(true)
+        .from_reader(text.as_bytes());
+    let headers = reader
+        .headers()
+        .map_err(|_| CoreError::new(ErrorCode::CorruptData))?
+        .clone();
+    if headers.len() > MAX_IMPORT_COLUMNS {
+        return Err(CoreError::new(ErrorCode::LimitExceeded));
+    }
+    let indices = HeaderMap::new(&headers);
+    let mut states = ImportState::new(ImportFormat::ProtonCsv);
+    for record in reader.records() {
+        let record = record.map_err(|_| CoreError::new(ErrorCode::CorruptData))?;
+        if record.len() > MAX_IMPORT_COLUMNS {
+            return Err(CoreError::new(ErrorCode::LimitExceeded));
+        }
+        let kind = indices.get(&record, &["type"]).to_ascii_lowercase();
+        let title = indices.get(&record, &["name", "title"]);
+        if title.trim().is_empty() {
+            states.failed += 1;
+            continue;
+        }
+        let mut notes = indices.get(&record, &["note", "notes"]);
+        let totp = indices.get(&record, &["totp"]);
+        if !totp.trim().is_empty() {
+            if !notes.is_empty() {
+                notes.push('\n');
+            }
+            notes.push_str("TOTP: ");
+            notes.push_str(totp.trim());
+        }
+        if kind == "note" {
+            states.push(
+                ImportedItem {
+                    kind: ImportKind::Note,
+                    title,
+                    username: String::new(),
+                    password: String::new(),
+                    url: String::new(),
+                    notes,
+                    folder: indices.get(&record, &["vault", "folder"]),
+                    tags: Vec::new(),
+                },
+                policy,
+            )?;
+            continue;
+        }
+        if !kind.is_empty() && kind != "login" {
+            states.failed += 1;
+            continue;
+        }
+        let username = {
+            let value = indices.get(&record, &["username", "email"]);
+            if value.trim().is_empty() {
+                indices.get(&record, &["email"])
+            } else {
+                value
+            }
+        };
+        states.push(
+            ImportedItem {
+                kind: ImportKind::Login,
+                title,
+                username,
+                password: indices.get(&record, &["password"]),
+                url: indices.get(&record, &["url", "website"]),
+                notes,
+                folder: indices.get(&record, &["vault", "folder"]),
+                tags: Vec::new(),
+            },
+            policy,
+        )?;
     }
     states.finish()
 }
@@ -512,6 +790,55 @@ mod tests {
         {"type":3,"name":"Unsupported"}
       ]
     }"#;
+
+    #[test]
+    fn proton_json_imports_login_note() {
+        let json = r#"{"encrypted":false,"vaults":[{"name":"Personal","items":[
+          {"data":{"type":"login","metadata":{"name":"GitHub","note":"hello"},
+            "content":{"username":"alice","password":"secret","urls":["https://github.com"],"totpUri":""}}},
+          {"data":{"type":"note","metadata":{"name":"Recovery","note":"offline"},"content":""}}
+        ]}]}"#;
+        let result = import(json.as_bytes(), DuplicatePolicy::Skip).expect("import");
+        assert_eq!(result.report.format, ImportFormat::ProtonJson);
+        assert_eq!(result.report.imported, 2);
+        assert_eq!(result.items[0].username, "alice");
+        assert_eq!(result.items[0].folder, "Personal");
+        assert_eq!(result.items[1].kind, ImportKind::Note);
+    }
+
+    #[test]
+    fn onepux_imports_login_and_note() {
+        let json = r#"{"accounts":[{"vaults":[{"name":"Personal","items":[
+          {"item":{"title":"GitHub","categoryUuid":"001",
+            "details":{"loginFields":[
+              {"designation":"username","value":"alice"},
+              {"designation":"password","value":"secret"}],
+              "notes":"hello"},"urls":[{"url":"https://github.com"}]}},
+          {"item":{"title":"Recovery","categoryUuid":"003","details":{"notes":"offline"}}}
+        ]}]}]}"#;
+        let result = import(json.as_bytes(), DuplicatePolicy::Skip).expect("import");
+        assert_eq!(result.report.format, ImportFormat::OnePassword1pux);
+        assert_eq!(result.report.imported, 2);
+        assert_eq!(result.items[0].username, "alice");
+        assert_eq!(result.items[0].folder, "Personal");
+        assert_eq!(result.items[1].kind, ImportKind::Note);
+    }
+
+    #[test]
+    fn proton_csv_imports_login_and_skips_card() {
+        let csv = "type,name,url,email,username,password,note,totp,vault\n\
+login,Proton Login,https://proton.me,alice@example.com,,secret,hello,otpauth://totp/Proton,Personal\n\
+creditCard,My Card,,,,,,,Personal\n";
+        let result = import(csv.as_bytes(), DuplicatePolicy::Skip).expect("import");
+        assert_eq!(result.report.format, ImportFormat::ProtonCsv);
+        assert_eq!(result.report.imported, 1);
+        assert_eq!(result.report.failed, 1);
+        let item = &result.items[0];
+        assert_eq!(item.kind, ImportKind::Login);
+        assert_eq!(item.username, "alice@example.com");
+        assert_eq!(item.folder, "Personal");
+        assert!(item.notes.contains("TOTP: otpauth://totp/Proton"));
+    }
 
     #[test]
     fn bitwarden_json_imports_login_and_note() {

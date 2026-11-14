@@ -870,6 +870,43 @@ let wasm_bindgen = (function(exports) {
     exports.WasmVaultSession = WasmVaultSession;
 
     /**
+     * Decrypt a Proton Pass `data.pgp` payload with its export passphrase.
+     * @param {Uint8Array | number[]} bytes
+     * @param {string} passphrase
+     * @returns {Uint8Array}
+     */
+    function decrypt_proton_pgp(bytes, passphrase) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            let ptr0, len0, ptr1, len1;
+            try {
+                ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
+                len0 = WASM_VECTOR_LEN;
+                ptr1 = passStringToWasm0(passphrase, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+                len1 = WASM_VECTOR_LEN;
+            } catch (e) {
+                if (ptr1) { wasm.__wbindgen_export3(ptr1, len1 * 1, 1); }
+                if (ptr0) { wasm.__wbindgen_export3(ptr0, len0 * 1, 1); }
+                throw e;
+            }
+            wasm.decrypt_proton_pgp(retptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeFromExternrefTable0(r2);
+            }
+            var v3 = getArrayU8FromWasm0(r0, r1).slice();
+            wasm.__wbindgen_export3(r0, r1 * 1, 1);
+            return v3;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    exports.decrypt_proton_pgp = decrypt_proton_pgp;
+
+    /**
      * Encrypt portable item JSON with a separate export password.
      *
      * # Errors
@@ -1170,6 +1207,41 @@ let wasm_bindgen = (function(exports) {
         }
     }
     exports.health_report = health_report;
+
+    /**
+     * Parse a plaintext password-manager export into normalized JSON.
+     * @param {Uint8Array | number[]} bytes
+     * @param {boolean} merge_duplicates
+     * @returns {string}
+     */
+    function import_plaintext_json(bytes, merge_duplicates) {
+        let deferred4_0;
+        let deferred4_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
+            const val2 = +merge_duplicates;
+            const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.import_plaintext_json(retptr, ptr0, len0, val2);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr3 = r0;
+            var len3 = r1;
+            if (r3) {
+                ptr3 = 0; len3 = 0;
+                throw takeFromExternrefTable0(r2);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export3(deferred4_0, deferred4_1, 1);
+        }
+    }
+    exports.import_plaintext_json = import_plaintext_json;
 
     /**
      * Decrypt a portable export and return item JSON.
