@@ -1066,6 +1066,8 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
     }
 }
 
+private fun itemKey(item: VaultItem): String = item.id.joinToString("") { "%02x".format(it) }
+
 private fun typeGlyph(item: VaultItem): String = when (item.type) {
     "note" -> "N"
     "card" -> "C"
@@ -1237,6 +1239,10 @@ private fun VaultScreen(
     var filterText by rememberSaveable { mutableStateOf("") }
     var showFolders by remember { mutableStateOf(false) }
     var sortMode by rememberSaveable { mutableIntStateOf(0) }
+    var selectionMode by remember { mutableStateOf(false) }
+    var selectedKeys by remember { mutableStateOf(setOf<String>()) }
+    var showBulkMove by remember { mutableStateOf(false) }
+    var bulkFolder by remember { mutableStateOf("") }
     val searchIndex = remember(items) {
         FfiSearchIndex().also { index ->
             items.forEach { item ->
@@ -1279,6 +1285,7 @@ private fun VaultScreen(
             },
         )
     }
+    val scope = rememberCoroutineScope()
     Scaffold(
         contentWindowInsets = WindowInsets.safeDrawing,
     ) { innerPadding ->
@@ -1295,8 +1302,37 @@ private fun VaultScreen(
                         Text("CIPHERKEEP", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         Text("Your vault, quietly secure", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.semantics { heading() })
                     }
+                    TextButton(onClick = { selectionMode = !selectionMode; selectedKeys = emptySet() }) {
+                        Text(if (selectionMode) "Done" else "Select")
+                    }
                     Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surface, shadowElevation = 2.dp) {
                         TextButton(onClick = onLock) { Text("Lock") }
+                    }
+                }
+                if (selectionMode) {
+                    Spacer(Modifier.height(CKDimens.Space2))
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = CKDimens.Space2),
+                        horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("${selectedKeys.size} selected", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { selectedKeys = emptySet() }) { Text("Clear") }
+                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = {
+                            val chosen = items.filter { itemKey(it) in selectedKeys }
+                            scope.launch {
+                                chosen.forEach { controller.setFavorite(it, true) }
+                                selectedKeys = emptySet()
+                            }
+                        }) { Text("Pin") }
+                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = { showBulkMove = true }) { Text("Move") }
+                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = {
+                            val chosen = items.filter { itemKey(it) in selectedKeys }
+                            scope.launch {
+                                chosen.forEach { controller.deleteItem(it) }
+                                selectedKeys = emptySet()
+                            }
+                        }) { Text("Delete") }
                     }
                 }
                 Spacer(Modifier.height(CKDimens.Space3))
@@ -1393,8 +1429,17 @@ private fun VaultScreen(
             items(visibleItems.filterNot { it.favorite }) { item ->
                 val index = items.indexOf(item)
                 Card(
-                    modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${item.title}") { onOpen(index) },
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    modifier = Modifier.fillMaxWidth().clickable(onClickLabel = "Open ${item.title}") {
+                        if (selectionMode) {
+                            val key = itemKey(item)
+                            selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+                        } else {
+                            onOpen(index)
+                        }
+                    },
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (itemKey(item) in selectedKeys) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                    ),
                     shape = RoundedCornerShape(20.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                 ) {
@@ -1433,6 +1478,26 @@ private fun VaultScreen(
                 )
             }
         }
+    }
+    if (showBulkMove) {
+        AlertDialog(
+            onDismissRequest = { showBulkMove = false },
+            title = { Text("Move ${selectedKeys.size} items") },
+            text = {
+                OutlinedTextField(value = bulkFolder, onValueChange = { bulkFolder = it }, label = { Text("Folder") }, singleLine = true)
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val chosen = items.filter { itemKey(it) in selectedKeys }
+                    scope.launch {
+                        chosen.forEach { controller.moveItem(it, bulkFolder.trim()) }
+                        selectedKeys = emptySet()
+                        showBulkMove = false
+                    }
+                }) { Text("Move") }
+            },
+            dismissButton = { TextButton(onClick = { showBulkMove = false }) { Text("Cancel") } },
+        )
     }
     if (showFolders) {
         FolderDialog(controller = controller, onDismiss = { showFolders = false })
@@ -1946,7 +2011,7 @@ private fun extractZipEntry(bytes: ByteArray, wanted: String): ByteArray? = runC
         val buffer = ByteArray(16 * 1024)
         while (true) {
             val entry = zip.nextEntry ?: return null
-            if (entry.name == wanted) {
+            if (entry.name == wanted || entry.name.substringAfterLast('/') == wanted) {
                 val output = java.io.ByteArrayOutputStream()
                 var total = 0
                 while (true) {
@@ -2060,6 +2125,10 @@ private fun ImportSection(context: Context, controller: SessionController) {
                     Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
                         addCategory(Intent.CATEGORY_OPENABLE)
                         type = "*/*"
+                        putExtra(
+                            Intent.EXTRA_MIME_TYPES,
+                            arrayOf("application/zip", "application/x-zip-compressed", "text/csv", "application/json", "application/octet-stream"),
+                        )
                     },
                     BackupFileBridge.TEXT_IMPORT_REQUEST_CODE,
                 )

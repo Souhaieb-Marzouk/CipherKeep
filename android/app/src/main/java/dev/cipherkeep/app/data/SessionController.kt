@@ -611,13 +611,17 @@ class SessionController(context: Context) {
                     val item = items.getJSONObject(index)
                     val title = item.optString("title").trim()
                     if (title.isEmpty()) continue
+                    val rawNotes = item.optString("notes")
+                    val totp = Regex("TOTP:\\s*(otpauth://\\S+)").find(rawNotes)?.groupValues?.get(1).orEmpty()
+                    val notes = if (totp.isEmpty()) rawNotes else rawNotes.replace("TOTP: $totp", "").trim()
                     saveItem(
                         title = title.take(512),
                         username = item.optString("username").take(4_096),
                         password = item.optString("password").take(65_536),
                         url = importUrl(item.optString("url")),
-                        notes = item.optString("notes").take(65_536),
+                        notes = notes.take(65_536),
                         folder = item.optString("folder").take(64),
+                        totpUri = totp.take(4_096),
                     ).getOrThrow()
                     imported += 1
                 }
