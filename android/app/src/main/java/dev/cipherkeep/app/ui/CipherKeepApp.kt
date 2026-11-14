@@ -2,6 +2,9 @@ package dev.cipherkeep.app.ui
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import dev.cipherkeep.app.BuildConfig
+import dev.cipherkeep.app.update.UpdateInstaller
 
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -1797,6 +1800,34 @@ private fun ImportSection(context: Context, controller: SessionController) {
     }
 }
 
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AboutSection(context: Context) {
+    fun open(url: String) {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    }
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+        shape = RoundedCornerShape(24.dp),
+    ) {
+        Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            Text("About CipherKeep", style = MaterialTheme.typography.titleLarge)
+            Text("Designed and architected by Souhaieb Marzouk.", style = MaterialTheme.typography.bodyMedium)
+            Text("A local-first, zero-knowledge password manager for Android and Firefox.", style = MaterialTheme.typography.bodySmall)
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            Text("Version ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodySmall)
+            Text("License: GNU AGPL-3.0", style = MaterialTheme.typography.bodySmall)
+            Text("Package: ${context.packageName}", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                TextButton(onClick = { open("https://github.com/Souhaieb-Marzouk/CipherKeep") }) { Text("GitHub") }
+                TextButton(onClick = { open("https://github.com/Souhaieb-Marzouk/CipherKeep/blob/main/LICENSE") }) { Text("License") }
+                TextButton(onClick = { open("https://github.com/Souhaieb-Marzouk/CipherKeep/blob/main/SECURITY.md") }) { Text("Security") }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettingsScreen(
@@ -1806,7 +1837,8 @@ private fun SettingsScreen(
     onBack: () -> Unit,
 ) {
     var updateMessage by remember { mutableStateOf<String?>(null) }
-    var updateNotes by remember { mutableStateOf<String?>(null) }
+    var availableUpdate by remember { mutableStateOf<UpdateOutcome.Available?>(null) }
+    var updateBusy by remember { mutableStateOf(false) }
     var dailyCheck by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val updateChecker = remember { UpdateChecker(context) }
@@ -2064,17 +2096,16 @@ private fun SettingsScreen(
             )
             OutlinedButton(
                 onClick = {
-                    updateMessage = "Checking GitHub Releases…"
-                    updateNotes = null
+                    updateMessage = "Checking…"
+                    availableUpdate = null
                     scope.launch {
                         when (val outcome = updateChecker.check()) {
                             is UpdateOutcome.Available -> {
-                                updateMessage = "Update available: ${outcome.currentVersion} → ${outcome.latestVersion}\n" +
-                                    "Published ${outcome.publishedAt}; ${outcome.sizeBytes} bytes."
-                                updateNotes = outcome.notes
+                                availableUpdate = outcome
+                                updateMessage = "Update available: ${outcome.latestVersion}"
                             }
                             is UpdateOutcome.UpToDate -> {
-                                updateMessage = "Up to date (${outcome.currentVersion})."
+                                updateMessage = "You're up to date (${outcome.currentVersion})."
                             }
                             UpdateOutcome.NoRelease -> {
                                 updateMessage = "No public release has been published yet."
@@ -2099,18 +2130,39 @@ private fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (updateNotes != null) {
-                Text(
-                    text = updateNotes.orEmpty(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = CKDimens.Space2),
-                )
+            availableUpdate?.let { update ->
+                if (update.apkUrl == null) {
+                    Text(
+                        "This release has no Android APK asset.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Button(
+                        enabled = !updateBusy,
+                        onClick = {
+                            updateBusy = true
+                            updateMessage = "Downloading ${update.apkName.ifBlank { "update" }}…"
+                            scope.launch {
+                                val result = UpdateInstaller.download(context, update)
+                                updateBusy = false
+                                result.onSuccess { file ->
+                                    updateMessage = "Downloaded. Opening installer…"
+                                    UpdateInstaller.install(context, file)
+                                        .onFailure { updateMessage = "Could not open the installer: ${it.message}" }
+                                }.onFailure {
+                                    updateMessage = it.message ?: "Update download failed."
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(if (updateBusy) "Downloading…" else "Download & install ${update.latestVersion}")
+                    }
+                }
             }
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = CKDimens.Space3),
+                modifier = Modifier.fillMaxWidth().padding(top = CKDimens.Space3),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Switch(
@@ -2130,7 +2182,7 @@ private fun SettingsScreen(
                 )
             }
             Text(
-                text = "Download and install arrive in P5-001. This check never installs anything.",
+                text = "Only a checked release with a matching APK signature can be installed.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = CKDimens.Space2),
@@ -2196,6 +2248,7 @@ private fun SettingsScreen(
             WebAuthnSection(context, controller)
             PasskeyProviderSection(context)
             ImportSection(context, controller)
+            AboutSection(context)
             RelaySyncSection(controller)
             OutlinedButton(
                 onClick = {

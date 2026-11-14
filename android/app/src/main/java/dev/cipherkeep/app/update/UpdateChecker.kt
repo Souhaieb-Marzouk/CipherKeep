@@ -17,6 +17,9 @@ sealed interface UpdateOutcome {
         val sizeBytes: Long,
         val notes: String,
         val releaseUrl: String,
+        val apkUrl: String? = null,
+        val apkName: String = "",
+        val apkSizeBytes: Long = 0L,
     ) : UpdateOutcome
 
     data class UpToDate(val currentVersion: String, val latestVersion: String) : UpdateOutcome
@@ -95,20 +98,36 @@ class UpdateChecker internal constructor(
             val notes = ReleaseNotes.sanitize(json.optString("body"))
             val url = json.optString("html_url")
             val published = json.optString("published_at")
-            val size = json.optJSONArray("assets")?.let { assets ->
-                (0 until assets.length()).sumOf { index ->
-                    assets.optJSONObject(index)?.optLong("size", 0L) ?: 0L
+            var totalSize = 0L
+            var apkUrl: String? = null
+            var apkName = ""
+            var apkSize = 0L
+            json.optJSONArray("assets")?.let { assets ->
+                for (index in 0 until assets.length()) {
+                    val asset = assets.optJSONObject(index) ?: continue
+                    val size = asset.optLong("size", 0L)
+                    totalSize += size
+                    val name = asset.optString("name")
+                    val download = asset.optString("browser_download_url")
+                    if (name.endsWith(".apk", ignoreCase = true) && download.startsWith("https://")) {
+                        apkUrl = download
+                        apkName = name
+                        apkSize = size
+                    }
                 }
-            } ?: 0L
+            }
 
             if (latest > current) {
                 UpdateOutcome.Available(
                     currentVersion = currentVersion,
                     latestVersion = tag,
                     publishedAt = published,
-                    sizeBytes = size,
+                    sizeBytes = totalSize,
                     notes = notes,
                     releaseUrl = url,
+                    apkUrl = apkUrl,
+                    apkName = apkName,
+                    apkSizeBytes = apkSize,
                 )
             } else {
                 UpdateOutcome.UpToDate(currentVersion, tag.ifEmpty { "unknown" })

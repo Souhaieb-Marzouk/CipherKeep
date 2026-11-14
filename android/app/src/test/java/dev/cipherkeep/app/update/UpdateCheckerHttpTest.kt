@@ -32,7 +32,7 @@ class UpdateCheckerHttpTest {
           "published_at": "2026-11-11T00:00:00Z",
           "body": "<b>Changes</b><script>alert(1)</script>",
           "html_url": "https://github.com/Souhaieb-Marzouk/CipherKeep/releases/tag/v0.2.0",
-          "assets": [{"size": 100}, {"size": 200}]
+          "assets": [{"size": 100}, {"size": 200, "name": "cipherkeep.apk", "browser_download_url": "https://example.test/cipherkeep.apk"}]
         }
     """.trimIndent()
 
@@ -68,6 +68,9 @@ class UpdateCheckerHttpTest {
         outcome as UpdateOutcome.Available
         assertEquals("v0.2.0", outcome.latestVersion)
         assertEquals(300L, outcome.sizeBytes)
+        assertEquals("https://example.test/cipherkeep.apk", outcome.apkUrl)
+        assertEquals("cipherkeep.apk", outcome.apkName)
+        assertEquals(200L, outcome.apkSizeBytes)
         assertEquals(false, outcome.notes.contains("<script>"))
         assertEquals("\"abc\"", cache.etagValue)
     }
