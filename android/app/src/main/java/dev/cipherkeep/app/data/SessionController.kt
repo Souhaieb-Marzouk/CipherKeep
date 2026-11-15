@@ -142,6 +142,9 @@ class SessionController(context: Context) {
                 blob = encoded
                 travel.clear()
                 if (!openStorage()) error("storage unavailable")
+                // A joined vault replaces the local identity, so stale items from
+                // the previous vault must not be merged into the new one.
+                repository?.list()?.forEach { entity -> repository?.delete(entity.itemId) }
                 loadItems()
                 state = VaultUiState.Unlocked
                 recordActivity()
@@ -853,7 +856,7 @@ class SessionController(context: Context) {
     fun pairingCode(): String? = runCatching {
         val active = session ?: return@runCatching null
         val endpoint = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
-            .getString("relay_endpoint", "https://cipherkeep-relay.marzouk-souhaieb.workers.dev")
+            .getString("relay_endpoint", DEFAULT_RELAY_ENDPOINT)
             .orEmpty()
         val token = SyncCredentialStore(appContext).load().orEmpty()
         val json = JSONObject()
@@ -862,11 +865,53 @@ class SessionController(context: Context) {
             .put("vaultKey", active.familyVaultKey())
             .put("endpoint", endpoint)
             .put("token", token)
-        "CKPAIR1:" + Base64.encodeToString(
+        PAIRING_PREFIX + Base64.encodeToString(
             json.toString().toByteArray(),
             Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING,
         )
     }.getOrNull()
+
+    /** Decode a `CKPAIR1:` code into its vault identity and relay settings. */
+    private fun decodePairingCode(code: String): JSONObject {
+        val trimmed = code.trim()
+        require(trimmed.startsWith(PAIRING_PREFIX)) { "Pairing code must start with $PAIRING_PREFIX" }
+        val encoded = trimmed.removePrefix(PAIRING_PREFIX).replace('-', '+').replace('_', '/')
+        val padded = encoded + "=".repeat((4 - encoded.length % 4) % 4)
+        return JSONObject(String(Base64.decode(padded, Base64.NO_WRAP), Charsets.UTF_8))
+    }
+
+    /**
+     * Join the vault described by a pairing code, persist its relay settings and
+     * pull remote records once so the second device starts with the same items.
+     */
+    suspend fun joinWithPairingCode(code: String, password: String): Result<Int> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val payload = decodePairingCode(code)
+                val vaultId = payload.optString("vaultId")
+                val vaultKey = payload.optString("vaultKey")
+                require(vaultId.length == 32 && vaultKey.length == 64) {
+                    "Pairing code is incomplete."
+                }
+                joinFamilyVault(password, vaultId, vaultKey).getOrThrow()
+                val endpoint = payload.optString("endpoint").ifBlank { DEFAULT_RELAY_ENDPOINT }
+                val token = payload.optString("token")
+                appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("relay_endpoint", endpoint)
+                    .apply()
+                var records = 0
+                if (token.isNotBlank()) {
+                    SyncCredentialStore(appContext).save(token)
+                    records = AndroidSyncEngine(appContext, this@SessionController)
+                        .sync(endpoint, token)
+                        .getOrThrow()
+                        .records
+                    loadItems()
+                }
+                records
+            }
+        }
 
     fun familyVaultKeyHex(): String {
         val active = session ?: error("vault is locked")
@@ -1468,5 +1513,8 @@ class SessionController(context: Context) {
 
     companion object {
         const val AUTO_LOCK_MILLIS = 60_000L
+        const val PAIRING_PREFIX = "CKPAIR1:"
+        const val DEFAULT_RELAY_ENDPOINT = "https://cipherkeep-relay.marzouk-souhaieb.workers.dev"
+        const val MIN_JOIN_PASSWORD_LENGTH = 12
     }
 }

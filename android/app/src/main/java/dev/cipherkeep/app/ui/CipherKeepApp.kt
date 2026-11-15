@@ -1311,28 +1311,48 @@ private fun VaultScreen(
                 }
                 if (selectionMode) {
                     Spacer(Modifier.height(CKDimens.Space2))
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = CKDimens.Space2),
-                        horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text("${selectedKeys.size} selected", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { selectedKeys = emptySet() }) { Text("Clear") }
-                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = {
-                            val chosen = items.filter { itemKey(it) in selectedKeys }
-                            scope.launch {
-                                chosen.forEach { controller.setFavorite(it, true) }
-                                selectedKeys = emptySet()
-                            }
-                        }) { Text("Pin") }
-                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = { showBulkMove = true }) { Text("Move") }
-                        TextButton(enabled = selectedKeys.isNotEmpty(), onClick = {
-                            val chosen = items.filter { itemKey(it) in selectedKeys }
-                            scope.launch {
-                                chosen.forEach { controller.deleteItem(it) }
-                                selectedKeys = emptySet()
-                            }
-                        }) { Text("Delete") }
+                    Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${selectedKeys.size} selected", style = MaterialTheme.typography.labelMedium, modifier = Modifier.weight(1f))
+                            TextButton(
+                                enabled = visibleItems.isNotEmpty(),
+                                onClick = { selectedKeys = visibleItems.map { itemKey(it) }.toSet() },
+                            ) { Text("Select all") }
+                            TextButton(enabled = selectedKeys.isNotEmpty(), onClick = { selectedKeys = emptySet() }) { Text("None") }
+                        }
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            OutlinedButton(
+                                enabled = selectedKeys.isNotEmpty(),
+                                onClick = {
+                                    val chosen = items.filter { itemKey(it) in selectedKeys }
+                                    scope.launch {
+                                        chosen.forEach { controller.setFavorite(it, true) }
+                                        selectedKeys = emptySet()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Pin") }
+                            OutlinedButton(
+                                enabled = selectedKeys.isNotEmpty(),
+                                onClick = { showBulkMove = true },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Move") }
+                            OutlinedButton(
+                                enabled = selectedKeys.isNotEmpty(),
+                                onClick = {
+                                    val chosen = items.filter { itemKey(it) in selectedKeys }
+                                    scope.launch {
+                                        chosen.forEach { controller.deleteItem(it) }
+                                        selectedKeys = emptySet()
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) { Text("Delete") }
+                        }
                     }
                 }
                 Spacer(Modifier.height(CKDimens.Space3))
@@ -1411,16 +1431,33 @@ private fun VaultScreen(
                 item { Text("Pinned", style = MaterialTheme.typography.titleMedium) }
                 items(pinnedItems) { item ->
                     val index = items.indexOf(item)
+                    val selected = itemKey(item) in selectedKeys
                     Surface(
                         shape = RoundedCornerShape(18.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.fillMaxWidth().clickable { onOpen(index) },
+                        color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.fillMaxWidth().clickable(onClickLabel = if (selectionMode) "Select ${item.title}" else "Open ${item.title}") {
+                            if (selectionMode) {
+                                val key = itemKey(item)
+                                selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+                            } else {
+                                onOpen(index)
+                            }
+                        },
                     ) {
                         Row(Modifier.fillMaxWidth().padding(CKDimens.Space3), verticalAlignment = Alignment.CenterVertically) {
-                            Text("★", color = MaterialTheme.colorScheme.primary)
+                            Text("★", color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(CKDimens.Space2))
-                            Text(item.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                            Text(itemSubtitle(item), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(
+                                item.title,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                itemSubtitle(item),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
                     }
                 }
@@ -2261,17 +2298,119 @@ private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick:
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PairingSection(controller: SessionController) {
+private fun PairingSection(controller: SessionController, onJoined: () -> Unit) {
     var code by remember { mutableStateOf<String?>(null) }
+    var copied by remember { mutableStateOf(false) }
+    var joinCode by remember { mutableStateOf("") }
+    var joinPassword by remember { mutableStateOf("") }
+    var joinConfirm by remember { mutableStateOf("") }
+    var status by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val scanQr = rememberQrScanner(
+        onText = { joinCode = it.trim(); status = "Pairing code captured." },
+        onError = { status = it },
+    )
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
         Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-            Text("Pair with Firefox", style = MaterialTheme.typography.titleMedium)
-            Text("Creates a one-time pairing code containing this vault identity and relay settings. Treat it like a password.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = { code = controller.pairingCode() }, modifier = Modifier.fillMaxWidth()) { Text("Generate pairing code") }
+            Text("Pair another device", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Generate a code on this phone, then enter it on a second phone or paste it into the Firefox extension. The code carries the vault identity and relay settings, so treat it like a password.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Button(onClick = { code = controller.pairingCode(); copied = false }, modifier = Modifier.fillMaxWidth()) { Text("Generate pairing code") }
             code?.let { value ->
                 Text(value, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
-                TextButton(onClick = { clipboard.setText(AnnotatedString(value)) }) { Text("Copy code") }
+                TextButton(onClick = { clipboard.setText(AnnotatedString(value)); copied = true }) {
+                    Text(if (copied) "Copied" else "Copy code")
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(CKDimens.Space3))
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            Text("Join a vault from another device", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Joining replaces the vault on this phone with the paired vault and pulls its items over relay sync. Use the code shown on the other phone or in the Firefox extension.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OutlinedTextField(
+                value = joinCode,
+                onValueChange = { joinCode = it },
+                label = { Text("Pairing code") },
+                minLines = 3,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                OutlinedButton(onClick = scanQr, modifier = Modifier.weight(1f)) { Text("Scan QR") }
+                OutlinedButton(
+                    onClick = {
+                        val pasted = clipboard.getText()?.text?.trim()
+                        if (pasted.isNullOrEmpty()) {
+                            status = "Clipboard is empty."
+                        } else {
+                            joinCode = pasted
+                            status = "Pairing code pasted."
+                        }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) { Text("Paste") }
+            }
+            OutlinedTextField(
+                value = joinPassword,
+                onValueChange = { joinPassword = it },
+                label = { Text("New master password for this phone") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = joinConfirm,
+                onValueChange = { joinConfirm = it },
+                label = { Text("Confirm master password") },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            val canJoin = !busy &&
+                joinCode.isNotBlank() &&
+                joinPassword.length >= SessionController.MIN_JOIN_PASSWORD_LENGTH &&
+                joinPassword == joinConfirm
+            Button(
+                enabled = canJoin,
+                onClick = {
+                    busy = true
+                    status = "Joining the vault…"
+                    scope.launch {
+                        controller.joinWithPairingCode(joinCode, joinPassword)
+                            .onSuccess { records ->
+                                joinCode = ""
+                                joinPassword = ""
+                                joinConfirm = ""
+                                busy = false
+                                status = if (records > 0) {
+                                    "Joined and synced $records record(s)."
+                                } else {
+                                    "Joined. Add a relay token under Relay sync, then press Sync now."
+                                }
+                                onJoined()
+                            }
+                            .onFailure {
+                                busy = false
+                                status = it.message ?: "Could not join the vault."
+                            }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) { Text(if (busy) "Joining…" else "Join vault") }
+            status?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -2423,7 +2562,7 @@ private fun SettingsScreen(
                     }
                 }
             }
-            PairingSection(controller)
+            PairingSection(controller, onBack)
             Text(
                 text = "Appearance",
                 style = MaterialTheme.typography.titleMedium,
@@ -2666,57 +2805,8 @@ private fun SettingsScreen(
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outline)
 
-            Text(
-                text = "Autofill Inspector",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Column(modifier = Modifier.padding(CKDimens.Space4)) {
-                    var recipeRegistry by remember {
-                        mutableStateOf<dev.cipherkeep.app.data.RecipeRegistry?>(null)
-                    }
-                    LaunchedEffect(Unit) {
-                        recipeRegistry = withContext(Dispatchers.IO) {
-                            dev.cipherkeep.app.data.RecipeRegistry.load(context)
-                        }
-                    }
-                    Text(
-                        text = recipeRegistry?.let { "Recipe registry v${it.version} · ${it.hash.take(16)}…" }
-                            ?: "Recipe registry unavailable or signature invalid",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    val eligible = controller.items.filter {
-                        it.autofillAllowed && it.url.isNotBlank() && it.password.isNotEmpty()
-                    }
-                    Text("${eligible.size} item(s) explicitly allowed for autofill")
-            OutlinedButton(onClick = { dev.cipherkeep.app.autofill.PhishingOverrideStore(context).clear() }) { Text("Clear phishing overrides") }
-                    eligible.forEach { item ->
-                        val origin = runCatching { java.net.URI(item.url).host }.getOrNull() ?: "invalid URL"
-                        Text(
-                            text = "${item.title} · $origin",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    if (eligible.isEmpty()) {
-                        Text(
-                            text = "No item is autofill-eligible. Open an item, choose Edit and opt in for its exact origin.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
             SyncFolderSection(context, controller)
             HibpSection(context, controller)
-            HealthSection(controller)
             WebAuthnSection(context, controller)
             PasskeyProviderSection(context)
             RelaySyncSection(controller)
@@ -2840,19 +2930,6 @@ private fun SettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
-            Text(
-                text = "About",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                text = "CipherKeep 0.1.0-shell\nRust core connected via UniFFI.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
     if (showDesignGallery) {
