@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
@@ -203,32 +204,59 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
                 visualTransformation = PasswordVisualTransformation(),
                 modifier = Modifier.fillMaxWidth(),
             )
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        val activeToken = token.ifBlank {
-                            runCatching { dev.cipherkeep.app.data.SyncCredentialStore(context).load() }
-                                .getOrNull()
-                                .orEmpty()
-                        }
-                        if (activeToken.length < 32) {
-                            message = "Enter the relay token (at least 32 characters)."
-                            return@launch
-                        }
-                        syncPrefs.edit().putString("relay_endpoint", endpoint.trim()).apply()
-                        dev.cipherkeep.app.data.SyncCredentialStore(context).save(activeToken)
-                        token = activeToken
-                        message = dev.cipherkeep.app.data.AndroidSyncEngine(context, controller)
-                            .sync(endpoint.trim(), activeToken)
-                            .fold(
-                                { "Synced ${it.records} record(s); conflicts ${it.conflicts}." },
-                                { "Sync failed. Check the endpoint, token and connection." },
-                            )
-                        conflicts = controller.conflictItems()
+            val runSync: (Boolean) -> Unit = { push ->
+                scope.launch {
+                    val activeToken = token.ifBlank {
+                        runCatching { dev.cipherkeep.app.data.SyncCredentialStore(context).load() }
+                            .getOrNull()
+                            .orEmpty()
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Sync now") }
+                    if (activeToken.length < 32) {
+                        message = "Enter the relay token (at least 32 characters)."
+                        return@launch
+                    }
+                    syncPrefs.edit().putString("relay_endpoint", endpoint.trim()).apply()
+                    dev.cipherkeep.app.data.SyncCredentialStore(context).save(activeToken)
+                    token = activeToken
+                    message = if (push) "Sending changes…" else "Receiving changes…"
+                    message = runCatching {
+                        controller.syncNow(
+                            endpoint.trim(),
+                            activeToken,
+                            controller.syncNamespace(),
+                            push,
+                        )
+                    }.fold(
+                        { outcome ->
+                            if (push) {
+                                "Uploaded. ${outcome.records} record(s), conflicts ${outcome.conflicts}."
+                            } else {
+                                "Downloaded. ${outcome.records} record(s), conflicts ${outcome.conflicts}."
+                            }
+                        },
+                        {
+                            if (push) {
+                                "Upload failed. Check the endpoint, token and connection."
+                            } else {
+                                "Download failed. Check the endpoint, token and connection."
+                            }
+                        },
+                    )
+                    conflicts = controller.conflictItems()
+                }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                OutlinedButton(onClick = { runSync(false) }, modifier = Modifier.weight(1f)) {
+                    Text("Download changes")
+                }
+                Button(onClick = { runSync(true) }, modifier = Modifier.weight(1f)) {
+                    Text("Upload changes")
+                }
+            }
+            Text(
+                "Nothing syncs on its own: upload after edits, download before editing on another phone.",
+                style = MaterialTheme.typography.labelSmall,
+            )
             message?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
             conflicts.forEach { (item, field) ->
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

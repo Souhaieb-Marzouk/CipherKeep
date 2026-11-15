@@ -10,6 +10,7 @@ import dev.cipherkeep.app.update.UpdateInstaller
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -72,7 +74,9 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -87,6 +91,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import android.provider.Settings
@@ -140,11 +145,9 @@ fun CipherKeepApp() {
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         dev.cipherkeep.app.data.SyncRuntime.controller = controller
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-            "cipherkeep-sync",
-            ExistingPeriodicWorkPolicy.KEEP,
-            PeriodicWorkRequestBuilder<dev.cipherkeep.app.data.SyncWorker>(15, TimeUnit.MINUTES).build(),
-        )
+        // Sync is explicit: nothing is pushed or pulled until the user asks for
+        // it in Advanced settings, so local edits and deletions stay local.
+        WorkManager.getInstance(context).cancelUniqueWork("cipherkeep-sync")
     }
     val reduceMotion = Settings.Global.getFloat(
         context.contentResolver,
@@ -632,12 +635,15 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
             Text(
                 text = "CipherKeep",
                 style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.semantics { heading() },
+                modifier = Modifier.fillMaxWidth().semantics { heading() },
+                textAlign = TextAlign.Center,
             )
             Text(
                 text = "Unlock your local vault.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+                textAlign = TextAlign.Center,
             )
             Spacer(Modifier.height(CKDimens.Space4))
             Card(
@@ -1038,29 +1044,42 @@ private fun GeneratorCheck(label: String, checked: Boolean, onChange: (Boolean) 
 
 @Composable
 private fun BrandMark() {
-    Box(
-        modifier = Modifier
-            .size(64.dp)
-            .background(
-                brush = Brush.linearGradient(
-                    listOf(CKColor.LightAccent, CKColor.DarkPrimary),
-                ),
-                shape = RoundedCornerShape(CKDimens.RadiusLg),
-            ),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = "CK",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = CKColor.DarkOnPrimary,
-        )
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            shadowElevation = 14.dp,
+            tonalElevation = 2.dp,
+            modifier = Modifier.size(108.dp),
+        ) {
+            Image(
+                painter = painterResource(dev.cipherkeep.app.R.drawable.ic_launcher),
+                contentDescription = "CipherKeep logo",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SecurityHubScreen(context: Context, controller: SessionController, onBack: () -> Unit) {
+    var biometricEnabled by remember { mutableStateOf(false) }
+    var legacyBiometric by remember { mutableStateOf(false) }
+    LaunchedEffect(controller) {
+        biometricEnabled = controller.biometricWrapped() != null
+        legacyBiometric = controller.hasLegacyBiometric()
+    }
+    val report = rememberHealthReport(controller)
+    val weak = report?.optInt("weak") ?: 0
+    val reused = report?.optInt("reused") ?: 0
+    val old = report?.optInt("old") ?: 0
+    val breached = report?.optInt("breached") ?: 0
+    val missingTotp = report?.optInt("missingTotp") ?: 0
+    val total = controller.items.size
+    val issues = weak + reused + old + breached + missingTotp
+    val score = if (total == 0) 100 else (100 - (issues * 100 / total)).coerceIn(0, 100)
+    val lockMinutes = (controller.lockTimeoutMillis() / 60_000).coerceAtLeast(1)
     Scaffold(
         topBar = {
             TopAppBar(
@@ -1077,11 +1096,141 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
                 .padding(CKDimens.Space4),
             verticalArrangement = Arrangement.spacedBy(CKDimens.Space3),
         ) {
-            Text("Password health", style = MaterialTheme.typography.titleMedium)
-            HealthSection(controller)
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-            Text("Breach monitoring", style = MaterialTheme.typography.titleMedium)
-            HibpSection(context, controller)
+            Card(
+                shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+                elevation = CardDefaults.cardElevation(defaultElevation = 10.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary,
+                                    MaterialTheme.colorScheme.tertiary,
+                                ),
+                            ),
+                            RoundedCornerShape(28.dp),
+                        )
+                        .padding(CKDimens.Space6),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        DepthIcon(CkIcon.SECURITY, size = 66.dp, plate = false, tint = MaterialTheme.colorScheme.onPrimary)
+                        Spacer(Modifier.width(CKDimens.Space4))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Security overview",
+                                style = MaterialTheme.typography.titleLarge,
+                                color = MaterialTheme.colorScheme.onPrimary,
+                            )
+                            Text(
+                                "$score / 100 - $total item(s)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.88f),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(CKDimens.Space4))
+                    LinearProgressIndicator(
+                        progress = { score / 100f },
+                        modifier = Modifier.fillMaxWidth().height(10.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        trackColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.25f),
+                    )
+                    Spacer(Modifier.height(CKDimens.Space4))
+                    Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                        SecurityStat("Weak", weak)
+                        SecurityStat("Reused", reused)
+                        SecurityStat("Breached", breached)
+                        SecurityStat("No 2FA", missingTotp)
+                    }
+                }
+            }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space3)) {
+                    Text("Protection", style = MaterialTheme.typography.titleMedium)
+                    SecurityInfoRow(
+                        CkIcon.LOCK,
+                        "Auto-lock",
+                        "After $lockMinutes minute(s) without activity",
+                    )
+                    SecurityInfoRow(
+                        CkIcon.BIOMETRIC,
+                        "Biometric unlock",
+                        when {
+                            biometricEnabled -> "Enabled"
+                            legacyBiometric -> "Re-enable required after update"
+                            else -> "Off"
+                        },
+                    )
+                    SecurityInfoRow(
+                        CkIcon.SYNC,
+                        "Sync",
+                        "Manual: upload and download from Advanced settings",
+                    )
+                }
+            }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    Text("Password health", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Weak, reused, aging and breached passwords, and accounts without a second factor.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(CKDimens.Space2))
+                    HealthSection(controller)
+                }
+            }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                    Text("Breach monitoring", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Checks account addresses against the Have I Been Pwned range API.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Spacer(Modifier.height(CKDimens.Space2))
+                    HibpSection(context, controller)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.SecurityStat(label: String, value: Int) {
+    Column(
+        modifier = Modifier.weight(1f),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(
+            value.toString(),
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun SecurityInfoRow(icon: CkIcon, title: String, value: String) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        DepthIcon(icon, size = 40.dp)
+        Spacer(Modifier.width(CKDimens.Space3))
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            Text(
+                value,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -1124,11 +1273,11 @@ private fun AuroraNavBar(current: String, onVault: () -> Unit, onAdd: () -> Unit
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⌂", "Vault", current == "vault", onVault) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◈", "Security", current == "security", onSecurity) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem(CkIcon.VAULT, "Vault", current == "vault", onVault) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem(CkIcon.SECURITY, "Security", current == "security", onSecurity) }
                 Spacer(Modifier.weight(1f))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⚙", "Settings", current == "settings" || current == "settings_advanced", onSettings) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◔", "Monitor", current == "monitor", onMonitor) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem(CkIcon.SETTINGS, "Settings", current == "settings" || current == "settings_advanced", onSettings) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem(CkIcon.MONITOR, "Monitor", current == "monitor", onMonitor) }
             }
         }
         Surface(
@@ -1138,14 +1287,14 @@ private fun AuroraNavBar(current: String, onVault: () -> Unit, onAdd: () -> Unit
             shadowElevation = 12.dp,
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Text("+", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary)
+                DepthIcon(CkIcon.ADD, size = 30.dp, plate = false, tint = MaterialTheme.colorScheme.onPrimary)
             }
         }
     }
 }
 
 @Composable
-private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onClick: () -> Unit) {
+private fun AuroraNavItem(icon: CkIcon, label: String, selected: Boolean, onClick: () -> Unit) {
     val tint = if (selected) {
         MaterialTheme.colorScheme.primary
     } else {
@@ -1155,10 +1304,16 @@ private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onCli
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 2.dp, vertical = 6.dp),
+            .padding(horizontal = 2.dp, vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(glyph, style = MaterialTheme.typography.titleMedium, color = tint)
+        Box(
+            modifier = Modifier
+                .size(if (selected) 30.dp else 27.dp)
+                .alpha(if (selected) 1f else 0.55f),
+        ) {
+            DepthIcon(icon, size = if (selected) 30.dp else 27.dp)
+        }
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
@@ -1382,7 +1537,7 @@ private fun VaultScreen(
                                 onClick = {
                                     val chosen = items.filter { itemKey(it) in selectedKeys }
                                     scope.launch {
-                                        chosen.forEach { controller.deleteItem(it) }
+                                        controller.deleteItems(chosen)
                                         selectedKeys = emptySet()
                                     }
                                 },
@@ -2354,16 +2509,16 @@ private fun SettingsHubScreen(
             Text("Everything in one place", style = MaterialTheme.typography.headlineSmall)
             Text("Choose an area. Each opens its own window.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(CKDimens.Space2))
-            SettingsRow("♥", "Password health", "Weak, reused and aging passwords") { section = "health" }
-            SettingsRow("◆", "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
-            SettingsRow("↓", "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
-            SettingsRow("✉", "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
-            SettingsRow("◷", "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
-            SettingsRow("✈", "Travel Mode", "Decoy vault for travel") { section = "travel" }
-            SettingsRow("◎", "Family sharing", "Owner, editor and viewer roles") { section = "family" }
-            SettingsRow("ℹ", "About CipherKeep", "Designer, version, license and links") { section = "about" }
+            SettingsRow(CkIcon.HEART, "Password health", "Weak, reused and aging passwords") { section = "health" }
+            SettingsRow(CkIcon.RADAR, "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
+            SettingsRow(CkIcon.IMPORT, "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
+            SettingsRow(CkIcon.ALIAS, "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
+            SettingsRow(CkIcon.CLOCK, "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
+            SettingsRow(CkIcon.TRAVEL, "Travel Mode", "Decoy vault for travel") { section = "travel" }
+            SettingsRow(CkIcon.FAMILY, "Family sharing", "Owner, editor and viewer roles") { section = "family" }
+            SettingsRow(CkIcon.INFO, "About CipherKeep", "Designer, version, license and links") { section = "about" }
             Spacer(Modifier.height(CKDimens.Space2))
-            SettingsRow("⚙", "Advanced settings", "Backup, sync, biometrics, updates, passkeys") { onAdvanced() }
+            SettingsRow(CkIcon.SETTINGS, "Advanced settings", "Backup, sync, biometrics, updates, passkeys") { onAdvanced() }
         }
     }
     section?.let { selected ->
@@ -2390,7 +2545,7 @@ private fun SettingsHubScreen(
 }
 
 @Composable
-private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick: () -> Unit) {
+private fun SettingsRow(icon: CkIcon, title: String, subtitle: String, onClick: () -> Unit) {
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -2398,9 +2553,7 @@ private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick:
         shadowElevation = 1.dp,
     ) {
         Row(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalAlignment = Alignment.CenterVertically) {
-            Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(42.dp)) {
-                Box(contentAlignment = Alignment.Center) { Text(glyph, color = MaterialTheme.colorScheme.onPrimaryContainer) }
-            }
+            DepthIcon(icon, size = 42.dp)
             Spacer(Modifier.width(CKDimens.Space3))
             Column(Modifier.weight(1f)) {
                 Text(title, style = MaterialTheme.typography.titleMedium)

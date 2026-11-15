@@ -1,6 +1,8 @@
 package dev.cipherkeep.app.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,9 +22,8 @@ import org.json.JSONObject
 import dev.cipherkeep.app.ui.theme.CKDimens
 
 @Composable
-fun HealthSection(controller: SessionController) {
-    var filter by remember { mutableStateOf("All") }
-    val report = remember(controller.items) {
+fun rememberHealthReport(controller: SessionController): JSONObject? {
+    return remember(controller.items) {
         runCatching {
             val values = JSONArray()
             controller.items.forEach { item ->
@@ -49,6 +50,12 @@ fun HealthSection(controller: SessionController) {
             )
         }.getOrNull()
     }
+}
+
+@Composable
+fun HealthSection(controller: SessionController) {
+    var filter by remember { mutableStateOf("All") }
+    val report = rememberHealthReport(controller)
     Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
         Text("Password health", style = MaterialTheme.typography.titleMedium)
         if (report == null) {
@@ -59,7 +66,7 @@ fun HealthSection(controller: SessionController) {
             "Weak ${report.optInt("weak")} · Reused ${report.optInt("reused")} · Old ${report.optInt("old")} · Breached ${report.optInt("breached")} · No TOTP ${report.optInt("missingTotp")}",
             style = MaterialTheme.typography.bodySmall,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+        Row(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
             listOf("All", "Weak", "Reused", "Old", "Breached", "NoTOTP").forEach { value ->
                 OutlinedButton(onClick = { filter = value }) {
                     Text(if (filter == value) "✓ $value" else value, style = MaterialTheme.typography.labelSmall)

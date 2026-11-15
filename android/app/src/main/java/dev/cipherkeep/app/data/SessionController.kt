@@ -381,7 +381,7 @@ class SessionController(context: Context) {
         val active = session ?: return
         items = runCatching {
             repo.list().mapNotNull { entity ->
-                if (entity.itemId.contentEquals(FOLDER_META_ID)) {
+                if (entity.itemId.contentEquals(FOLDER_META_ID) || entity.tombstone) {
                     return@mapNotNull null
                 }
                 runCatching {
@@ -390,26 +390,7 @@ class SessionController(context: Context) {
                     }.getOrNull()
                         ?: active.decryptItem(entity.itemId, entity.ciphertext)
                     val json = JSONObject(plaintext.decodeToString())
-                    val exported = runCatching {
-                        active.exportSyncRecord(
-                            entity.itemId,
-                            entity.ciphertext,
-                            ByteArray(16) { 1 },
-                            System.currentTimeMillis().toULong(),
-                            1uL,
-                        )
-                    }.getOrNull()
-                    if (exported != null && !exported.contentEquals(entity.syncRecord)) {
-                        repo.save(
-                            itemId = entity.itemId,
-                            ciphertext = entity.ciphertext,
-                            lamport = entity.lamport,
-                            tombstone = entity.tombstone,
-                            schemaVersion = entity.schemaVersion,
-                            updatedAt = entity.updatedAt,
-                            syncRecord = exported,
-                        )
-                    }
+
                     VaultItem(
                         id = entity.itemId,
                         title = json.optString("title"),
@@ -455,6 +436,7 @@ class SessionController(context: Context) {
         favorite: Boolean = false,
         autofillAllowed: Boolean = true,
         totpUri: String = "",
+        reload: Boolean = true,
     ): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -496,7 +478,7 @@ class SessionController(context: Context) {
                     schemaVersion = 1,
                     updatedAt = System.currentTimeMillis(),
                 )
-                loadItems()
+                if (reload) loadItems()
             }
         }
 
@@ -718,12 +700,14 @@ class SessionController(context: Context) {
                                 notes = notes.take(65_536),
                                 folder = item.optString("folder").take(64),
                                 totpUri = totp.take(4_096),
+                                reload = false,
                             ).getOrThrow()
                         }
                         if (result.isSuccess) imported += 1 else failed += 1
                     }
                     onProgress(index + 1, total, imported, failed)
                 }
+                loadItems()
                 ImportSummary(
                     imported = imported,
                     skipped = report.optInt("skippedDuplicates", 0),
@@ -763,12 +747,14 @@ class SessionController(context: Context) {
                                 url = importUrl(item.optString("url")),
                                 notes = item.optString("notes").take(65_536),
                                 folder = item.optString("folder").take(64),
+                                reload = false,
                             ).getOrThrow()
                         }
                         if (result.isSuccess) imported += 1 else failed += 1
                     }
                     onProgress(index + 1, total, imported, failed)
                 }
+                loadItems()
                 ImportSummary(
                     imported = imported,
                     skipped = report.optInt("skippedDuplicates", 0),
@@ -819,14 +805,29 @@ class SessionController(context: Context) {
         return active.vaultId().joinToString("") { "%02x".format(it) }
     }
 
-    suspend fun syncNow(endpoint: String, token: String, namespace: String): SyncOutcome =
+    /**
+     * Merge with the relay.
+     *
+     * @param push when false the merged state is applied locally only, which is
+     *   the "receive changes" action; when true the merged state is uploaded as
+     *   well, which is the "send changes" action.
+     */
+    suspend fun syncNow(
+        endpoint: String,
+        token: String,
+        namespace: String,
+        push: Boolean = true,
+    ): SyncOutcome =
         withContext(Dispatchers.IO) {
             if (travel.enabled()) error("Travel Mode is active")
             val active = session ?: error("vault is locked")
             val repo = repository ?: error("storage is unavailable")
             if (!Regex("^[a-f0-9]{32}$").matches(namespace)) error("invalid sync namespace")
+            // Tombstoned items stay in the local set while they carry a record so
+            // their deletion keeps being pushed; live items always participate.
             val entities = repo.list().filter {
-                !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID)
+                !it.itemId.contentEquals(FOLDER_META_ID) &&
+                    (it.syncRecord != null || !it.tombstone)
             }
             val actor = deviceActor()
             // Reuse the stored canonical record when the item has not changed
@@ -927,7 +928,9 @@ class SessionController(context: Context) {
                 .put("records", records)
                 .toString()
                 .encodeToByteArray()
-            client.putManifest(namespace, payload, null)
+            if (push) {
+                client.putManifest(namespace, payload, null)
+            }
             loadItems()
             SyncOutcome(records.length(), conflicts.length())
         }
@@ -1161,8 +1164,7 @@ class SessionController(context: Context) {
         }
 
     /** Highest Lamport counter carried by a v2 sync record. */
-    private fun recordMaxCounter(raw: String): Long {
-        val record = runCatching { JSONObject(raw).optJSONObject("record") }.getOrNull() ?: return 0L
+    private fun recordMaxCounter(raw: String): Long {        val record = runCatching { JSONObject(raw).optJSONObject("record") }.getOrNull() ?: return 0L
         var max = maxOf(
             record.optLong("itemCounter", 0L),
             record.optLong("typeCounter", 0L),
@@ -1175,6 +1177,21 @@ class SessionController(context: Context) {
         return max
     }
 
+    /** Turn a stored v2 record into a tombstone that wins the next merge. */
+    private fun tombstoneRecord(recordJson: String, actor: ByteArray): String? = runCatching {
+        val wrapper = JSONObject(recordJson)
+        val record = wrapper.optJSONObject("record") ?: return@runCatching null
+        val next = recordMaxCounter(recordJson) + 1
+        val actorHex = actor.joinToString("") { "%02x".format(it) }
+        record.put("deleted", true)
+        record.put("deletedCounter", next)
+        record.put("deletedActor", actorHex)
+        record.put("itemCounter", maxOf(record.optLong("itemCounter", 0L), next))
+        record.put("itemActor", actorHex)
+        wrapper.put("record", record)
+        wrapper.toString()
+    }.getOrNull()
+
     private suspend fun persistMergedRecords(
         active: FfiVaultSession,
         repo: VaultRepository,
@@ -1184,10 +1201,23 @@ class SessionController(context: Context) {
             val raw = records.getString(index)
             val wrapper = JSONObject(raw)
             val id = hexBytes(wrapper.getString("item"))
+            val previous = repo.get(id)
+            if (wrapper.optJSONObject("record")?.optBoolean("deleted") == true) {
+                // Keep the tombstone row so this deletion keeps winning merges.
+                repo.save(
+                    itemId = id,
+                    ciphertext = previous?.ciphertext ?: ByteArray(0),
+                    lamport = previous?.lamport ?: 1L,
+                    tombstone = true,
+                    schemaVersion = previous?.schemaVersion ?: 1,
+                    updatedAt = System.currentTimeMillis(),
+                    syncRecord = raw.encodeToByteArray(),
+                )
+                continue
+            }
             val legacy = active.applySyncRecord(raw.encodeToByteArray())
             val ciphertext = active.encryptItem(id, legacy)
             legacy.fill(0)
-            val previous = repo.get(id)
             repo.save(
                 itemId = id,
                 ciphertext = ciphertext,
@@ -1683,12 +1713,38 @@ class SessionController(context: Context) {
             }
         }
 
-    suspend fun deleteItem(item: VaultItem): Result<Unit> = withContext(Dispatchers.IO) {
+    /**
+     * Delete items locally and keep a CRDT tombstone for every synced item, so
+     * the deletion propagates on the next push instead of being resurrected by
+     * the next pull from another device.
+     */
+    suspend fun deleteItems(targets: List<VaultItem>): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            repository?.delete(item.id)
+            val repo = repository ?: error("storage is unavailable")
+            val actor = deviceActor()
+            targets.forEach { target ->
+                val entity = repo.get(target.id)
+                val record = entity?.syncRecord?.decodeToString()
+                if (entity != null && record != null) {
+                    val tombstone = tombstoneRecord(record, actor) ?: record
+                    repo.save(
+                        itemId = target.id,
+                        ciphertext = entity.ciphertext,
+                        lamport = maxOf(entity.lamport + 1, 2),
+                        tombstone = true,
+                        schemaVersion = entity.schemaVersion,
+                        updatedAt = System.currentTimeMillis(),
+                        syncRecord = tombstone.encodeToByteArray(),
+                    )
+                } else {
+                    repo.delete(target.id)
+                }
+            }
             loadItems()
         }
     }
+
+    suspend fun deleteItem(item: VaultItem): Result<Unit> = deleteItems(listOf(item))
 
     /** Hide the vault without deleting it; the session key is locked. */
     fun enterTravelMode() {
