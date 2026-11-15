@@ -10,9 +10,14 @@ import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
 /**
- * AES-256-GCM key that requires biometric/device-credential authentication for
- * every use. The cipher is passed to BiometricPrompt as a CryptoObject; after
- * success the framework lets the pending `doFinal` complete.
+ * AES-256-GCM key unlocked by a successful biometric or device-credential
+ * authentication, usable for a short window afterwards.
+ *
+ * A time-bound key is used instead of an auth-per-use key on purpose: on several
+ * devices an auth-per-use cipher cannot be initialised once the screen has been
+ * locked, so the prompt would succeed and `doFinal` would fail on an
+ * uninitialised cipher. Callers must authenticate first, then call [encrypt] or
+ * [decrypt] immediately.
  */
 class BiometricKeyManager(
     private val alias: String = DEFAULT_ALIAS,
@@ -21,6 +26,7 @@ class BiometricKeyManager(
 
     fun ensureKey(): SecretKey {
         existingKey()?.let { return it }
+        deleteLegacyKey()
         val builder = KeyGenParameterSpec.Builder(
             alias,
             KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT,
@@ -33,14 +39,13 @@ class BiometricKeyManager(
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             builder.setUserAuthenticationParameters(
-                0,
+                AUTH_VALIDITY_SECONDS,
                 KeyProperties.AUTH_BIOMETRIC_STRONG or
                     KeyProperties.AUTH_DEVICE_CREDENTIAL,
             )
         } else {
-            // Auth-per-use. BiometricPrompt supplies the user authentication.
             @Suppress("DEPRECATION")
-            builder.setUserAuthenticationValidityDurationSeconds(-1)
+            builder.setUserAuthenticationValidityDurationSeconds(AUTH_VALIDITY_SECONDS)
         }
 
         val generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
@@ -48,34 +53,23 @@ class BiometricKeyManager(
         return generator.generateKey()
     }
 
-    /**
-     * Create an encryption cipher. Auth-per-use may throw
-     * UserNotAuthenticatedException during init; the cipher is still handed to
-     * BiometricPrompt and completes after authentication.
-     */
-    fun encryptCipher(): Cipher {
+    /** Wrap [master]. Call only after BiometricPrompt reported success. */
+    fun encrypt(master: ByteArray): WrappedSecret {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        try {
-            cipher.init(Cipher.ENCRYPT_MODE, ensureKey())
-        } catch (_: android.security.keystore.UserNotAuthenticatedException) {
-            // Expected until BiometricPrompt authenticates the key.
-        }
-        return cipher
+        cipher.init(Cipher.ENCRYPT_MODE, ensureKey())
+        val ciphertext = cipher.doFinal(master)
+        return WrappedSecret(WrappedSecret.VERSION, cipher.iv, ciphertext)
     }
 
-    /** Create a decrypt cipher for a stored IV, with the same auth contract. */
-    fun decryptCipher(iv: ByteArray): Cipher {
+    /** Unwrap [wrapped]. Call only after BiometricPrompt reported success. */
+    fun decrypt(wrapped: WrappedSecret): ByteArray {
         val cipher = Cipher.getInstance(TRANSFORMATION)
-        try {
-            cipher.init(
-                Cipher.DECRYPT_MODE,
-                ensureKey(),
-                GCMParameterSpec(128, iv),
-            )
-        } catch (_: android.security.keystore.UserNotAuthenticatedException) {
-            // Expected until BiometricPrompt authenticates the key.
-        }
-        return cipher
+        cipher.init(
+            Cipher.DECRYPT_MODE,
+            ensureKey(),
+            GCMParameterSpec(TAG_BITS, wrapped.iv),
+        )
+        return cipher.doFinal(wrapped.ciphertext)
     }
 
     fun deleteKey() {
@@ -84,11 +78,22 @@ class BiometricKeyManager(
         }
     }
 
+    private fun deleteLegacyKey() {
+        runCatching {
+            if (keyStore.containsAlias(LEGACY_ALIAS)) {
+                keyStore.deleteEntry(LEGACY_ALIAS)
+            }
+        }
+    }
+
     private fun existingKey(): SecretKey? = keyStore.getKey(alias, null) as? SecretKey
 
     companion object {
-        const val DEFAULT_ALIAS = "cipherkeep.biometric.v1"
+        const val DEFAULT_ALIAS = "cipherkeep.biometric.v2"
+        private const val LEGACY_ALIAS = "cipherkeep.biometric.v1"
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
+        private const val TAG_BITS = 128
+        private const val AUTH_VALIDITY_SECONDS = 60
     }
 }

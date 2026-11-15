@@ -573,38 +573,40 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
             busy = true
             error = null
             val wrapped = biometricWrapped ?: return@LaunchedEffect
-            try {
-                val cipher = biometricKey.decryptCipher(wrapped.iv)
-                promptBiometric(
-                    activity = activity,
-                    cipher = cipher,
-                    title = "Unlock CipherKeep",
-                    subtitle = "Authenticate to unwrap the vault master key.",
-                    onSuccess = { authenticated ->
-                        scope.launch {
+            promptBiometricAuthentication(
+                activity = activity,
+                title = "Unlock CipherKeep",
+                subtitle = "Authenticate to unwrap the vault master key.",
+                onSuccess = {
+                    scope.launch {
+                        runCatching {
+                            val master = biometricKey.decrypt(wrapped)
                             try {
-                                val master = authenticated.doFinal(wrapped.ciphertext)
-                                val result = controller.unlockWithMasterKey(master)
+                                controller.unlockWithMasterKey(master).getOrThrow()
+                            } finally {
                                 master.fill(0)
-                                busy = false
-                                if (result.isFailure) {
-                                    error = "Biometric unlock failed. Use your master password."
-                                }
-                            } catch (_: Exception) {
-                                busy = false
+                            }
+                        }.onSuccess {
+                            busy = false
+                        }.onFailure { failure ->
+                            android.util.Log.w("CipherKeepBiometric", "auto unlock failed", failure)
+                            busy = false
+                            if (failure is android.security.keystore.KeyPermanentlyInvalidatedException) {
+                                biometricKey.deleteKey()
+                                scope.launch { controller.clearBiometric() }
+                                biometricWrapped = null
+                                error = "Biometric data changed. Re-enable biometric unlock with your master password."
+                            } else {
                                 error = "Biometric unlock failed. Use your master password."
                             }
                         }
-                    },
-                    onFailure = { reason ->
-                        busy = false
-                        error = "Biometric authentication failed: $reason"
-                    },
-                )
-            } catch (_: Exception) {
-                busy = false
-                error = "Biometric key is unavailable. Use your master password."
-            }
+                    }
+                },
+                onFailure = { reason ->
+                    busy = false
+                    error = "Biometric authentication failed: $reason"
+                },
+            )
         }
     }
 
@@ -696,38 +698,44 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
                                     busy = true
                                     error = null
                                     val wrapped = biometricWrapped ?: return@OutlinedButton
-                                    try {
-                                        val cipher = biometricKey.decryptCipher(wrapped.iv)
-                                        promptBiometric(
-                                            activity = activity,
-                                            cipher = cipher,
-                                            title = "Unlock CipherKeep",
-                                            subtitle = "Authenticate to unwrap the vault master key.",
-                                            onSuccess = { authenticated ->
-                                                scope.launch {
+                                    promptBiometricAuthentication(
+                                        activity = activity,
+                                        title = "Unlock CipherKeep",
+                                        subtitle = "Authenticate to unwrap the vault master key.",
+                                        onSuccess = {
+                                            scope.launch {
+                                                runCatching {
+                                                    val master = biometricKey.decrypt(wrapped)
                                                     try {
-                                                        val master = authenticated.doFinal(wrapped.ciphertext)
-                                                        val result = controller.unlockWithMasterKey(master)
+                                                        controller.unlockWithMasterKey(master).getOrThrow()
+                                                    } finally {
                                                         master.fill(0)
-                                                        busy = false
-                                                        if (result.isFailure) {
-                                                            error = "Biometric unlock failed. Use your master password."
-                                                        }
-                                                    } catch (_: Exception) {
-                                                        busy = false
+                                                    }
+                                                }.onSuccess {
+                                                    busy = false
+                                                }.onFailure { failure ->
+                                                    android.util.Log.w(
+                                                        "CipherKeepBiometric",
+                                                        "manual unlock failed",
+                                                        failure,
+                                                    )
+                                                    busy = false
+                                                    if (failure is android.security.keystore.KeyPermanentlyInvalidatedException) {
+                                                        biometricKey.deleteKey()
+                                                        scope.launch { controller.clearBiometric() }
+                                                        biometricWrapped = null
+                                                        error = "Biometric data changed. Re-enable biometric unlock with your master password."
+                                                    } else {
                                                         error = "Biometric unlock failed. Use your master password."
                                                     }
                                                 }
-                                            },
-                                            onFailure = { reason ->
-                                                busy = false
-                                                error = "Biometric authentication failed: $reason"
-                                            },
-                                        )
-                                    } catch (_: Exception) {
-                                        busy = false
-                                        error = "Biometric key is unavailable. Use your master password."
-                                    }
+                                            }
+                                        },
+                                        onFailure = { reason ->
+                                            busy = false
+                                            error = "Biometric authentication failed: $reason"
+                                        },
+                                    )
                                 },
                                 enabled = !busy,
                                 modifier = Modifier
@@ -2752,42 +2760,34 @@ private fun SettingsScreen(
                                         biometricMessage = "Unlock the vault with your password first."
                                         return@launch
                                     }
-                                    try {
-                                        val cipher = biometricKey.encryptCipher()
-                                        promptBiometric(
-                                            activity = activity,
-                                            cipher = cipher,
-                                            title = "Enable biometric unlock",
-                                            subtitle = "Authenticate to wrap the vault master key.",
-                                            onSuccess = { authenticated ->
-                                                scope.launch {
-                                                    try {
-                                                        val ciphertext = authenticated.doFinal(master)
-                                                        controller.saveBiometricWrapped(
-                                                            WrappedSecret(
-                                                                WrappedSecret.VERSION,
-                                                                authenticated.iv,
-                                                                ciphertext,
-                                                            ),
-                                                        )
-                                                        biometricEnabled = true
-                                                        biometricMessage = "Biometric unlock enabled."
-                                                    } catch (_: Exception) {
-                                                        biometricMessage = "Could not enable biometric unlock."
-                                                    } finally {
-                                                        master.fill(0)
-                                                    }
+                                    promptBiometricAuthentication(
+                                        activity = activity,
+                                        title = "Enable biometric unlock",
+                                        subtitle = "Authenticate to wrap the vault master key.",
+                                        onSuccess = {
+                                            scope.launch {
+                                                try {
+                                                    val wrapped = biometricKey.encrypt(master)
+                                                    controller.saveBiometricWrapped(wrapped)
+                                                    biometricEnabled = true
+                                                    biometricMessage = "Biometric unlock enabled."
+                                                } catch (failure: Exception) {
+                                                    android.util.Log.w(
+                                                        "CipherKeepBiometric",
+                                                        "enable failed",
+                                                        failure,
+                                                    )
+                                                    biometricMessage = "Could not enable biometric unlock."
+                                                } finally {
+                                                    master.fill(0)
                                                 }
-                                            },
-                                            onFailure = { reason ->
-                                                master.fill(0)
-                                                biometricMessage = "Biometric setup failed: $reason"
-                                            },
-                                        )
-                                    } catch (_: Exception) {
-                                        master.fill(0)
-                                        biometricMessage = "Biometric key is unavailable on this device."
-                                    }
+                                            }
+                                        },
+                                        onFailure = { reason ->
+                                            master.fill(0)
+                                            biometricMessage = "Biometric setup failed: $reason"
+                                        },
+                                    )
                                 }
                             }
                         },

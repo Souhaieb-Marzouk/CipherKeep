@@ -23,7 +23,7 @@ data class WrappedSecret(
     }
 
     companion object {
-        const val VERSION: Byte = 1
+        const val VERSION: Byte = 2
         const val IV_LEN = 12
         const val TAG_LEN = 16
 

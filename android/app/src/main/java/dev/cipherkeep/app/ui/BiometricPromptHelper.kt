@@ -1,10 +1,10 @@
 package dev.cipherkeep.app.ui
 
+import android.os.Build
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
-import javax.crypto.Cipher
 
 /** Whether this device can satisfy the biometric-or-device-credential gate. */
 fun canUseBiometrics(activity: FragmentActivity): Boolean {
@@ -15,15 +15,14 @@ fun canUseBiometrics(activity: FragmentActivity): Boolean {
 }
 
 /**
- * Show a BiometricPrompt with the pending cipher. The callback receives the
- * authenticated cipher; callers must complete `doFinal` and clear secrets.
+ * Show a plain authentication prompt. The Keystore key is time-bound, so the
+ * caller must run its encrypt/decrypt immediately after [onSuccess].
  */
-fun promptBiometric(
+fun promptBiometricAuthentication(
     activity: FragmentActivity,
-    cipher: Cipher,
     title: String,
     subtitle: String,
-    onSuccess: (Cipher) -> Unit,
+    onSuccess: () -> Unit,
     onFailure: (String) -> Unit,
 ) {
     val prompt = BiometricPrompt(
@@ -31,12 +30,7 @@ fun promptBiometric(
         ContextCompat.getMainExecutor(activity),
         object : BiometricPrompt.AuthenticationCallback() {
             override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                val authenticated = result.cryptoObject?.cipher
-                if (authenticated == null) {
-                    onFailure("Biometric authentication returned no cipher.")
-                } else {
-                    onSuccess(authenticated)
-                }
+                onSuccess()
             }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -49,13 +43,21 @@ fun promptBiometric(
             }
         },
     )
-    val info = BiometricPrompt.PromptInfo.Builder()
+    prompt.authenticate(promptInfo(title, subtitle))
+}
+
+private fun promptInfo(title: String, subtitle: String): BiometricPrompt.PromptInfo {
+    val builder = BiometricPrompt.PromptInfo.Builder()
         .setTitle(title)
         .setSubtitle(subtitle)
-        .setAllowedAuthenticators(
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        builder.setAllowedAuthenticators(
             BiometricManager.Authenticators.BIOMETRIC_STRONG or
                 BiometricManager.Authenticators.DEVICE_CREDENTIAL,
         )
-        .build()
-    prompt.authenticate(info, BiometricPrompt.CryptoObject(cipher))
+    } else {
+        @Suppress("DEPRECATION")
+        builder.setDeviceCredentialAllowed(true)
+    }
+    return builder.build()
 }
