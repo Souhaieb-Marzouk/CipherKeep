@@ -38,7 +38,9 @@ uniffi = "0.32.2"
 wasm-bindgen = "0.2"
 zeroize = { version = "1.8", features = ["alloc"] }
 keepass = "0.8.16"
-pgp = "0.14"
+aes = "0.8"
+cfb-mode = "0.8"
+flate2 = "1"
 
 [profile.release]
 panic = "abort"

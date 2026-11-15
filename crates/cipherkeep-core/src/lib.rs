@@ -41,6 +41,7 @@ pub mod keepass_import;
 pub mod keyring;
 pub mod keys;
 pub mod lock;
+mod openpgp;
 pub mod phishing;
 pub mod proton_pgp;
 pub mod recipes;

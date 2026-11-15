@@ -1,0 +1,1 @@
+{"vaults":[{"name":"Personal","items":[{"itemId":"a1","type":"login","data":{"metadata":{"name":"GitHub","note":"TOTP: otpauth://totp/GitHub:me?secret=JBSWY3DPEHPK3PXP"},"content":{"itemUsername":"me@example.com","password":"s3cret"}}}]}]}

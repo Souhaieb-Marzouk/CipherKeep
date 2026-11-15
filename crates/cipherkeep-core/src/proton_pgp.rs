@@ -3,9 +3,12 @@
 //! Proton's encrypted ZIP contains `data.pgp`: an ASCII-armored OpenPGP
 //! message encrypted with a passphrase. The decrypted payload is the same
 //! JSON document used by the unencrypted Proton JSON export.
+//!
+//! Decryption itself lives in [`crate::openpgp`], which implements only the
+//! passphrase-based subset of OpenPGP that Proton exports use.
 
-use crate::{CoreError, ErrorCode};
-use pgp::{Deserializable, Message};
+use crate::CoreError;
+use crate::ErrorCode;
 
 fn corrupt() -> CoreError {
     CoreError::new(ErrorCode::CorruptData)
@@ -21,20 +24,5 @@ pub fn decrypt_proton_pgp(bytes: &[u8], passphrase: &str) -> crate::Result<Vec<u
     if bytes.is_empty() || passphrase.is_empty() {
         return Err(corrupt());
     }
-    let trimmed = std::str::from_utf8(bytes)
-        .ok()
-        .map(str::trim)
-        .map(str::as_bytes)
-        .unwrap_or(bytes);
-    let message = Message::from_armor_single(trimmed)
-        .map(|(message, _)| message)
-        .or_else(|_| Message::from_bytes(trimmed))
-        .map_err(|_| corrupt())?;
-    let decrypted = message
-        .decrypt_with_password(|| passphrase.to_string())
-        .map_err(|_| corrupt())?;
-    decrypted
-        .get_content()
-        .map_err(|_| corrupt())?
-        .ok_or_else(corrupt)
+    crate::openpgp::decrypt_symmetric_message(bytes, passphrase)
 }

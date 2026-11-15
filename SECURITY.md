@@ -9,7 +9,8 @@ highest-priority work.
 
 | Version | Supported | Notes |
 |---|---|---|
-| `1.0.x` | Yes | First official signed release |
+| `2.2.x` | Yes | Current signed release |
+| `1.0.x` | No | Superseded by 2.2 |
 | older | No | Pre-release development builds |
 
 The supported-version table is updated when a new official release is published.
