@@ -61,7 +61,14 @@ class WebAuthnPrfManager(private val context: Context) {
         val credentialId = registration.optString("rawId")
         require(credentialId.isNotEmpty()) { "no credential id" }
         val enrollment = WebAuthnEnrollment(credentialId, b64(salt), "")
-        enrollment to unb64(prf)
+        // Some authenticators only enable PRF at creation and return the value
+        // on the first assertion, so evaluate it explicitly when it is missing.
+        val prfBytes = if (prf.isNotEmpty()) {
+            unb64(prf)
+        } else {
+            assert(enrollment).getOrThrow()
+        }
+        enrollment to prfBytes
     }
 
     suspend fun assert(enrollment: WebAuthnEnrollment): Result<ByteArray> = runCatching {

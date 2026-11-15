@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -137,6 +138,11 @@ fun CipherKeepApp() {
     var themeName by rememberSaveable { mutableStateOf(ThemeMode.System.name) }
     var screen by rememberSaveable { mutableStateOf("vault") }
     var selectedIndex by rememberSaveable { mutableIntStateOf(-1) }
+    val vaultListState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
+    var vaultSearch by rememberSaveable { mutableStateOf("") }
+    var vaultFilter by rememberSaveable { mutableStateOf("") }
+    var vaultFavorites by rememberSaveable { mutableStateOf(false) }
+    var vaultSort by rememberSaveable { mutableIntStateOf(1) }
     val context = LocalContext.current
     val controller = remember {
         dev.cipherkeep.app.data.SessionProvider.get(context)
@@ -173,6 +179,17 @@ fun CipherKeepApp() {
         }
     }
     LaunchedEffect(controller) { controller.bootstrap() }
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS,
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     CipherKeepTheme(mode = ThemeMode.valueOf(themeName)) {
         Surface(
@@ -243,6 +260,15 @@ fun CipherKeepApp() {
                             VaultScreen(
                                 controller = controller,
                                 items = controller.items,
+                                listState = vaultListState,
+                                searchQuery = vaultSearch,
+                                onSearchQueryChange = { vaultSearch = it },
+                                filterText = vaultFilter,
+                                onFilterTextChange = { vaultFilter = it },
+                                favoritesOnly = vaultFavorites,
+                                onFavoritesOnlyChange = { vaultFavorites = it },
+                                sortMode = vaultSort,
+                                onSortModeChange = { vaultSort = it },
                                 onOpen = { index -> selectedIndex = index },
                                 onAdd = { screen = "add" },
                                 onSettings = { screen = "settings" },
@@ -1075,8 +1101,13 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
     val breached = report?.optInt("breached") ?: 0
     val missingTotp = report?.optInt("missingTotp") ?: 0
     val total = controller.items.size
-    val issues = weak + reused + old + breached + missingTotp
-    val score = if (total == 0) 100 else (100 - (issues * 100 / total)).coerceIn(0, 100)
+    val atRisk = remember(report) {
+        val entries = report?.optJSONArray("items") ?: return@remember 0
+        (0 until entries.length()).count { index ->
+            (entries.getJSONObject(index).optJSONArray("reasons")?.length() ?: 0) > 0
+        }
+    }
+    val score = if (total == 0) 100 else (100 - (atRisk * 100 / total)).coerceIn(0, 100)
     val lockMinutes = (controller.lockTimeoutMillis() / 60_000).coerceAtLeast(1)
     Scaffold(
         topBar = {
@@ -1171,14 +1202,16 @@ private fun SecurityHubScreen(context: Context, controller: SessionController, o
             }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
-                    Text("Password health", style = MaterialTheme.typography.titleMedium)
+                    Text("How CipherKeep protects you", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "Weak, reused, aging and breached passwords, and accounts without a second factor.",
+                        "Your vault is encrypted on this phone before anything is stored, and the key never leaves the device.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(Modifier.height(CKDimens.Space2))
-                    HealthSection(controller)
+                    PrivacyRow("Screenshots are blocked", "Android cannot capture the vault screens, and the app is hidden from the recent-apps preview.")
+                    PrivacyRow("No cloud backup", "Android backup is disabled, so the encrypted vault is not copied to Google Drive.")
+                    PrivacyRow("No silent network access", "The app connects only when you check for updates, sync manually or import.")
+                    PrivacyRow("Locked when idle", "The vault locks itself after $lockMinutes minute(s) without activity and asks for your password or biometrics again.")
                 }
             }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
@@ -1213,6 +1246,18 @@ private fun RowScope.SecurityStat(label: String, value: Int) {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.85f),
             maxLines = 1,
+        )
+    }
+}
+
+@Composable
+private fun PrivacyRow(title: String, detail: String) {
+    Column(Modifier.fillMaxWidth()) {
+        Text(title, style = MaterialTheme.typography.titleSmall)
+        Text(
+            detail,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -1417,17 +1462,22 @@ private fun MonitorMetric(label: String, count: Int, selected: Boolean, modifier
 private fun VaultScreen(
     controller: SessionController,
     items: List<VaultItem>,
+    listState: LazyListState,
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    filterText: String,
+    onFilterTextChange: (String) -> Unit,
+    favoritesOnly: Boolean,
+    onFavoritesOnlyChange: (Boolean) -> Unit,
+    sortMode: Int,
+    onSortModeChange: (Int) -> Unit,
     onOpen: (Int) -> Unit,
     onAdd: () -> Unit,
     onSettings: () -> Unit,
     onSecurity: () -> Unit,
     onLock: () -> Unit,
 ) {
-    var searchQuery by rememberSaveable { mutableStateOf("") }
-    var favoritesOnly by rememberSaveable { mutableStateOf(false) }
-    var filterText by rememberSaveable { mutableStateOf("") }
     var showFolders by remember { mutableStateOf(false) }
-    var sortMode by rememberSaveable { mutableIntStateOf(0) }
     var selectionMode by remember { mutableStateOf(false) }
     var selectedKeys by remember { mutableStateOf(setOf<String>()) }
     var showBulkMove by remember { mutableStateOf(false) }
@@ -1468,6 +1518,7 @@ private fun VaultScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
     ) { innerPadding ->
         LazyColumn(
+            state = listState,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -1553,7 +1604,7 @@ private fun VaultScreen(
                 Spacer(Modifier.height(CKDimens.Space3))
                 OutlinedTextField(
                     value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                    onValueChange = onSearchQueryChange,
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Search by name, user or website") },
                     leadingIcon = { Text("⌕", style = MaterialTheme.typography.titleLarge) },
@@ -1567,20 +1618,20 @@ private fun VaultScreen(
                         Surface(
                             shape = RoundedCornerShape(50),
                             color = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.clickable { favoritesOnly = fav },
+                            modifier = Modifier.clickable { onFavoritesOnlyChange(fav) },
                         ) { Text(label, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium, color = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface) }
                     }
                     Surface(shape = RoundedCornerShape(50), color = MaterialTheme.colorScheme.surfaceVariant, modifier = Modifier.clickable { showFolders = true }) {
                         Text("Folders", modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp), style = MaterialTheme.typography.labelMedium)
                     }
                     Spacer(Modifier.weight(1f))
-                    TextButton(onClick = { sortMode = (sortMode + 1) % 3 }) {
+                    TextButton(onClick = { onSortModeChange((sortMode + 1) % 3) }) {
                         Text(when (sortMode) { 1 -> "Recent"; 2 -> "Folder"; else -> "A–Z" })
                     }
                 }
                 OutlinedTextField(
                     value = filterText,
-                    onValueChange = { filterText = it },
+                    onValueChange = onFilterTextChange,
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Filter by folder or tag") },
                     singleLine = true,
@@ -1715,12 +1766,12 @@ private fun VaultScreen(
         )
     }
     if (showFolders) {
-        FolderDialog(controller = controller, onDismiss = { showFolders = false })
+        FolderDialog(controller = controller, onDismiss = { showFolders = false }, onOpenFolder = { folder -> onFilterTextChange(folder); showFolders = false })
     }
 }
 
 @Composable
-private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
+private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit, onOpenFolder: (String) -> Unit) {
     var names by remember { mutableStateOf<List<String>>(emptyList()) }
     var newName by remember { mutableStateOf("") }
     var renameFrom by remember { mutableStateOf<String?>(null) }
@@ -1775,7 +1826,8 @@ private fun FolderDialog(controller: SessionController, onDismiss: () -> Unit) {
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(name, modifier = Modifier.weight(1f))
+                        Text(name, modifier = Modifier.weight(1f).clickable { onOpenFolder(name) })
+                        TextButton(onClick = { onOpenFolder(name) }) { Text("Open") }
                         TextButton(onClick = {
                             renameFrom = name
                             renameTo = name
@@ -2499,7 +2551,7 @@ private fun SettingsHubScreen(
             SettingsRow(CkIcon.HEART, "Password health", "Weak, reused and aging passwords") { section = "health" }
             SettingsRow(CkIcon.RADAR, "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
             SettingsRow(CkIcon.IMPORT, "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
-            SettingsRow(CkIcon.ALIAS, "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
+            SettingsRow(CkIcon.ALIAS, "Email aliases", "Cloudflare and SimpleLogin") { section = "aliases" }
             SettingsRow(CkIcon.CLOCK, "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
             SettingsRow(CkIcon.TRAVEL, "Travel Mode", "Decoy vault for travel") { section = "travel" }
             SettingsRow(CkIcon.FAMILY, "Family sharing", "Owner, editor and viewer roles") { section = "family" }
@@ -2829,37 +2881,6 @@ private fun SettingsScreen(
                     } else {
                         OutlinedButton(onClick = { onThemeMode(mode) }) { Text(mode.name) }
                     }
-                }
-            }
-
-            OutlinedButton(
-                onClick = { showDesignGallery = true },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("Design token gallery") }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline)
-
-            Text(
-                text = "Security",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.semantics { heading() },
-            )
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(20.dp),
-            ) {
-                Column(modifier = Modifier.padding(CKDimens.Space4)) {
-                    Text("Screenshots blocked (FLAG_SECURE)", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        "Backups disabled (allowBackup=false)",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(top = CKDimens.Space2),
-                    )
-                    Text(
-                        "Network: manual GitHub update checks only",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(top = CKDimens.Space2),
-                    )
                 }
             }
 

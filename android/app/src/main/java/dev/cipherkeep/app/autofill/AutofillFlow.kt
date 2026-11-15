@@ -50,8 +50,10 @@ object AutofillFlow {
         items: List<VaultItem>,
         form: LoginForm,
         now: Long,
+        saveInfo: android.service.autofill.SaveInfo? = null,
     ): FillResponse {
         val response = FillResponse.Builder()
+        saveInfo?.let(response::setSaveInfo)
         items.forEach { item -> buildDataset(context, item, form, now)?.let(response::addDataset) }
         return response.build()
     }

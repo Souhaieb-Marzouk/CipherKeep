@@ -9,7 +9,9 @@ import android.service.autofill.FillCallback
 import android.service.autofill.FillRequest
 import android.service.autofill.FillResponse
 import android.service.autofill.SaveCallback
+import android.service.autofill.SaveInfo
 import android.service.autofill.SaveRequest
+import android.view.View
 import dev.cipherkeep.core.phishingCheck
 import org.json.JSONObject
 
@@ -74,7 +76,12 @@ class CipherKeepAutofillService : AutofillService() {
             "match candidates=${candidates.size} matched=${matches.size}",
         )
         if (matches.isEmpty()) {
-            callback.onSuccess(null)
+            val info = saveInfo(form)
+            if (info != null) {
+                callback.onSuccess(FillResponse.Builder().setSaveInfo(info).build())
+            } else {
+                callback.onSuccess(null)
+            }
             return
         }
         // Re-check the lock state immediately before releasing plaintext datasets.
@@ -87,14 +94,83 @@ class CipherKeepAutofillService : AutofillService() {
             matches,
             form,
             System.currentTimeMillis() / 1000,
+            saveInfo(form),
         )
         android.util.Log.i("CipherKeepAutofill", "datasets=${matches.size}")
         callback.onSuccess(response)
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
-        // Saving is explicit in the vault UI; autofill never persists page values.
+        // The app finished a login form: offer to store manually entered values.
+        requestSave(request)
         callback.onSuccess()
+    }
+
+    private fun saveInfo(form: LoginForm): SaveInfo? {
+        val passwordId = form.passwordId ?: return null
+        val builder = SaveInfo.Builder(
+            SaveInfo.SAVE_DATA_TYPE_USERNAME or SaveInfo.SAVE_DATA_TYPE_PASSWORD,
+            arrayOf(passwordId),
+        )
+        form.usernameId?.let { builder.setOptionalIds(arrayOf(it)) }
+        return builder.build()
+    }
+
+    private fun requestSave(request: SaveRequest) {
+        var username = ""
+        var password = ""
+        var domain: String? = null
+        var packageName: String? = null
+        request.fillContexts.forEach { context ->
+            val structure = context.structure ?: return@forEach
+            if (packageName == null) packageName = structure.activityComponent?.packageName
+            for (index in 0 until structure.windowNodeCount) {
+                val root = structure.getWindowNodeAt(index).rootViewNode
+                if (domain.isNullOrBlank() && !root.webDomain.isNullOrBlank()) {
+                    domain = root.webDomain
+                }
+                walk(root) { node ->
+                    if (domain.isNullOrBlank() && !node.webDomain.isNullOrBlank()) {
+                        domain = node.webDomain
+                    }
+                    if (node.autofillId == null) return@walk
+                    val text = node.text?.toString()?.trim().orEmpty()
+                    if (text.isEmpty()) return@walk
+                    val hints = node.autofillHints?.joinToString(" ").orEmpty().lowercase()
+                    val identity = "${node.idEntry.orEmpty()} ${node.hint.orEmpty()}".lowercase()
+                    val isPassword = node.inputType and 0x00000080 != 0 ||
+                        hints.contains("password") ||
+                        identity.contains("password") ||
+                        identity.contains("passwd")
+                    val isUser = hints.contains("username") ||
+                        hints.contains("email") ||
+                        identity.contains("user") ||
+                        identity.contains("email") ||
+                        identity.contains("login")
+                    if (isPassword && password.isEmpty()) {
+                        password = text
+                    } else if (isUser && username.isEmpty()) {
+                        username = text
+                    }
+                }
+            }
+        }
+        if (password.isBlank()) return
+        val title = domain?.takeIf { it.isNotBlank() }
+            ?: packageName?.let { pkg ->
+                runCatching {
+                    val info = packageManager.getApplicationInfo(pkg, 0)
+                    packageManager.getApplicationLabel(info).toString()
+                }.getOrNull()
+            }
+            ?: "Saved login"
+        val url = domain?.takeIf { it.isNotBlank() }?.let { "https://$it" }.orEmpty()
+        AutofillSaveNotifier.request(this, PendingLogin(title, username, password, url))
+    }
+
+    private fun walk(node: AssistStructure.ViewNode, visit: (AssistStructure.ViewNode) -> Unit) {
+        if (node.autofillId != null || node.childCount > 0) visit(node)
+        for (index in 0 until node.childCount) walk(node.getChildAt(index), visit)
     }
 
     private fun unlockResponse(form: LoginForm): FillResponse {

@@ -1,9 +1,12 @@
 package dev.cipherkeep.app.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -18,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import dev.cipherkeep.app.data.SessionController
 import dev.cipherkeep.app.data.family.FamilyStore
 import dev.cipherkeep.app.ui.theme.CKDimens
@@ -33,11 +37,14 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
     val store = remember { FamilyStore(context) }
     val scope = rememberCoroutineScope()
     var state by remember { mutableStateOf(JSONObject()) }
+    var vaultId by remember { mutableStateOf("") }
     var memberId by remember { mutableStateOf("") }
     var memberPublic by remember { mutableStateOf("") }
     var role by remember { mutableStateOf("editor") }
     var message by remember { mutableStateOf<String?>(null) }
     var revoking by remember { mutableStateOf<String?>(null) }
+    var selfId by remember { mutableStateOf("member-1") }
+    var selfRole by remember { mutableStateOf("editor") }
     var joinVaultId by remember { mutableStateOf("") }
     var joinMemberId by remember { mutableStateOf("") }
     var joinPublic by remember { mutableStateOf("") }
@@ -46,16 +53,27 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
     var joinSecret by remember { mutableStateOf("") }
     var joinPassword by remember { mutableStateOf("") }
     var joinRole by remember { mutableStateOf("editor") }
+    val clipboard = remember { context.getSystemService(ClipboardManager::class.java) }
+
+    fun copy(label: String, value: String) {
+        if (value.isBlank()) return
+        clipboard?.setPrimaryClip(ClipData.newPlainText(label, value))
+        message = "$label copied."
+    }
 
     fun refresh() {
         state = store.load() ?: JSONObject()
     }
-    LaunchedEffect(Unit) { refresh() }
+
+    LaunchedEffect(Unit) {
+        refresh()
+        vaultId = runCatching { controller.syncNamespace() }.getOrDefault("")
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
         Text("Family sharing", style = MaterialTheme.typography.titleMedium)
         Text(
-            "Owner-approved members receive a wrapped vault key. Revoking rotates the vault key and rekeys future writes. Ciphertext a removed member already had remains readable; verify fingerprints out of band.",
+            "The owner wraps the vault key to each approved member. Revoking rotates the vault key and rewraps remaining members. A removed member keeps ciphertext they already downloaded; verify fingerprints out of band.",
             style = MaterialTheme.typography.labelSmall,
         )
         val owner = state.optJSONObject("owner")
@@ -77,9 +95,14 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
             ) { Text("Create family owner identity") }
         } else {
             Text("Owner fingerprint: ${owner.optString("fingerprint")}", style = MaterialTheme.typography.bodySmall)
+            if (vaultId.isNotBlank()) {
+                Text("Vault id (32 hex): $vaultId", style = MaterialTheme.typography.bodySmall)
+                TextButton(onClick = { copy("Vault id", vaultId) }) { Text("Copy vault id") }
+            }
         }
+        Text("Owner: invite a member", style = MaterialTheme.typography.titleSmall)
         OutlinedTextField(memberId, { memberId = it }, label = { Text("Member id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(memberPublic, { memberPublic = it }, label = { Text("Member X25519 public key (64 hex)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(memberPublic, { memberPublic = it }, label = { Text("Member public key (64 hex)") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
             OutlinedButton(onClick = { role = "editor" }) { Text(if (role == "editor") "✓ Editor" else "Editor") }
             OutlinedButton(onClick = { role = "viewer" }) { Text(if (role == "viewer") "✓ Viewer" else "Viewer") }
@@ -109,7 +132,7 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
                         store.save(state)
                         memberId = ""
                         memberPublic = ""
-                        message = "Member invited. Verify their fingerprint out of band."
+                        message = "Member invited. Send them the envelope below, plus the vault id."
                     }.onFailure { message = "Invite failed; check the public key." }
                 }
             },
@@ -122,8 +145,20 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
         }
         for (index in 0 until members.length()) {
             val member = members.getJSONObject(index)
-            Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Text("${member.optString("id")} · ${member.optString("role")}", style = MaterialTheme.typography.bodySmall)
+                val wrapped = member.optJSONObject("wrapped")
+                if (wrapped != null) {
+                    Text("Envelope for this member:", style = MaterialTheme.typography.labelSmall)
+                    Text("ephemeralPublic: ${wrapped.optString("ephemeralPublic")}", style = MaterialTheme.typography.labelSmall)
+                    Text("nonce: ${wrapped.optString("nonce")}", style = MaterialTheme.typography.labelSmall)
+                    Text("ciphertext: ${wrapped.optString("ciphertext")}", style = MaterialTheme.typography.labelSmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                        TextButton(onClick = { copy("Ephemeral public", wrapped.optString("ephemeralPublic")) }) { Text("Copy ephemeral") }
+                        TextButton(onClick = { copy("Nonce", wrapped.optString("nonce")) }) { Text("Copy nonce") }
+                        TextButton(onClick = { copy("Ciphertext", wrapped.optString("ciphertext")) }) { Text("Copy ciphertext") }
+                    }
+                }
                 Row {
                     TextButton(onClick = {
                         scope.launch {
@@ -148,18 +183,56 @@ fun FamilySection(context: android.content.Context, controller: SessionControlle
                 }
             }
         }
+
+        Text("Member: create your identity", style = MaterialTheme.typography.titleSmall)
+        Text(
+            "Generate this on the member device, send the member id and public key to the owner, and keep the secret private until you join.",
+            style = MaterialTheme.typography.labelSmall,
+        )
+        OutlinedTextField(selfId, { selfId = it }, label = { Text("Your member id") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            OutlinedButton(onClick = { selfRole = "editor" }) { Text(if (selfRole == "editor") "✓ Editor" else "Editor") }
+            OutlinedButton(onClick = { selfRole = "viewer" }) { Text(if (selfRole == "viewer") "✓ Viewer" else "Viewer") }
+        }
+        OutlinedButton(
+            onClick = {
+                runCatching {
+                    val identity = JSONObject(familyIdentity(selfId.trim().ifBlank { "member-1" }, selfRole))
+                    state.put("member", identity)
+                    store.save(state)
+                    message = "Member identity created. Send memberId and public to the owner."
+                }.onFailure { message = "Member identity generation failed." }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) { Text("Create member identity") }
+        state.optJSONObject("member")?.let { member ->
+            Text("Your member id: ${member.optString("memberId")}", style = MaterialTheme.typography.bodySmall)
+            Text("Your public key: ${member.optString("public")}", style = MaterialTheme.typography.bodySmall)
+            Text("Your secret (keep private): ${member.optString("secret")}", style = MaterialTheme.typography.bodySmall)
+            Text("Fingerprint: ${member.optString("fingerprint")}", style = MaterialTheme.typography.bodySmall)
+            Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+                TextButton(onClick = { copy("Member id", member.optString("memberId")) }) { Text("Copy id") }
+                TextButton(onClick = { copy("Public key", member.optString("public")) }) { Text("Copy public") }
+                TextButton(onClick = { copy("Member secret", member.optString("secret")) }) { Text("Copy secret") }
+            }
+        }
+
         Text("Join a family vault", style = MaterialTheme.typography.titleSmall)
         Text("This replaces the local vault on this device with the owner's vault key. Use a fresh install or confirm you have a backup.", style = MaterialTheme.typography.labelSmall)
         listOf(
             "Vault id (32 hex)" to (joinVaultId to { value: String -> joinVaultId = value }),
             "Member id" to (joinMemberId to { value: String -> joinMemberId = value }),
-            "Member public key (64 hex)" to (joinPublic to { value: String -> joinPublic = value }),
+            "Envelope ephemeral public (64 hex)" to (joinPublic to { value: String -> joinPublic = value }),
             "Envelope nonce (48 hex)" to (joinNonce to { value: String -> joinNonce = value }),
             "Envelope ciphertext" to (joinCiphertext to { value: String -> joinCiphertext = value }),
             "Member secret (64 hex)" to (joinSecret to { value: String -> joinSecret = value }),
             "New local master password" to (joinPassword to { value: String -> joinPassword = value }),
         ).forEach { (labelText, pair) ->
             OutlinedTextField(pair.first, pair.second, label = { Text(labelText) }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
+            OutlinedButton(onClick = { joinRole = "editor" }) { Text(if (joinRole == "editor") "✓ Editor" else "Editor") }
+            OutlinedButton(onClick = { joinRole = "viewer" }) { Text(if (joinRole == "viewer") "✓ Viewer" else "Viewer") }
         }
         OutlinedButton(
             onClick = {
