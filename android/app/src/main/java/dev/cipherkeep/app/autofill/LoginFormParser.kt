@@ -11,6 +11,7 @@ data class LoginForm(
     val passwordId: AutofillId?,
     val webDomain: String?,
     val packageName: String?,
+    val otpId: AutofillId? = null,
 )
 
 /** Exact-origin matching: no subdomain fallback and no empty-origin fill. */
@@ -35,6 +36,7 @@ fun originMatches(itemUrl: String, webDomain: String?): Boolean {
 fun parseLoginForm(structure: AssistStructure): LoginForm {
     var usernameId: AutofillId? = null
     var passwordId: AutofillId? = null
+    var otpId: AutofillId? = null
     var domain: String? = null
     val packageName = structure.activityComponent?.packageName
     for (index in 0 until structure.windowNodeCount) {
@@ -43,13 +45,27 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
             domain = root.webDomain
         }
         walk(root) { node ->
+            if (domain.isNullOrBlank() && !node.webDomain.isNullOrBlank()) {
+                domain = node.webDomain
+            }
             val hints = node.autofillHints?.joinToString(" ").orEmpty().lowercase()
             val identity = "${node.idEntry.orEmpty()} ${node.hint.orEmpty()}".lowercase()
             val password = node.inputType and 0x00000080 != 0 ||
                 hints.contains("password") ||
                 identity.contains("password") ||
                 identity.contains("passwd")
-            val username = !password && (
+            val otp = !password && (
+                hints.contains("one-time-code") ||
+                    hints.contains("onetimecode") ||
+                    identity.contains("otp") ||
+                    identity.contains("totp") ||
+                    identity.contains("2fa") ||
+                    identity.contains("verification") ||
+                    identity.contains("auth code") ||
+                    identity.contains("security code") ||
+                    (identity.contains("code") && node.inputType and 0x00000002 != 0)
+                )
+            val username = !password && !otp && (
                 hints.contains("username") ||
                     hints.contains("email") ||
                     identity.contains("user") ||
@@ -64,13 +80,15 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
             ) {
                 if (password && passwordId == null) {
                     passwordId = node.autofillId
+                } else if (otp && otpId == null) {
+                    otpId = node.autofillId
                 } else if (username && usernameId == null) {
                     usernameId = node.autofillId
                 }
             }
         }
     }
-    return LoginForm(usernameId, passwordId, domain, packageName)
+    return LoginForm(usernameId, passwordId, domain, packageName, otpId)
 }
 
 private fun walk(node: AssistStructure.ViewNode, visit: (AssistStructure.ViewNode) -> Unit) {
