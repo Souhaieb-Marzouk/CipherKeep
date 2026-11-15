@@ -621,7 +621,7 @@ element<HTMLButtonElement>("generate").addEventListener("click", async () => {
   }
   element<HTMLDivElement>("generatedValue").textContent = reply.value;
   element<HTMLParagraphElement>("generatedMeta").textContent =
-    `${Math.round(reply.entropyBits)} bits Â· ${reply.strength}`;
+    `${Math.round(reply.entropyBits)} bits · ${reply.strength}`;
   element<HTMLElement>("generatedBox").hidden = false;
   showMessage("");
 });

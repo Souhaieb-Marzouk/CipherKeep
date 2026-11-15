@@ -1,4 +1,4 @@
-﻿package dev.cipherkeep.app.ui
+package dev.cipherkeep.app.ui
 
 import android.content.Context
 import android.content.Intent
@@ -193,7 +193,7 @@ fun CipherKeepApp() {
                     contentAlignment = Alignment.Center,
                 ) {
                     if (reduceMotion) {
-                        Text("Loading vaultâ€¦")
+                        Text("Loading vault…")
                     } else {
                         CircularProgressIndicator(
                             modifier = Modifier.semantics { contentDescription = "Loading vault" },
@@ -412,7 +412,7 @@ private fun SetupScreen(controller: SessionController) {
                         shape = MaterialTheme.shapes.small,
                     )
                     Text(
-                        text = "${password.length} characters Â· 12 minimum",
+                        text = "${password.length} characters · 12 minimum",
                         style = MaterialTheme.typography.labelSmall,
                         color = if (password.length >= 12) {
                             MaterialTheme.colorScheme.primary
@@ -456,7 +456,7 @@ private fun SetupScreen(controller: SessionController) {
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.medium,
                     ) {
-                        Text(if (busy) "Deriving keyâ€¦" else "Create vault")
+                        Text(if (busy) "Deriving key…" else "Create vault")
                     }
                 }
             }
@@ -688,7 +688,7 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
                         ) {
-                            Text(if (busy) "Unlockingâ€¦" else "Unlock")
+                            Text(if (busy) "Unlocking…" else "Unlock")
                         }
                         if (biometricWrapped != null && activity != null && canUseBiometrics(activity)) {
                             OutlinedButton(
@@ -819,7 +819,7 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
                         ) {
-                            Text(if (busy) "Recoveringâ€¦" else "Recover vault")
+                            Text(if (busy) "Recovering…" else "Recover vault")
                         }
                         TextButton(
                             onClick = {
@@ -933,10 +933,10 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
             ) {
                 listOf(
-                    Triple("login", "Login", "âœ¦"),
-                    Triple("note", "Note", "âœŽ"),
-                    Triple("card", "Card", "â–£"),
-                    Triple("identity", "Identity", "â—Ž"),
+                    Triple("login", "Login", "✦"),
+                    Triple("note", "Note", "✎"),
+                    Triple("card", "Card", "▣"),
+                    Triple("identity", "Identity", "◎"),
                 ).forEach { (value, label, glyph) ->
                     val selected = kind == value
                     Surface(
@@ -1000,7 +1000,7 @@ private fun AddItemScreen(controller: SessionController, onBack: () -> Unit) {
                 onClick = { if (kind == "login") saveLogin() else saveTyped() },
                 enabled = !busy && title.isNotBlank() && (kind != "login" || password.isNotEmpty()),
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (busy) "Savingâ€¦" else "Save ${kind.replaceFirstChar(Char::uppercase)}") }
+            ) { Text(if (busy) "Saving…" else "Save ${kind.replaceFirstChar(Char::uppercase)}") }
         }
     }
 }
@@ -1083,9 +1083,9 @@ private fun itemSubtitle(item: VaultItem): String {
     val showUsername = DisplayPreferences(LocalContext.current).showUsernames()
     return when (item.type) {
     "note" -> "Secure note"
-    "card" -> listOf("Card", item.cardholder).filter(String::isNotBlank).joinToString(" Â· ")
-    "identity" -> listOf("Identity", item.fullName.ifBlank { item.email }).filter(String::isNotBlank).joinToString(" Â· ")
-    "totp" -> listOf("TOTP", item.username).filter(String::isNotBlank).joinToString(" Â· ")
+    "card" -> listOf("Card", item.cardholder).filter(String::isNotBlank).joinToString(" · ")
+    "identity" -> listOf("Identity", item.fullName.ifBlank { item.email }).filter(String::isNotBlank).joinToString(" · ")
+    "totp" -> listOf("TOTP", item.username).filter(String::isNotBlank).joinToString(" · ")
         else -> if (showUsername) item.username.ifBlank { "No username" } else ""
     }
 }
@@ -1106,11 +1106,11 @@ private fun AuroraNavBar(current: String, onVault: () -> Unit, onAdd: () -> Unit
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("âŒ‚", "Vault", current == "vault", onVault) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("â—ˆ", "Security", current == "security", onSecurity) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⌂", "Vault", current == "vault", onVault) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◈", "Security", current == "security", onSecurity) }
                 Spacer(Modifier.weight(1f))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("âš™", "Settings", current == "settings" || current == "settings_advanced", onSettings) }
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("â—”", "Monitor", current == "monitor", onMonitor) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("⚙", "Settings", current == "settings" || current == "settings_advanced", onSettings) }
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { AuroraNavItem("◔", "Monitor", current == "monitor", onMonitor) }
             }
         }
         Surface(
@@ -1382,12 +1382,12 @@ private fun VaultScreen(
                         Column(Modifier.weight(1f)) {
                             Text("${items.size} ${if (items.size == 1) "item" else "items"}", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onPrimary)
                             Text(
-                                "${items.count { it.favorite }} favorites Â· ${items.map { it.folder }.filter { it.isNotBlank() }.distinct().size} folders",
+                                "${items.count { it.favorite }} favorites · ${items.map { it.folder }.filter { it.isNotBlank() }.distinct().size} folders",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f),
                             )
                         }
-                        Text("âœ¦", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.secondary)
+                        Text("✦", style = MaterialTheme.typography.displaySmall, color = MaterialTheme.colorScheme.secondary)
                     }
                 }
                 Spacer(Modifier.height(CKDimens.Space3))
@@ -1396,7 +1396,7 @@ private fun VaultScreen(
                     onValueChange = { searchQuery = it },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Search by name, user or website") },
-                    leadingIcon = { Text("âŒ•", style = MaterialTheme.typography.titleLarge) },
+                    leadingIcon = { Text("⌕", style = MaterialTheme.typography.titleLarge) },
                     singleLine = true,
                     shape = RoundedCornerShape(18.dp),
                 )
@@ -1415,7 +1415,7 @@ private fun VaultScreen(
                     }
                     Spacer(Modifier.weight(1f))
                     TextButton(onClick = { sortMode = (sortMode + 1) % 3 }) {
-                        Text(when (sortMode) { 1 -> "Recent"; 2 -> "Folder"; else -> "Aâ€“Z" })
+                        Text(when (sortMode) { 1 -> "Recent"; 2 -> "Folder"; else -> "A–Z" })
                     }
                 }
                 OutlinedTextField(
@@ -1463,7 +1463,7 @@ private fun VaultScreen(
                         },
                     ) {
                         Row(Modifier.fillMaxWidth().padding(CKDimens.Space3), verticalAlignment = Alignment.CenterVertically) {
-                            Text("â˜…", color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
+                            Text("★", color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary)
                             Spacer(Modifier.width(CKDimens.Space2))
                             Text(
                                 item.title,
@@ -1515,12 +1515,12 @@ private fun VaultScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(item.title, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                if (item.favorite) Text("â˜…", color = MaterialTheme.colorScheme.primary)
+                                if (item.favorite) Text("★", color = MaterialTheme.colorScheme.primary)
                             }
                             Text(itemSubtitle(item), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
                             if (item.folder.isNotBlank()) Text(item.folder, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                         }
-                        Text("â€º", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -1714,7 +1714,7 @@ private fun ItemDetailScreen(
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
-                    TextButton(onClick = { menuOpen = true }) { Text("â‹®") }
+                    TextButton(onClick = { menuOpen = true }) { Text("⋮") }
                     DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                         DropdownMenuItem(text = { Text(if (item.favorite) "Unpin" else "Pin") }, onClick = {
                             menuOpen = false
@@ -1755,7 +1755,7 @@ private fun ItemDetailScreen(
                 Spacer(Modifier.width(CKDimens.Space3))
                 Column {
                     Text(
-                        text = itemSubtitle(item).substringBefore(" Â· "),
+                        text = itemSubtitle(item).substringBefore(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.primary,
                     )
@@ -1859,13 +1859,13 @@ private fun ItemDetailScreen(
                         if (item.cardNumber.isNotBlank()) {
                             DetailRow(
                                 "Card number",
-                                if (revealed) item.cardNumber else "â€¢â€¢â€¢â€¢ " + item.cardNumber.takeLast(4),
+                                if (revealed) item.cardNumber else "•••• " + item.cardNumber.takeLast(4),
                                 item.cardNumber,
                             )
                         }
                         if (item.cardExpiry.isNotBlank()) DetailRow("Expiry", item.cardExpiry)
                         if (item.cardCvv.isNotBlank()) {
-                            DetailRow("CVV", if (revealed) item.cardCvv else "â€¢â€¢â€¢", item.cardCvv)
+                            DetailRow("CVV", if (revealed) item.cardCvv else "•••", item.cardCvv)
                         }
                     }
                     if (item.type == "identity") {
@@ -2336,16 +2336,16 @@ private fun SettingsHubScreen(
             Text("Everything in one place", style = MaterialTheme.typography.headlineSmall)
             Text("Choose an area. Each opens its own window.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(CKDimens.Space2))
-            SettingsRow("â™¥", "Password health", "Weak, reused and aging passwords") { section = "health" }
-            SettingsRow("â—†", "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
-            SettingsRow("â†“", "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
-            SettingsRow("âœ‰", "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
-            SettingsRow("â—·", "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
-            SettingsRow("âœˆ", "Travel Mode", "Decoy vault for travel") { section = "travel" }
-            SettingsRow("â—Ž", "Family sharing", "Owner, editor and viewer roles") { section = "family" }
-            SettingsRow("â„¹", "About CipherKeep", "Designer, version, license and links") { section = "about" }
+            SettingsRow("♥", "Password health", "Weak, reused and aging passwords") { section = "health" }
+            SettingsRow("◆", "Breach monitoring", "Check passwords against HIBP") { section = "hibp" }
+            SettingsRow("↓", "Import passwords", "Proton, Bitwarden, 1Password, KeePass") { section = "import" }
+            SettingsRow("✉", "Email aliases", "SimpleLogin and Addy.io") { section = "aliases" }
+            SettingsRow("◷", "Emergency access", "Cron-delivered recovery shares") { section = "emergency" }
+            SettingsRow("✈", "Travel Mode", "Decoy vault for travel") { section = "travel" }
+            SettingsRow("◎", "Family sharing", "Owner, editor and viewer roles") { section = "family" }
+            SettingsRow("ℹ", "About CipherKeep", "Designer, version, license and links") { section = "about" }
             Spacer(Modifier.height(CKDimens.Space2))
-            SettingsRow("âš™", "Advanced settings", "Backup, sync, biometrics, updates, passkeys") { onAdvanced() }
+            SettingsRow("⚙", "Advanced settings", "Backup, sync, biometrics, updates, passkeys") { onAdvanced() }
         }
     }
     section?.let { selected ->
@@ -2388,7 +2388,7 @@ private fun SettingsRow(glyph: String, title: String, subtitle: String, onClick:
                 Text(title, style = MaterialTheme.typography.titleMedium)
                 Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Text("â€º", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("›", style = MaterialTheme.typography.headlineSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -2464,7 +2464,7 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
                 enabled = !busy && joinCode.isNotBlank(),
                 onClick = {
                     busy = true
-                    status = "Joining the vaultâ€¦"
+                    status = "Joining the vault…"
                     scope.launch {
                         controller.joinWithPairingCode(joinCode)
                             .onSuccess { records ->
@@ -2484,7 +2484,7 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (busy) "Joiningâ€¦" else "Join vault") }
+            ) { Text(if (busy) "Joining…" else "Join vault") }
             status?.let {
                 Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -2807,7 +2807,7 @@ private fun SettingsScreen(
             )
             OutlinedButton(
                 onClick = {
-                    updateMessage = "Checkingâ€¦"
+                    updateMessage = "Checking…"
                     availableUpdate = null
                     scope.launch {
                         when (val outcome = updateChecker.check()) {
@@ -2853,12 +2853,12 @@ private fun SettingsScreen(
                         enabled = !updateBusy,
                         onClick = {
                             updateBusy = true
-                            updateMessage = "Downloading ${update.apkName.ifBlank { "update" }}â€¦"
+                            updateMessage = "Downloading ${update.apkName.ifBlank { "update" }}…"
                             scope.launch {
                                 val result = UpdateInstaller.download(context, update)
                                 updateBusy = false
                                 result.onSuccess { file ->
-                                    updateMessage = "Downloaded. Opening installerâ€¦"
+                                    updateMessage = "Downloaded. Opening installer…"
                                     UpdateInstaller.install(context, file)
                                         .onFailure { updateMessage = "Could not open the installer: ${it.message}" }
                                 }.onFailure {
@@ -2868,7 +2868,7 @@ private fun SettingsScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(if (updateBusy) "Downloadingâ€¦" else "Download & install ${update.latestVersion}")
+                        Text(if (updateBusy) "Downloading…" else "Download & install ${update.latestVersion}")
                     }
                 }
             }
@@ -3049,9 +3049,9 @@ private fun SettingsScreen(
                             Text(label, modifier = Modifier.padding(start = CKDimens.Space2))
                         }
                     }
-                    Text("Body 16sp Â· Small 14sp Â· Caption 12sp", style = MaterialTheme.typography.bodyMedium)
+                    Text("Body 16sp · Small 14sp · Caption 12sp", style = MaterialTheme.typography.bodyMedium)
                     Text("Spacing 4/8/12/16/24/32/40/48 dp", style = MaterialTheme.typography.bodySmall)
-                    Text("Focus ring 2px Â· touch target 48dp", style = MaterialTheme.typography.bodySmall)
+                    Text("Focus ring 2px · touch target 48dp", style = MaterialTheme.typography.bodySmall)
                 }
             },
             confirmButton = { TextButton(onClick = { showDesignGallery = false }) { Text("Close") } },
