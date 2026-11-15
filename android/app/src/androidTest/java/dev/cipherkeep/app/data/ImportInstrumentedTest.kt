@@ -1,4 +1,4 @@
-package dev.cipherkeep.app.data
+﻿package dev.cipherkeep.app.data
 
 import android.content.Context
 import dev.cipherkeep.app.data.db.VaultDatabase
@@ -31,7 +31,7 @@ class ImportInstrumentedTest {
         val controller = SessionController(context)
         controller.bootstrap()
         controller.unlock("Q7!mZ2#vL9@x").getOrThrow()
-        assertEquals(1, controller.importPlaintext(csv).getOrThrow())
+        assertEquals(1, controller.importPlaintext(csv).getOrThrow().imported)
     }
 
     @Test
@@ -45,6 +45,6 @@ class ImportInstrumentedTest {
         val controller = SessionController(context)
         controller.bootstrap()
         controller.unlock("Q7!mZ2#vL9@x").getOrThrow()
-        assertEquals(1, controller.importPlaintext(json).getOrThrow())
+        assertEquals(1, controller.importPlaintext(json).getOrThrow().imported)
     }
 }

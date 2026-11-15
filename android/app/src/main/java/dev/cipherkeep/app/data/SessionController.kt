@@ -1,4 +1,4 @@
-package dev.cipherkeep.app.data
+﻿package dev.cipherkeep.app.data
 
 import android.content.Context
 import android.util.Base64
@@ -31,6 +31,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+/** Result of one password-manager import, including per-record failures. */
+data class ImportSummary(
+    val imported: Int,
+    val skipped: Int,
+    val failed: Int,
+    val total: Int,
+)
 
 sealed interface VaultUiState {
     data object Loading : VaultUiState
@@ -190,6 +198,13 @@ class SessionController(context: Context) {
                 // A joined vault replaces the local identity, so stale items from
                 // the previous vault must not be merged into the new one.
                 repository?.list()?.forEach { entity -> repository?.delete(entity.itemId) }
+                // A joined vault is a new device identity: never keep an actor id
+                // cloned from another installation, and drop stale conflicts.
+                appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("device_actor")
+                    .putString("conflict_inputs", "[]")
+                    .apply()
                 loadItems()
                 state = VaultUiState.Unlocked
                 recordActivity()
@@ -210,6 +225,11 @@ class SessionController(context: Context) {
                 session = created
                 blob = encoded
                 rememberPassword(password)
+                appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("device_actor")
+                    .putString("conflict_inputs", "[]")
+                    .apply()
                 biometrics.clear()
                 backoff.clear()
                 if (!openStorage()) {
@@ -651,59 +671,107 @@ class SessionController(context: Context) {
             .put("favorite", false)
             .toString()
 
-    suspend fun importPlaintext(bytes: ByteArray, mergeDuplicates: Boolean = false): Result<Int> =
+    /**
+     * Import a plaintext password-manager export.
+     *
+     * [onProgress] is called after every parsed record with the number processed
+     * so the UI can show a determinate progress bar and live failure count.
+     */
+    suspend fun importPlaintext(
+        bytes: ByteArray,
+        mergeDuplicates: Boolean = false,
+        onProgress: (done: Int, total: Int, imported: Int, failed: Int) -> Unit = { _, _, _, _ -> },
+    ): Result<ImportSummary> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val active = session ?: error("vault is locked")
                 if (active.isLocked()) error("vault is locked")
                 val report = JSONObject(dev.cipherkeep.core.importPlaintextJson(bytes, mergeDuplicates))
                 val items = report.getJSONArray("items")
+                val total = items.length()
                 var imported = 0
-                for (index in 0 until items.length()) {
+                var failed = 0
+                onProgress(0, total, 0, 0)
+                for (index in 0 until total) {
                     val item = items.getJSONObject(index)
                     val title = item.optString("title").trim()
-                    if (title.isEmpty()) continue
-                    val rawNotes = item.optString("notes")
-                    val totp = Regex("TOTP:\\s*(otpauth://\\S+)").find(rawNotes)?.groupValues?.get(1).orEmpty()
-                    val notes = if (totp.isEmpty()) rawNotes else rawNotes.replace("TOTP: $totp", "").trim()
-                    saveItem(
-                        title = title.take(512),
-                        username = item.optString("username").take(4_096),
-                        password = item.optString("password").take(65_536),
-                        url = importUrl(item.optString("url")),
-                        notes = notes.take(65_536),
-                        folder = item.optString("folder").take(64),
-                        totpUri = totp.take(4_096),
-                    ).getOrThrow()
-                    imported += 1
+                    if (title.isEmpty()) {
+                        failed += 1
+                    } else {
+                        val rawNotes = item.optString("notes")
+                        val totp = Regex("TOTP:\\s*(otpauth://\\S+)")
+                            .find(rawNotes)?.groupValues?.get(1).orEmpty()
+                        val notes = if (totp.isEmpty()) {
+                            rawNotes
+                        } else {
+                            rawNotes.replace("TOTP: $totp", "").trim()
+                        }
+                        val result = runCatching {
+                            saveItem(
+                                title = title.take(512),
+                                username = item.optString("username").take(4_096),
+                                password = item.optString("password").take(65_536),
+                                url = importUrl(item.optString("url")),
+                                notes = notes.take(65_536),
+                                folder = item.optString("folder").take(64),
+                                totpUri = totp.take(4_096),
+                            ).getOrThrow()
+                        }
+                        if (result.isSuccess) imported += 1 else failed += 1
+                    }
+                    onProgress(index + 1, total, imported, failed)
                 }
-                imported
+                ImportSummary(
+                    imported = imported,
+                    skipped = report.optInt("skippedDuplicates", 0),
+                    failed = failed,
+                    total = total,
+                )
             }
         }
 
-    suspend fun importKdbx(bytes: ByteArray, password: String): Result<Int> =
+    /** Import a KeePass `.kdbx` database with the same progress contract. */
+    suspend fun importKdbx(
+        bytes: ByteArray,
+        password: String,
+        onProgress: (done: Int, total: Int, imported: Int, failed: Int) -> Unit = { _, _, _, _ -> },
+    ): Result<ImportSummary> =
         withContext(Dispatchers.IO) {
             runCatching {
                 val active = session ?: error("vault is locked")
                 if (active.isLocked()) error("vault is locked")
                 val report = JSONObject(dev.cipherkeep.core.importKdbxJson(bytes, password))
                 val items = report.getJSONArray("items")
+                val total = items.length()
                 var imported = 0
-                for (index in 0 until items.length()) {
+                var failed = 0
+                onProgress(0, total, 0, 0)
+                for (index in 0 until total) {
                     val item = items.getJSONObject(index)
                     val title = item.optString("title").trim()
-                    if (title.isEmpty()) continue
-                    saveItem(
-                        title = title.take(512),
-                        username = item.optString("username").take(4_096),
-                        password = item.optString("password").take(65_536),
-                        url = importUrl(item.optString("url")),
-                        notes = item.optString("notes").take(65_536),
-                        folder = item.optString("folder").take(64),
-                    ).getOrThrow()
-                    imported += 1
+                    if (title.isEmpty()) {
+                        failed += 1
+                    } else {
+                        val result = runCatching {
+                            saveItem(
+                                title = title.take(512),
+                                username = item.optString("username").take(4_096),
+                                password = item.optString("password").take(65_536),
+                                url = importUrl(item.optString("url")),
+                                notes = item.optString("notes").take(65_536),
+                                folder = item.optString("folder").take(64),
+                            ).getOrThrow()
+                        }
+                        if (result.isSuccess) imported += 1 else failed += 1
+                    }
+                    onProgress(index + 1, total, imported, failed)
                 }
-                imported
+                ImportSummary(
+                    imported = imported,
+                    skipped = report.optInt("skippedDuplicates", 0),
+                    failed = failed,
+                    total = total,
+                )
             }
         }
 
@@ -800,9 +868,31 @@ class SessionController(context: Context) {
                     array.optString(index).takeIf { it.isNotEmpty() }
                 }
             }
-            val merged = JSONObject(mergeSyncRecordsV2(local, remote))
-            val records = merged.optJSONArray("records") ?: JSONArray()
-            val conflicts = merged.optJSONArray("conflicts") ?: JSONArray()
+            var merged = JSONObject(mergeSyncRecordsV2(local, remote))
+            var records = merged.optJSONArray("records") ?: JSONArray()
+            var conflicts = merged.optJSONArray("conflicts") ?: JSONArray()
+            val firstApply = runCatching { persistMergedRecords(active, repo, records) }
+            if (firstApply.isFailure) {
+                // Records written by older builds carry a random item key. Merging
+                // them with local records mixes wrapped keys, so every field of the
+                // merged record becomes unreadable and the whole sync aborts.
+                // Re-seal those remote records under the derived item key once and
+                // retry; this also breaks the loop where the relay kept serving the
+                // same unreadable manifest.
+                val repairedLocal = local.mapNotNull { normalizeRemoteRecord(active, it) }
+                val repairedRemote = remote.mapNotNull { normalizeRemoteRecord(active, it) }
+                if (repairedLocal.isEmpty() && repairedRemote.isEmpty()) {
+                    throw firstApply.exceptionOrNull() ?: IllegalStateException("sync failed")
+                }
+                merged = JSONObject(
+                    mergeSyncRecordsV2(
+                        repairedLocal.ifEmpty { local },
+                        repairedRemote,
+                    ),
+                )
+                conflicts = JSONArray()
+                persistMergedRecords(active, repo, records)
+            }
             val inputs = JSONArray()
             for (index in 0 until conflicts.length()) {
                 val conflict = conflicts.getJSONObject(index)
@@ -829,27 +919,6 @@ class SessionController(context: Context) {
                 .edit()
                 .putString("conflict_inputs", inputs.toString())
                 .apply()
-            for (index in 0 until records.length()) {
-                val raw = records.getString(index)
-                val wrapper = JSONObject(raw)
-                val idHex = wrapper.getString("item")
-                val legacy = active.applySyncRecord(raw.encodeToByteArray())
-                val id = ByteArray(16) { offset ->
-                    idHex.substring(offset * 2, offset * 2 + 2).toInt(16).toByte()
-                }
-                val ciphertext = active.encryptItem(id, legacy)
-                legacy.fill(0)
-                val previous = repo.get(id)
-                repo.save(
-                    itemId = id,
-                    ciphertext = ciphertext,
-                    lamport = previous?.lamport ?: 1L,
-                    tombstone = false,
-                    schemaVersion = previous?.schemaVersion ?: 1,
-                    updatedAt = System.currentTimeMillis(),
-                    syncRecord = raw.encodeToByteArray(),
-                )
-            }
             val payload = JSONObject()
                 .put("v", 1)
                 .put("records", records)
@@ -1088,6 +1157,93 @@ class SessionController(context: Context) {
             value.substring(index * 2, index * 2 + 2).toInt(16).toByte()
         }
 
+    /** Highest Lamport counter carried by a v2 sync record. */
+    private fun recordMaxCounter(raw: String): Long {
+        val record = runCatching { JSONObject(raw).optJSONObject("record") }.getOrNull() ?: return 0L
+        var max = maxOf(
+            record.optLong("itemCounter", 0L),
+            record.optLong("typeCounter", 0L),
+            record.optLong("deletedCounter", 0L),
+        )
+        val fields = record.optJSONArray("fields") ?: return max
+        for (index in 0 until fields.length()) {
+            max = maxOf(max, fields.optJSONObject(index)?.optLong("counter", 0L) ?: 0L)
+        }
+        return max
+    }
+
+    private suspend fun persistMergedRecords(
+        active: FfiVaultSession,
+        repo: VaultRepository,
+        records: JSONArray,
+    ) {
+        for (index in 0 until records.length()) {
+            val raw = records.getString(index)
+            val wrapper = JSONObject(raw)
+            val id = hexBytes(wrapper.getString("item"))
+            val legacy = active.applySyncRecord(raw.encodeToByteArray())
+            val ciphertext = active.encryptItem(id, legacy)
+            legacy.fill(0)
+            val previous = repo.get(id)
+            repo.save(
+                itemId = id,
+                ciphertext = ciphertext,
+                lamport = previous?.lamport ?: 1L,
+                tombstone = false,
+                schemaVersion = previous?.schemaVersion ?: 1,
+                updatedAt = System.currentTimeMillis(),
+                syncRecord = raw.encodeToByteArray(),
+            )
+        }
+    }
+
+    /**
+     * Re-seal one remote record under the derived item key while keeping its
+     * original actor and creation time.
+     *
+     * Records written by older builds carry a random item key. Merging them with
+     * local records mixed two wrapped keys and made every field of the merged
+     * record unreadable, which aborted the sync and left the relay serving the
+     * same manifest forever. This is used only as a one-time repair.
+     */
+    private fun normalizeRemoteRecord(active: FfiVaultSession, raw: String): String? = runCatching {
+        val wrapper = JSONObject(raw)
+        val idHex = wrapper.optString("item")
+        if (idHex.length != 32) return@runCatching null
+        val record = wrapper.optJSONObject("record") ?: return@runCatching null
+        val actorHex = record.optString("typeActor").ifBlank { record.optString("itemActor") }
+        if (actorHex.length != 32) return@runCatching null
+        val legacy = active.applySyncRecord(raw.encodeToByteArray())
+        val id = hexBytes(idHex)
+        val sealed = active.encryptItem(id, legacy)
+        legacy.fill(0)
+        active.exportSyncRecord(
+            id,
+            sealed,
+            hexBytes(actorHex),
+            record.optLong("created", System.currentTimeMillis()).coerceAtLeast(1L).toULong(),
+            (recordMaxCounter(raw) + 1).toULong(),
+        ).decodeToString()
+    }.getOrNull()
+
+    /** Copy one conflicted field from the chosen record's legacy JSON. */
+    private fun copyLegacyField(fieldId: Int, target: JSONObject, source: JSONObject) {
+        val key = when (fieldId) {
+            1 -> "title"
+            2 -> "notes"
+            10 -> "username"
+            11 -> "password"
+            12 -> "url"
+            13 -> "totpUri"
+            0x8001 -> "folder"
+            0x8002 -> "tags"
+            0x8003 -> "favorite"
+            0x8004 -> "autofillAllowed"
+            else -> return
+        }
+        if (source.has(key)) target.put(key, source.get(key)) else target.remove(key)
+    }
+
     suspend fun resolveConflict(item: String, field: Int, keepRight: Boolean): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
@@ -1106,20 +1262,30 @@ class SessionController(context: Context) {
                     }
                 }
                 val entry = selected ?: error("conflict not found")
-                val resolved = resolveSyncConflict(
-                    entry.getString("local"),
-                    entry.getString("remote"),
-                    field.toUShort(),
-                    keepRight,
+                val localRaw = entry.getString("local")
+                val remoteRaw = entry.getString("remote")
+                val chosenRaw = if (keepRight) remoteRaw else localRaw
+                val merged = JSONObject(active.applySyncRecord(localRaw.encodeToByteArray()).decodeToString())
+                val chosen = JSONObject(active.applySyncRecord(chosenRaw.encodeToByteArray()).decodeToString())
+                copyLegacyField(field, merged, chosen)
+                val payload = merged.toString().encodeToByteArray()
+                val id = hexBytes(entry.getString("item"))
+                val ciphertext = active.encryptItem(id, payload)
+                payload.fill(0)
+                // Re-export above both sides so the choice wins the next merge
+                // instead of being reported again.
+                val counter = maxOf(recordMaxCounter(localRaw), recordMaxCounter(remoteRaw)) + 1
+                val created = JSONObject(localRaw)
+                    .optJSONObject("record")
+                    ?.optLong("created", System.currentTimeMillis())
+                    ?: System.currentTimeMillis()
+                val record = active.exportSyncRecord(
+                    id,
+                    ciphertext,
+                    deviceActor(),
+                    created.coerceAtLeast(1L).toULong(),
+                    counter.toULong(),
                 )
-                val wrapper = JSONObject(resolved)
-                val idHex = wrapper.getString("item")
-                val legacy = active.applySyncRecord(resolved.encodeToByteArray())
-                val id = ByteArray(16) { offset ->
-                    idHex.substring(offset * 2, offset * 2 + 2).toInt(16).toByte()
-                }
-                val ciphertext = active.encryptItem(id, legacy)
-                legacy.fill(0)
                 val previous = repo.get(id)
                 repo.save(
                     itemId = id,
@@ -1128,7 +1294,7 @@ class SessionController(context: Context) {
                     tombstone = false,
                     schemaVersion = previous?.schemaVersion ?: 1,
                     updatedAt = System.currentTimeMillis(),
-                    syncRecord = resolved.encodeToByteArray(),
+                    syncRecord = record,
                 )
                 prefs.edit().putString("conflict_inputs", remaining.toString()).apply()
                 loadItems()
