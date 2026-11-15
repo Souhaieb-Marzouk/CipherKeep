@@ -102,8 +102,6 @@ import java.util.concurrent.TimeUnit
 import dev.cipherkeep.app.data.SensitiveClipboard
 import dev.cipherkeep.core.FfiPassphrasePolicy
 import dev.cipherkeep.core.FfiPasswordPolicy
-import dev.cipherkeep.core.FfiSearchDocument
-import dev.cipherkeep.core.FfiSearchIndex
 import dev.cipherkeep.core.generatePassphrase
 import dev.cipherkeep.core.generatePassword
 import java.security.MessageDigest
@@ -1434,33 +1432,22 @@ private fun VaultScreen(
     var selectedKeys by remember { mutableStateOf(setOf<String>()) }
     var showBulkMove by remember { mutableStateOf(false) }
     var bulkFolder by remember { mutableStateOf("") }
-    val searchIndex = remember(items) {
-        FfiSearchIndex().also { index ->
-            items.forEach { item ->
-                index.insert(
-                    FfiSearchDocument(
-                        id = item.id,
-                        title = item.title,
-                        username = item.username,
-                        url = item.url,
-                        folder = listOf(item.folder, item.tags.joinToString(" "))
-                            .filter(String::isNotBlank)
-                            .joinToString(" "),
-                        notes = item.notes,
-                    ),
-                )
-            }
-        }
-    }
-    DisposableEffect(searchIndex) {
-        onDispose { searchIndex.close() }
-    }
-    val visibleItems = remember(searchQuery, filterText, favoritesOnly, items, searchIndex) {
-        val searched = if (searchQuery.isBlank()) {
+    val visibleItems = remember(searchQuery, filterText, favoritesOnly, items) {
+        val query = searchQuery.trim().lowercase()
+        val searched = if (query.isEmpty()) {
             items
         } else {
-            val ids = searchIndex.search(searchQuery, 50u).map { it.id }
-            items.filter { item -> ids.any { it.contentEquals(item.id) } }
+            items.asSequence()
+                .filter { item ->
+                    item.title.lowercase().contains(query) ||
+                        item.username.lowercase().contains(query) ||
+                        item.url.lowercase().contains(query) ||
+                        item.notes.lowercase().contains(query) ||
+                        item.folder.lowercase().contains(query) ||
+                        item.tags.any { it.lowercase().contains(query) }
+                }
+                .take(50)
+                .toList()
         }
         val normalized = filterText.trim().lowercase()
         searched.filter { item ->

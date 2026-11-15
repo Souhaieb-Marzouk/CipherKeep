@@ -18,8 +18,17 @@ fun originMatches(itemUrl: String, webDomain: String?): Boolean {
     if (webDomain.isNullOrBlank() || itemUrl.isBlank()) {
         return false
     }
-    val host = runCatching { java.net.URI(itemUrl).host }.getOrNull() ?: return false
-    return host.equals(webDomain, ignoreCase = true)
+    val domain = webDomain.trim().lowercase().removeSuffix(".")
+    if (domain.isBlank()) return false
+    val host = runCatching { java.net.URI(itemUrl).host }.getOrNull()
+        ?: itemUrl.substringAfter("://", itemUrl)
+            .substringBefore('/')
+            .substringBefore(':')
+            .substringBefore('?')
+            .trim()
+            .lowercase()
+    if (host.isBlank()) return false
+    return host.removePrefix("www.") == domain.removePrefix("www.")
 }
 
 /** Parse visible, enabled username/password fields and the top-level web origin. */

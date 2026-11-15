@@ -47,8 +47,8 @@ class RelaySyncClient(
     private fun open(url: String, method: String, etag: String? = null): HttpURLConnection =
         (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = method
-            connectTimeout = 15_000
-            readTimeout = 30_000
+            connectTimeout = 20_000
+            readTimeout = 120_000
             instanceFollowRedirects = false
             setRequestProperty("Authorization", "Bearer $token")
             if (etag != null) setRequestProperty("If-Match", etag)

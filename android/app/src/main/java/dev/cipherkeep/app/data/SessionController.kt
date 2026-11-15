@@ -872,7 +872,20 @@ class SessionController(context: Context) {
                     array.optString(index).takeIf { it.isNotEmpty() }
                 }
             }
-            var merged = JSONObject(mergeSyncRecordsV2(local, remote))
+            var merged = runCatching {
+                JSONObject(mergeSyncRecordsV2(local, remote))
+            }.getOrElse { failure ->
+                // One malformed record must not make the whole relay unusable.
+                // Drop records that do not look like a v2 wrapper and retry.
+                val safeLocal = local.filter(::isV2Record)
+                val safeRemote = remote.filter(::isV2Record)
+                runCatching { JSONObject(mergeSyncRecordsV2(safeLocal, safeRemote)) }
+                    .getOrElse {
+                        throw IllegalStateException(
+                            "merge failed: ${failure.message ?: "malformed records"}",
+                        )
+                    }
+            }
             var records = merged.optJSONArray("records") ?: JSONArray()
             var conflicts = merged.optJSONArray("conflicts") ?: JSONArray()
             val firstApply = runCatching { persistMergedRecords(active, repo, records) }
@@ -894,6 +907,8 @@ class SessionController(context: Context) {
                         repairedRemote,
                     ),
                 )
+                // Persist the repaired merge, not the manifest that just failed.
+                records = merged.optJSONArray("records") ?: JSONArray()
                 conflicts = JSONArray()
                 persistMergedRecords(active, repo, records)
             }
@@ -1177,6 +1192,12 @@ class SessionController(context: Context) {
         return max
     }
 
+    /** True when [raw] is a v2 sync envelope with a 16-byte item id. */
+    private fun isV2Record(raw: String): Boolean = runCatching {
+        val wrapper = JSONObject(raw)
+        wrapper.optString("item").length == 32 && wrapper.optJSONObject("record") != null
+    }.getOrDefault(false)
+
     /** Turn a stored v2 record into a tombstone that wins the next merge. */
     private fun tombstoneRecord(recordJson: String, actor: ByteArray): String? = runCatching {
         val wrapper = JSONObject(recordJson)
@@ -1199,34 +1220,46 @@ class SessionController(context: Context) {
     ) {
         for (index in 0 until records.length()) {
             val raw = records.getString(index)
+            if (!isV2Record(raw)) continue
             val wrapper = JSONObject(raw)
             val id = hexBytes(wrapper.getString("item"))
             val previous = repo.get(id)
-            if (wrapper.optJSONObject("record")?.optBoolean("deleted") == true) {
-                // Keep the tombstone row so this deletion keeps winning merges.
+            try {
+                if (wrapper.optJSONObject("record")?.optBoolean("deleted") == true) {
+                    // Keep the tombstone row so this deletion keeps winning merges.
+                    repo.save(
+                        itemId = id,
+                        ciphertext = previous?.ciphertext ?: ByteArray(0),
+                        lamport = previous?.lamport ?: 1L,
+                        tombstone = true,
+                        schemaVersion = previous?.schemaVersion ?: 1,
+                        updatedAt = System.currentTimeMillis(),
+                        syncRecord = raw.encodeToByteArray(),
+                    )
+                    continue
+                }
+                val legacy = active.applySyncRecord(raw.encodeToByteArray())
+                val ciphertext = active.encryptItem(id, legacy)
+                legacy.fill(0)
                 repo.save(
                     itemId = id,
-                    ciphertext = previous?.ciphertext ?: ByteArray(0),
+                    ciphertext = ciphertext,
                     lamport = previous?.lamport ?: 1L,
-                    tombstone = true,
+                    tombstone = false,
                     schemaVersion = previous?.schemaVersion ?: 1,
                     updatedAt = System.currentTimeMillis(),
                     syncRecord = raw.encodeToByteArray(),
                 )
-                continue
+            } catch (failure: Exception) {
+                // A single unreadable record must not discard the rest of the
+                // manifest; keep the local copy and continue with the others.
+                android.util.Log.w("CipherKeepSync", "record apply failed", failure)
             }
-            val legacy = active.applySyncRecord(raw.encodeToByteArray())
-            val ciphertext = active.encryptItem(id, legacy)
-            legacy.fill(0)
-            repo.save(
-                itemId = id,
-                ciphertext = ciphertext,
-                lamport = previous?.lamport ?: 1L,
-                tombstone = false,
-                schemaVersion = previous?.schemaVersion ?: 1,
-                updatedAt = System.currentTimeMillis(),
-                syncRecord = raw.encodeToByteArray(),
-            )
+        }
+        if (records.length() > 0 &&
+            (0 until records.length()).none { isV2Record(records.optString(it)) }
+        ) {
+            error("no valid record in manifest")
         }
     }
 
@@ -1244,6 +1277,7 @@ class SessionController(context: Context) {
         val idHex = wrapper.optString("item")
         if (idHex.length != 32) return@runCatching null
         val record = wrapper.optJSONObject("record") ?: return@runCatching null
+        if (record.optBoolean("deleted")) return@runCatching raw
         val actorHex = record.optString("typeActor").ifBlank { record.optString("itemActor") }
         if (actorHex.length != 32) return@runCatching null
         val legacy = active.applySyncRecord(raw.encodeToByteArray())

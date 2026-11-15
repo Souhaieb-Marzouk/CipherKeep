@@ -234,11 +234,13 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
                                 "Downloaded. ${outcome.records} record(s), conflicts ${outcome.conflicts}."
                             }
                         },
-                        {
+                        { failure ->
+                            android.util.Log.w("CipherKeepSync", "sync failed", failure)
+                            val reason = failure.message?.take(140)
                             if (push) {
-                                "Upload failed. Check the endpoint, token and connection."
+                                "Upload failed: ${reason ?: "check the endpoint, token and connection"}."
                             } else {
-                                "Download failed. Check the endpoint, token and connection."
+                                "Download failed: ${reason ?: "check the endpoint, token and connection"}."
                             }
                         },
                     )
