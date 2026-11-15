@@ -139,7 +139,7 @@ fun CipherKeepApp() {
     var selectedIndex by rememberSaveable { mutableIntStateOf(-1) }
     val context = LocalContext.current
     val controller = remember {
-        SessionController(context).also { dev.cipherkeep.app.autofill.AutofillRegistry.controller = it }
+        dev.cipherkeep.app.data.SessionProvider.get(context)
     }
     androidx.compose.runtime.LaunchedEffect(Unit) {
         dev.cipherkeep.app.data.SyncRuntime.controller = controller

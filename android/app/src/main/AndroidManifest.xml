@@ -29,6 +29,11 @@
             android:theme="@style/Theme.CipherKeep"
             tools:targetApi="34" />
 
+        <activity
+            android:name=".autofill.AutofillUnlockActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@style/Theme.CipherKeep.Autofill" />
         <service
             android:name=".passkeys.CipherKeepCredentialProvider"
             android:exported="true"
