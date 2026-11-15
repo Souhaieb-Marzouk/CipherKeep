@@ -563,8 +563,10 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
     val activity = context as? FragmentActivity
     val biometricKey = remember { BiometricKeyManager() }
     var biometricWrapped by remember { mutableStateOf<WrappedSecret?>(null) }
+    var legacyBiometric by remember { mutableStateOf(false) }
     LaunchedEffect(controller) {
         biometricWrapped = controller.biometricWrapped()
+        legacyBiometric = controller.hasLegacyBiometric()
     }
     var biometricAttempted by remember { mutableStateOf(false) }
     LaunchedEffect(biometricWrapped, activity) {
@@ -691,6 +693,14 @@ private fun UnlockScreen(controller: SessionController, state: VaultUiState.Lock
                             shape = MaterialTheme.shapes.medium,
                         ) {
                             Text(if (busy) "Unlocking…" else "Unlock")
+                        }
+                        if (biometricWrapped == null && legacyBiometric) {
+                            Text(
+                                text = "Biometric unlock must be re-enabled after this update: unlock with your master password, then open Advanced settings.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = CKDimens.Space2),
+                            )
                         }
                         if (biometricWrapped != null && activity != null && canUseBiometrics(activity)) {
                             OutlinedButton(

@@ -1,4 +1,4 @@
-﻿package dev.cipherkeep.app.data
+package dev.cipherkeep.app.data
 
 import android.content.Context
 import android.util.Base64
@@ -332,6 +332,9 @@ class SessionController(context: Context) {
     }
 
     suspend fun biometricWrapped(): WrappedSecret? = biometrics.load()
+
+    /** True when a pre-2.2.7 biometric wrap must be recreated by the user. */
+    suspend fun hasLegacyBiometric(): Boolean = biometrics.hasLegacySecret()
 
     suspend fun saveBiometricWrapped(wrapped: WrappedSecret) {
         biometrics.save(wrapped)
