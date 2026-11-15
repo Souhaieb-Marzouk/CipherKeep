@@ -81,6 +81,51 @@ class SessionController(context: Context) {
 
     private var backgroundedAt: Long? = null
 
+    // The master password is kept only while the vault is unlocked so a join
+    // can rebuild the vault without asking the user to type it again. It is
+    // cleared on every lock, travel-mode entry and close.
+    private var sessionPassword: CharArray? = null
+
+    private fun rememberPassword(password: String) {
+        sessionPassword?.fill('\u0000')
+        sessionPassword = password.toCharArray()
+    }
+
+    private fun clearPassword() {
+        sessionPassword?.fill('\u0000')
+        sessionPassword = null
+    }
+
+    private fun currentPassword(): CharArray? =
+        sessionPassword?.takeIf { it.isNotEmpty() }
+
+    /** Persisted per-device sync actor id. */
+    private fun deviceActor(): ByteArray {
+        val prefs = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
+        val stored = prefs.getString("device_actor", null)
+        if (stored != null && stored.length == 32) return hexBytes(stored)
+        val bytes = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        prefs.edit()
+            .putString("device_actor", bytes.joinToString("") { "%02x".format(it) })
+            .apply()
+        return bytes
+    }
+
+    /** Configured auto-lock timeout in milliseconds. */
+    fun lockTimeoutMillis(): Long =
+        appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .getLong(LOCK_TIMEOUT_KEY, AUTO_LOCK_MILLIS)
+
+    /** Change the auto-lock timeout and re-arm the running timer. */
+    fun setLockTimeoutMillis(value: Long) {
+        val clamped = value.coerceIn(MIN_LOCK_TIMEOUT_MILLIS, MAX_LOCK_TIMEOUT_MILLIS)
+        appContext.getSharedPreferences("settings", Context.MODE_PRIVATE)
+            .edit()
+            .putLong(LOCK_TIMEOUT_KEY, clamped)
+            .apply()
+        recordActivity()
+    }
+
     suspend fun bootstrap() {
         blob = blobs.load()
         if (blob == null) {
@@ -164,6 +209,7 @@ class SessionController(context: Context) {
                 session?.close()
                 session = created
                 blob = encoded
+                rememberPassword(password)
                 biometrics.clear()
                 backoff.clear()
                 if (!openStorage()) {
@@ -198,6 +244,7 @@ class SessionController(context: Context) {
             val bytes = password.encodeToByteArray()
             try {
                 locked.unlockAgain(bytes)
+                rememberPassword(password)
                 backoff.clear()
                 if (!openStorage()) {
                     state = VaultUiState.StorageError("The encrypted vault database could not be opened.")
@@ -245,6 +292,7 @@ class SessionController(context: Context) {
                 session?.close()
                 session = recovered
                 blob = encoded
+                rememberPassword(newPassword)
                 biometrics.clear()
                 backoff.clear()
                 if (!openStorage()) {
@@ -709,16 +757,37 @@ class SessionController(context: Context) {
             val entities = repo.list().filter {
                 !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID)
             }
-            val actor = ByteArray(16) { 1 }
-            val created = System.currentTimeMillis().toULong()
+            val actor = deviceActor()
+            // Reuse the stored canonical record when the item has not changed
+            // since the last sync. Re-exporting would re-seal every field with
+            // a fresh nonce and make an unchanged item look like a concurrent
+            // edit on every sync.
             val local = entities.map { entity ->
-                active.exportSyncRecord(
-                    entity.itemId,
-                    entity.ciphertext,
-                    actor,
-                    created,
-                    1uL,
-                ).decodeToString()
+                val stored = entity.syncRecord?.decodeToString()
+                if (stored != null) {
+                    stored
+                } else {
+                    val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)
+                    val sealed = active.encryptItem(entity.itemId, plaintext)
+                    plaintext.fill(0)
+                    val record = active.exportSyncRecord(
+                        entity.itemId,
+                        sealed,
+                        actor,
+                        entity.updatedAt.coerceAtLeast(1).toULong(),
+                        maxOf(entity.lamport, 1).toULong(),
+                    )
+                    repo.save(
+                        itemId = entity.itemId,
+                        ciphertext = sealed,
+                        lamport = entity.lamport,
+                        tombstone = false,
+                        schemaVersion = entity.schemaVersion,
+                        updatedAt = entity.updatedAt,
+                        syncRecord = record,
+                    )
+                    record.decodeToString()
+                }
             }
             val client = RelaySyncClient(endpoint, token)
             val remoteBytes = client.getManifest(namespace)
@@ -774,10 +843,11 @@ class SessionController(context: Context) {
                 repo.save(
                     itemId = id,
                     ciphertext = ciphertext,
-                    lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                    lamport = previous?.lamport ?: 1L,
                     tombstone = false,
-                    schemaVersion = 1,
+                    schemaVersion = previous?.schemaVersion ?: 1,
                     updatedAt = System.currentTimeMillis(),
+                    syncRecord = raw.encodeToByteArray(),
                 )
             }
             val payload = JSONObject()
@@ -796,11 +866,34 @@ class SessionController(context: Context) {
         val uri = appContext.getSharedPreferences("sync", Context.MODE_PRIVATE)
             .getString("local_folder", null) ?: error("no sync folder")
         val folder = AndroidSyncFolder(appContext, Uri.parse(uri))
-        val actor = ByteArray(16) { 1 }
-        val created = System.currentTimeMillis().toULong()
+        val actor = deviceActor()
         val entities = repo.list().filter { !it.tombstone && !it.itemId.contentEquals(FOLDER_META_ID) }
         val local = entities.map { entity ->
-            active.exportSyncRecord(entity.itemId, entity.ciphertext, actor, created, 1uL).decodeToString()
+            val stored = entity.syncRecord?.decodeToString()
+            if (stored != null) {
+                stored
+            } else {
+                val plaintext = active.decryptItem(entity.itemId, entity.ciphertext)
+                val sealed = active.encryptItem(entity.itemId, plaintext)
+                plaintext.fill(0)
+                val record = active.exportSyncRecord(
+                    entity.itemId,
+                    sealed,
+                    actor,
+                    entity.updatedAt.coerceAtLeast(1).toULong(),
+                    maxOf(entity.lamport, 1).toULong(),
+                )
+                repo.save(
+                    itemId = entity.itemId,
+                    ciphertext = sealed,
+                    lamport = entity.lamport,
+                    tombstone = false,
+                    schemaVersion = entity.schemaVersion,
+                    updatedAt = entity.updatedAt,
+                    syncRecord = record,
+                )
+                record.decodeToString()
+            }
         }
         val remote = mutableListOf<String>()
         for (name in folder.listManifests()) {
@@ -824,10 +917,11 @@ class SessionController(context: Context) {
             repo.save(
                 itemId = id,
                 ciphertext = ciphertext,
-                lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                lamport = previous?.lamport ?: 1L,
                 tombstone = false,
-                schemaVersion = 1,
+                schemaVersion = previous?.schemaVersion ?: 1,
                 updatedAt = System.currentTimeMillis(),
+                syncRecord = raw.encodeToByteArray(),
             )
         }
         val payload = JSONObject().put("v", 1).put("records", records).toString().encodeToByteArray()
@@ -883,10 +977,16 @@ class SessionController(context: Context) {
     /**
      * Join the vault described by a pairing code, persist its relay settings and
      * pull remote records once so the second device starts with the same items.
+     *
+     * The local master password is reused, so the user keeps the password they
+     * chose when they first created their vault. It is available only while the
+     * session is unlocked with that password.
      */
-    suspend fun joinWithPairingCode(code: String, password: String): Result<Int> =
+    suspend fun joinWithPairingCode(code: String): Result<Int> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val password = currentPassword()?.concatToString()
+                    ?: error("Unlock with your master password before joining another vault.")
                 val payload = decodePairingCode(code)
                 val vaultId = payload.optString("vaultId")
                 val vaultKey = payload.optString("vaultKey")
@@ -1024,10 +1124,11 @@ class SessionController(context: Context) {
                 repo.save(
                     itemId = id,
                     ciphertext = ciphertext,
-                    lamport = maxOf((previous?.lamport ?: 0) + 1, 2),
+                    lamport = previous?.lamport ?: 1L,
                     tombstone = false,
-                    schemaVersion = 1,
+                    schemaVersion = previous?.schemaVersion ?: 1,
                     updatedAt = System.currentTimeMillis(),
+                    syncRecord = resolved.encodeToByteArray(),
                 )
                 prefs.edit().putString("conflict_inputs", remaining.toString()).apply()
                 loadItems()
@@ -1427,6 +1528,7 @@ class SessionController(context: Context) {
         autoLockJob?.cancel()
         autoLockJob = null
         session?.lock()
+        clearPassword()
         items = emptyList()
         backgroundedAt = null
         storage.closeBlocking()
@@ -1438,6 +1540,7 @@ class SessionController(context: Context) {
         autoLockJob?.cancel()
         autoLockJob = null
         session?.lock()
+        clearPassword()
         items = emptyList()
         dev.cipherkeep.app.data.hibp.BreachCache.clear()
         backgroundedAt = null
@@ -1448,9 +1551,10 @@ class SessionController(context: Context) {
     /** Reset the foreground inactivity deadline after real user input. */
     fun recordActivity() {
         if (state != VaultUiState.Unlocked) return
+        val timeout = lockTimeoutMillis()
         autoLockJob?.cancel()
         autoLockJob = scope.launch {
-            delay(AUTO_LOCK_MILLIS)
+            delay(timeout)
             lock("Session locked after inactivity.")
         }
     }
@@ -1459,25 +1563,29 @@ class SessionController(context: Context) {
     fun onBackground(now: Long = SystemClock.elapsedRealtime()) {
         if (state != VaultUiState.Unlocked && state != VaultUiState.LockWarning) return
         backgroundedAt = now
+        val timeout = lockTimeoutMillis()
         autoLockJob?.cancel()
         autoLockJob = scope.launch {
-            delay(AUTO_LOCK_MILLIS)
+            delay(timeout)
             lock("Session locked after inactivity.")
         }
     }
 
-    /** Lock if the app was backgrounded for at least the 60-second timeout. */
+    /** Lock if the app was backgrounded for at least the configured timeout. */
     fun onForeground(now: Long = SystemClock.elapsedRealtime()) {
         val since = backgroundedAt ?: return
         val elapsed = now - since
         backgroundedAt = null
-        if (state == VaultUiState.Unlocked && elapsed >= AUTO_LOCK_MILLIS) {
+        val timeout = lockTimeoutMillis()
+        val warningWindow = (timeout / 6).coerceIn(2_000L, 15_000L)
+        if (state == VaultUiState.Unlocked && elapsed >= timeout) {
             lock("Session locked after inactivity.")
-        } else if (state == VaultUiState.Unlocked && elapsed >= AUTO_LOCK_MILLIS - 5_000) {
+        } else if (state == VaultUiState.Unlocked && elapsed >= timeout - warningWindow) {
             state = VaultUiState.LockWarning
         } else if (state == VaultUiState.Unlocked) {
             autoLockJob?.cancel()
             autoLockJob = null
+            recordActivity()
         }
     }
 
@@ -1507,14 +1615,18 @@ class SessionController(context: Context) {
         autoLockJob?.cancel()
         session?.close()
         session = null
+        clearPassword()
         storage.closeBlocking()
         scope.cancel()
     }
 
     companion object {
         const val AUTO_LOCK_MILLIS = 60_000L
+        const val MIN_LOCK_TIMEOUT_MILLIS = 15_000L
+        const val MAX_LOCK_TIMEOUT_MILLIS = 30 * 60_000L
         const val PAIRING_PREFIX = "CKPAIR1:"
         const val DEFAULT_RELAY_ENDPOINT = "https://cipherkeep-relay.marzouk-souhaieb.workers.dev"
         const val MIN_JOIN_PASSWORD_LENGTH = 12
+        private const val LOCK_TIMEOUT_KEY = "auto_lock_millis"
     }
 }

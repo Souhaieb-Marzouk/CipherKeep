@@ -17,7 +17,7 @@ use crate::header::{VaultHeader, NONCE_LEN};
 use crate::item::ITEM_SCHEMA_VERSION;
 use crate::kdf::{derive_master_key, KdfParams};
 use crate::keyring::Keyring;
-use crate::keys::{random_array, ItemId, ItemKey, MasterKey, VaultId, VaultKey, KEY_LEN};
+use crate::keys::{random_array, ItemId, MasterKey, VaultId, VaultKey, KEY_LEN};
 use crate::secret::{SecretBytes, SecretString};
 use crate::shamir::{combine_2_of_3, split_2_of_3, RecoveryShare};
 use crate::sync::legacy::migrate_legacy_item;
@@ -381,7 +381,7 @@ impl VaultSession {
                 .keyring
                 .first_vault()
                 .ok_or_else(|| CoreError::new(ErrorCode::Internal))?;
-            let item_key = ItemKey::generate()?;
+            let item_key = vault.derive_item_key(item_id)?;
             let wrapped = vault.wrap_item_key(&item_key, item_id, ITEM_SCHEMA_VERSION)?;
             let sealed = item_key.seal_field(item_id, ITEM_PAYLOAD_FIELD, 1, false, plaintext)?;
             (wrapped.encode(), sealed.encode())
@@ -1064,4 +1064,125 @@ fn decode_item_blob(blob: &[u8]) -> Result<(crate::Envelope, crate::Envelope)> {
     let wrapped = crate::Envelope::decode(&blob[wrapped_start..wrapped_end])?;
     let sealed = crate::Envelope::decode(&blob[wrapped_end..])?;
     Ok((wrapped, sealed))
+}
+
+#[cfg(test)]
+mod sync_two_device_tests {
+    use super::*;
+    use crate::crdt::ActorId;
+    use crate::item::ItemRecord;
+    use std::collections::BTreeMap;
+
+    fn merge(local: &[Vec<u8>], remote: &[Vec<u8>]) -> (Vec<Vec<u8>>, usize) {
+        fn split(raw: &[u8]) -> (String, String, Vec<u8>) {
+            let value: serde_json::Value = serde_json::from_slice(raw).expect("record json");
+            (
+                value["item"].as_str().expect("item").to_string(),
+                value["key"].as_str().expect("key").to_string(),
+                serde_json::to_vec(&value["record"]).expect("record"),
+            )
+        }
+        let mut engine = crate::MergeEngine::new();
+        let mut keys: BTreeMap<String, String> = BTreeMap::new();
+        for raw in local {
+            let (item, key, record) = split(raw);
+            keys.insert(item, key);
+            engine
+                .insert_local(ItemRecord::from_sync_json(&record).expect("local record"))
+                .expect("insert local");
+        }
+        let mut conflicts = 0usize;
+        for raw in remote {
+            let (item, key, record) = split(raw);
+            keys.entry(item).or_insert(key);
+            let outcome = engine
+                .merge_remote(&ItemRecord::from_sync_json(&record).expect("remote record"))
+                .expect("merge");
+            conflicts += outcome.conflicts.len();
+        }
+        let records = engine
+            .records_for_sync()
+            .expect("records")
+            .into_iter()
+            .map(|raw| {
+                let parsed = ItemRecord::from_sync_json(&raw).expect("record");
+                let item = parsed
+                    .id()
+                    .as_bytes()
+                    .iter()
+                    .map(|byte| format!("{byte:02x}"))
+                    .collect::<String>();
+                let record: serde_json::Value = serde_json::from_slice(&raw).expect("record");
+                serde_json::json!({
+                    "v": 2,
+                    "item": item,
+                    "key": keys[&item],
+                    "record": record,
+                })
+                .to_string()
+                .into_bytes()
+            })
+            .collect();
+        (records, conflicts)
+    }
+
+    #[test]
+    fn records_from_two_devices_stay_mutually_readable() {
+        let device_a =
+            VaultSession::create(&SecretBytes::from_slice(b"correct horse battery staple"))
+                .expect("create a")
+                .session;
+        let vault_id = device_a.vault_id().expect("vault id");
+        let vault_key = VaultKey::from_parts(
+            vault_id,
+            SecretBytes::from_slice(&device_a.share_vault_key().expect("share key")),
+        )
+        .expect("vault key");
+        let device_b = VaultSession::create_with_vault_key(
+            &SecretBytes::from_slice(b"another long passphrase"),
+            vault_key,
+        )
+        .expect("join b")
+        .session;
+
+        let item_id = ItemId::from_bytes([7u8; 16]);
+        let payload_a = br#"{"v":1,"type":"login","title":"Alpha","username":"a","password":"p1","url":"https://example.com"}"#;
+        let blob_a = device_a
+            .encrypt_item(item_id, payload_a)
+            .expect("encrypt a");
+        let record_a = device_a
+            .export_sync_record(item_id, &blob_a, ActorId::from_bytes([1u8; 16]), 1_000, 1)
+            .expect("export a");
+
+        let (applied, conflicts) = merge(&[], std::slice::from_ref(&record_a));
+        assert_eq!(conflicts, 0);
+        let legacy_b = device_b.apply_sync_record(&applied[0]).expect("apply on b");
+        assert!(String::from_utf8_lossy(&legacy_b).contains("Alpha"));
+        let _first_blob_b = device_b
+            .encrypt_item(item_id, &legacy_b)
+            .expect("encrypt b");
+
+        let payload_b = br#"{"v":1,"type":"login","title":"Beta","username":"a","password":"p2","url":"https://example.com"}"#;
+        let blob_b_edit = device_b.encrypt_item(item_id, payload_b).expect("edit b");
+        let record_b = device_b
+            .export_sync_record(
+                item_id,
+                &blob_b_edit,
+                ActorId::from_bytes([2u8; 16]),
+                1_000,
+                2,
+            )
+            .expect("export b");
+
+        let (merged_on_a, conflicts) = merge(&[record_a], std::slice::from_ref(&record_b));
+        assert_eq!(conflicts, 0, "unexpected field conflicts");
+        let applied_on_a = device_a
+            .apply_sync_record(&merged_on_a[0])
+            .expect("device a decrypts merged record");
+        assert!(String::from_utf8_lossy(&applied_on_a).contains("Beta"));
+        let applied_on_b = device_b
+            .apply_sync_record(&merged_on_a[0])
+            .expect("device b decrypts merged record");
+        assert!(String::from_utf8_lossy(&applied_on_b).contains("Beta"));
+    }
 }

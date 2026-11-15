@@ -161,8 +161,24 @@ fun SyncConflictDialog(
 @Composable
 fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    var endpoint by remember { mutableStateOf("https://cipherkeep-relay.marzouk-souhaieb.workers.dev") }
-    var token by remember { mutableStateOf("") }
+    val syncPrefs = remember {
+        context.getSharedPreferences("sync", android.content.Context.MODE_PRIVATE)
+    }
+    var endpoint by remember {
+        mutableStateOf(
+            syncPrefs.getString(
+                "relay_endpoint",
+                dev.cipherkeep.app.data.SessionController.DEFAULT_RELAY_ENDPOINT,
+            ).orEmpty(),
+        )
+    }
+    var token by remember {
+        mutableStateOf(
+            runCatching { dev.cipherkeep.app.data.SyncCredentialStore(context).load() }
+                .getOrNull()
+                .orEmpty(),
+        )
+    }
     var message by remember { mutableStateOf<String?>(null) }
     var conflicts by remember { mutableStateOf<List<Pair<String, Int>>>(emptyList()) }
     val scope = rememberCoroutineScope()
@@ -190,14 +206,23 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
             OutlinedButton(
                 onClick = {
                     scope.launch {
-                        context.getSharedPreferences("sync", android.content.Context.MODE_PRIVATE)
-                            .edit().putString("relay_endpoint", endpoint.trim()).apply()
-                        dev.cipherkeep.app.data.SyncCredentialStore(context).save(token)
+                        val activeToken = token.ifBlank {
+                            runCatching { dev.cipherkeep.app.data.SyncCredentialStore(context).load() }
+                                .getOrNull()
+                                .orEmpty()
+                        }
+                        if (activeToken.length < 32) {
+                            message = "Enter the relay token (at least 32 characters)."
+                            return@launch
+                        }
+                        syncPrefs.edit().putString("relay_endpoint", endpoint.trim()).apply()
+                        dev.cipherkeep.app.data.SyncCredentialStore(context).save(activeToken)
+                        token = activeToken
                         message = dev.cipherkeep.app.data.AndroidSyncEngine(context, controller)
-                            .sync(endpoint.trim(), token)
+                            .sync(endpoint.trim(), activeToken)
                             .fold(
                                 { "Synced ${it.records} record(s); conflicts ${it.conflicts}." },
-                                { "Sync failed." },
+                                { "Sync failed. Check the endpoint, token and connection." },
                             )
                         conflicts = controller.conflictItems()
                     }
@@ -223,7 +248,7 @@ fun RelaySyncSection(controller: dev.cipherkeep.app.data.SessionController) {
                 }
             }
             Text(
-                "The token is encrypted with Android Keystore. Use a test vault until conflict resolution is complete.",
+                "The token is encrypted with Android Keystore and is pre-filled here when you return. Sync after every change on both phones.",
                 style = MaterialTheme.typography.labelSmall,
             )
         }

@@ -87,6 +87,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import android.provider.Settings
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
@@ -1126,12 +1127,28 @@ private fun AuroraNavBar(current: String, onVault: () -> Unit, onAdd: () -> Unit
 
 @Composable
 private fun AuroraNavItem(glyph: String, label: String, selected: Boolean, onClick: () -> Unit) {
+    val tint = if (selected) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Column(
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 2.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(glyph, style = MaterialTheme.typography.titleMedium, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(label, style = MaterialTheme.typography.labelSmall, color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(glyph, style = MaterialTheme.typography.titleMedium, color = tint)
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, lineHeight = 12.sp),
+            color = tint,
+            maxLines = 1,
+            softWrap = false,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 
@@ -2302,8 +2319,6 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
     var code by remember { mutableStateOf<String?>(null) }
     var copied by remember { mutableStateOf(false) }
     var joinCode by remember { mutableStateOf("") }
-    var joinPassword by remember { mutableStateOf("") }
-    var joinConfirm by remember { mutableStateOf("") }
     var status by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
@@ -2316,12 +2331,16 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
         Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
             Text("Pair another device", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Generate a code on this phone, then enter it on a second phone or paste it into the Firefox extension. The code carries the vault identity and relay settings, so treat it like a password.",
+                "Generate a code on this phone, then scan it on a second phone or paste it into the Firefox extension. The code carries the vault identity and relay settings, so treat it like a password.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Button(onClick = { code = controller.pairingCode(); copied = false }, modifier = Modifier.fillMaxWidth()) { Text("Generate pairing code") }
             code?.let { value ->
+                QrCodeImage(
+                    content = value,
+                    modifier = Modifier.fillMaxWidth().height(240.dp).background(Color.White, RoundedCornerShape(12.dp)).padding(8.dp),
+                )
                 Text(value, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
                 TextButton(onClick = { clipboard.setText(AnnotatedString(value)); copied = true }) {
                     Text(if (copied) "Copied" else "Copy code")
@@ -2334,7 +2353,7 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
         Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
             Text("Join a vault from another device", style = MaterialTheme.typography.titleMedium)
             Text(
-                "Joining replaces the vault on this phone with the paired vault and pulls its items over relay sync. Use the code shown on the other phone or in the Firefox extension.",
+                "Scan or paste the code shown on the other phone. This phone keeps the master password you already use here and pulls the paired vault's items over relay sync.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -2360,39 +2379,15 @@ private fun PairingSection(controller: SessionController, onJoined: () -> Unit) 
                     modifier = Modifier.weight(1f),
                 ) { Text("Paste") }
             }
-            OutlinedTextField(
-                value = joinPassword,
-                onValueChange = { joinPassword = it },
-                label = { Text("New master password for this phone") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = joinConfirm,
-                onValueChange = { joinConfirm = it },
-                label = { Text("Confirm master password") },
-                singleLine = true,
-                visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                modifier = Modifier.fillMaxWidth(),
-            )
-            val canJoin = !busy &&
-                joinCode.isNotBlank() &&
-                joinPassword.length >= SessionController.MIN_JOIN_PASSWORD_LENGTH &&
-                joinPassword == joinConfirm
             Button(
-                enabled = canJoin,
+                enabled = !busy && joinCode.isNotBlank(),
                 onClick = {
                     busy = true
                     status = "Joining the vault…"
                     scope.launch {
-                        controller.joinWithPairingCode(joinCode, joinPassword)
+                        controller.joinWithPairingCode(joinCode)
                             .onSuccess { records ->
                                 joinCode = ""
-                                joinPassword = ""
-                                joinConfirm = ""
                                 busy = false
                                 status = if (records > 0) {
                                     "Joined and synced $records record(s)."
@@ -2540,6 +2535,7 @@ private fun SettingsScreen(
             var autofillDefault by remember { mutableStateOf(displayPrefs.autofillDefault()) }
             var screenshotsAllowed by remember { mutableStateOf(displayPrefs.screenshotsAllowed()) }
             var showUsernames by remember { mutableStateOf(displayPrefs.showUsernames()) }
+            var lockTimeoutMillis by remember { mutableStateOf(controller.lockTimeoutMillis()) }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(CKDimens.Space4), verticalArrangement = Arrangement.spacedBy(CKDimens.Space2)) {
                     Text("Preferences", style = MaterialTheme.typography.titleMedium)
@@ -2559,6 +2555,25 @@ private fun SettingsScreen(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Show usernames under item names", modifier = Modifier.weight(1f))
                         Switch(checked = showUsernames, onCheckedChange = { showUsernames = it; displayPrefs.setShowUsernames(it) })
+                    }
+                    Text("Auto-lock after", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(top = CKDimens.Space2))
+                    Row(
+                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(CKDimens.Space2),
+                    ) {
+                        listOf(
+                            30_000L to "30 seconds",
+                            60_000L to "1 minute",
+                            300_000L to "5 minutes",
+                            900_000L to "15 minutes",
+                            1_800_000L to "30 minutes",
+                        ).forEach { (millis, label) ->
+                            if (lockTimeoutMillis == millis) {
+                                Button(onClick = { controller.setLockTimeoutMillis(millis); lockTimeoutMillis = millis }) { Text(label) }
+                            } else {
+                                OutlinedButton(onClick = { controller.setLockTimeoutMillis(millis); lockTimeoutMillis = millis }) { Text(label) }
+                            }
+                        }
                     }
                 }
             }

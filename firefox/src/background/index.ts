@@ -329,34 +329,13 @@ async function performSync(): Promise<Response> {
         }
 
         const active = requireSession();
-        const stored = await browser.storage.local.get(["syncConfig", "syncActor", "syncCreated"]);
+        const stored = await browser.storage.local.get(["syncConfig"]);
         const config: SyncConfig = { ...EMPTY_SYNC_CONFIG, ...(stored.syncConfig ?? {}) };
         const errors = validateSyncConfig(config);
         if (errors.length > 0) {
           return { ok: false, error: errors.join("; ") };
         }
-        let actor = stored.syncActor as string | undefined;
-        if (typeof actor !== "string" || actor.length !== 32) {
-          const bytes = crypto.getRandomValues(new Uint8Array(16));
-          actor = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-          await browser.storage.local.set({ syncActor: actor, syncCreated: Date.now() });
-        }
-        const created = typeof stored.syncCreated === "number" ? stored.syncCreated : Date.now();
-        const actorBytes = new Uint8Array(actor.match(/.{2}/g)!.map((value) => Number.parseInt(value, 16)));
-        await ensureItemStore();
-        const records = await itemStore.list();
-        const local: string[] = [];
-        for (const record of records) {
-          if (record.id === FOLDER_META_ID) continue;
-          const exported = active.export_sync_record(
-            hexToBytes(record.id),
-            record.ciphertext,
-            actorBytes,
-            created,
-            1,
-          );
-          local.push(new TextDecoder().decode(exported));
-        }
+        const local = await exportV2Records(active);
         const vaultId = Array.from(active.vault_id(), (byte) => byte.toString(16).padStart(2, "0")).join("");
         const transport =
           config.transport === "github"
@@ -388,6 +367,7 @@ async function performSync(): Promise<Response> {
           const ciphertext = active.encrypt_item(hexToBytes(id), legacy);
           legacy.fill(0);
           await itemStore.put({ id, ciphertext, updatedAt: Date.now() });
+          await rememberSyncRecord(id, raw, ciphertext);
         }
         await browser.storage.local.set({ syncConflicts: merged.conflicts });
         const conflictInputs = (merged.conflicts as Array<{ item: string; field: number }>).map((conflict) => {
@@ -527,22 +507,83 @@ async function storeEmergencyRecord(
   await itemStore.put({ id, ciphertext, updatedAt: Date.now() });
 }
 
-async function localV2Records(active: WasmVaultSession): Promise<string[]> {
+type SyncRecordEntry = { record: string; hash: string; counter: number; created: number };
+
+async function syncRecordCache(): Promise<Record<string, SyncRecordEntry>> {
+  const stored = await browser.storage.local.get("syncRecords");
+  const value = stored.syncRecords;
+  return value !== null && typeof value === "object"
+    ? (value as Record<string, SyncRecordEntry>)
+    : {};
+}
+
+function maxRecordCounter(raw: string): number {
+  try {
+    const wrapper = JSON.parse(raw) as {
+      record?: {
+        itemCounter?: number;
+        typeCounter?: number;
+        deletedCounter?: number;
+        created?: number;
+        fields?: Array<{ counter?: number }>;
+      };
+    };
+    const record = wrapper.record ?? {};
+    let max = Math.max(record.itemCounter ?? 0, record.typeCounter ?? 0, record.deletedCounter ?? 0);
+    for (const field of record.fields ?? []) max = Math.max(max, field.counter ?? 0);
+    return max;
+  } catch {
+    return 0;
+  }
+}
+
+async function rememberSyncRecord(id: string, raw: string, ciphertext: Uint8Array): Promise<void> {
+  const cache = await syncRecordCache();
+  const record = (JSON.parse(raw) as { record?: { created?: number } }).record;
+  cache[id] = {
+    record: raw,
+    hash: bytesToBase64(ciphertext),
+    counter: maxRecordCounter(raw),
+    created: record?.created ?? Date.now(),
+  };
+  await browser.storage.local.set({ syncRecords: cache });
+}
+
+async function exportV2Records(active: WasmVaultSession): Promise<string[]> {
   await ensureItemStore();
-  const records = await itemStore.list();
-  const actor = crypto.getRandomValues(new Uint8Array(16));
+  const stored = await browser.storage.local.get(["syncActor", "syncCreated"]);
+  let actor = stored.syncActor as string | undefined;
+  let created = typeof stored.syncCreated === "number" ? stored.syncCreated : Date.now();
+  if (typeof actor !== "string" || actor.length !== 32) {
+    actor = Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    created = Date.now();
+    await browser.storage.local.set({ syncActor: actor, syncCreated: created });
+  }
+  const actorBytes = new Uint8Array(actor.match(/.{2}/g)!.map((value) => Number.parseInt(value, 16)));
+  const cache = await syncRecordCache();
   const result: string[] = [];
-  for (const record of records) {
+  for (const record of await itemStore.list()) {
     if (record.id === FOLDER_META_ID) continue;
+    const hash = bytesToBase64(record.ciphertext);
+    const entry = cache[record.id];
+    if (entry !== undefined && entry.hash === hash) {
+      result.push(entry.record);
+      continue;
+    }
+    const counter = Math.max(entry?.counter ?? 0, 0) + 1;
+    const itemCreated = entry?.created ?? created;
     const exported = active.export_sync_record(
       hexToBytes(record.id),
       record.ciphertext,
-      actor,
-      Date.now(),
-      1,
+      actorBytes,
+      itemCreated,
+      counter,
     );
-    result.push(new TextDecoder().decode(exported));
+    const raw = new TextDecoder().decode(exported);
+    cache[record.id] = { record: raw, hash, counter, created: itemCreated };
+    result.push(raw);
   }
+  await browser.storage.local.set({ syncRecords: cache });
   return result;
 }
 
@@ -554,6 +595,7 @@ async function applyV2Records(active: WasmVaultSession, records: string[]): Prom
     const ciphertext = active.encrypt_item(hexToBytes(wrapper.item), legacy);
     legacy.fill(0);
     await itemStore.put({ id: wrapper.item, ciphertext, updatedAt: Date.now() });
+    await rememberSyncRecord(wrapper.item, raw, ciphertext);
   }
 }
 
@@ -939,12 +981,12 @@ async function handle(request: Request): Promise<Response> {
       }
       case "export-sync-bundle": {
         const active = requireSession();
-        const records = await localV2Records(active);
+        const records = await exportV2Records(active);
         return { ok: true, kind: "bundle", json: JSON.stringify({ v: 1, records }) };
       }
       case "import-sync-bundle": {
         const active = requireSession();
-        const local = await localV2Records(active);
+        const local = await exportV2Records(active);
         const parsed = JSON.parse(request.json) as { records?: unknown };
         const remote = Array.isArray(parsed.records)
           ? parsed.records.filter((value): value is string => typeof value === "string")
@@ -974,6 +1016,7 @@ async function handle(request: Request): Promise<Response> {
         const ciphertext = active.encrypt_item(hexToBytes(wrapper.item), legacy);
         legacy.fill(0);
         await itemStore.put({ id: wrapper.item, ciphertext, updatedAt: Date.now() });
+        await rememberSyncRecord(wrapper.item, resolved, ciphertext);
         await browser.storage.local.set({
           syncConflictInputs: inputs.filter((entry) => !(entry.item === request.item && entry.field === request.field)),
           syncConflicts: (await browser.storage.local.get("syncConflicts")).syncConflicts?.filter?.((entry: {item?:string;field?:number}) => !(entry.item === request.item && entry.field === request.field)) ?? [],

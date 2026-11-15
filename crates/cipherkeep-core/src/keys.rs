@@ -33,6 +33,8 @@ pub const KEY_LEN: usize = 32;
 pub const DOMAIN_KEYRING: &[u8] = b"cipherkeep/v1/keyring";
 /// HKDF domain for wrapping an item key with a vault key.
 pub const DOMAIN_ITEM_KEY_WRAP: &[u8] = b"cipherkeep/v1/item-key-wrap";
+/// HKDF domain for deriving a deterministic per-item key from the vault key.
+pub const DOMAIN_ITEM_KEY_DERIVE: &[u8] = b"cipherkeep/v1/item-key-derive";
 /// HKDF domain for X25519 sharing wraps.
 pub const DOMAIN_SHARING: &[u8] = b"cipherkeep/v1/sharing";
 /// HKDF domain for recovery wrapping keys.
@@ -237,6 +239,24 @@ impl VaultKey {
             &Aad::item_key(self.id, item_id, schema),
             item_key.secret().expose_secret(),
         )
+    }
+
+    /// Derive the deterministic per-item key for `item_id`.
+    ///
+    /// Every device that holds the same vault key derives the same item key, so
+    /// field envelopes written by one device can be opened by another even
+    /// though each device wraps the key under its own nonce.
+    ///
+    /// # Errors
+    ///
+    /// Returns a redacted [`CoreError`] if HKDF expansion fails.
+    pub fn derive_item_key(&self, item_id: ItemId) -> Result<ItemKey> {
+        let key = derive_subkey(
+            &self.key,
+            DOMAIN_ITEM_KEY_DERIVE,
+            &item_wrap_context(self.id, item_id),
+        )?;
+        ItemKey::from_secret_bytes(key)
     }
 
     /// Unwrap an item key previously wrapped by this vault.
