@@ -39,8 +39,8 @@ class AndroidSyncFolder(private val context: Context, private val tree: Uri) {
             stream.write(bytes)
             stream.flush()
         } ?: return false
-        val renamed = DocumentsContract.renameDocument(resolver, temporary, name) ?: temporary
-        renamed != null
+        DocumentsContract.renameDocument(resolver, temporary, name) ?: return false
+        true
     }.getOrDefault(false)
 
     fun listManifests(): List<String> = runCatching {

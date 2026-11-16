@@ -72,6 +72,7 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
                 domain = node.webDomain
             }
             val hints = node.autofillHints?.joinToString(" ").orEmpty().lowercase()
+            val maxLength = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) node.maxTextLength else -1
             val identity = "${node.idEntry.orEmpty()} ${node.hint.orEmpty()}".lowercase()
             val password = node.inputType and 0x00000080 != 0 ||
                 hints.contains("password") ||
@@ -107,7 +108,7 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
             if (looksLikeField) {
                 android.util.Log.i(
                     "CipherKeepAutofillFields",
-                    "id=${node.idEntry} hint=${node.hint} hints=$hints type=${node.inputType} max=${node.maxTextLength} class=${node.className} pw=$password otp=$otp user=$username",
+                    "id=${node.idEntry} hint=${node.hint} hints=$hints type=${node.inputType} max=$maxLength class=${node.className} pw=$password otp=$otp user=$username",
                 )
             }
             if (node.autofillId != null && autofillable &&
@@ -115,7 +116,7 @@ fun parseLoginForm(structure: AssistStructure): LoginForm {
             ) {
                 val splitBox = !password &&
                     node.inputType and 0x00000002 != 0 &&
-                    node.maxTextLength in 1..2
+                    maxLength in 1..2
                 if (splitBox) {
                     node.autofillId?.let { splitOtp.add(it) }
                 } else if (password && passwordId == null) {
